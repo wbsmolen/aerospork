@@ -1,0 +1,11 @@
+:idprefix:
+:idseparator: -
+:prewrap!:
+:relfilesuffix:
+:sectanchors:
+:sectlinks:
+:sectnums:
+:source-highlighter: pygments
+:toc: left
+:env-site:
+:favicon: ./assets/icon.png

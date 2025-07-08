@@ -1,0 +1,252 @@
+import Common
+
+enum AeroObj {
+    case window(window: Window, title: String)
+    case workspace(Workspace)
+    case app(any AbstractApp)
+    case monitor(Monitor)
+
+    var kind: AeroObjKind {
+        switch self {
+            case .window: .window
+            case .workspace: .workspace
+            case .app: .app
+            case .monitor: .monitor
+        }
+    }
+}
+
+enum AeroObjKind: CaseIterable {
+    case window, workspace, app, monitor
+}
+
+enum PlainInterVar: String, CaseIterable {
+    case rightPadding = "right-padding"
+    case newline = "newline"
+    case tab = "tab"
+}
+
+extension [AeroObj] {
+    @MainActor
+    func format(_ format: [StringInterToken]) -> Result<[String], String> {
+        var cellTable: [[Cell<String>]] = []
+        for obj in self {
+            var line: [Cell<String>] = []
+            var curCellParts: [String] = [] // Use array instead of string concatenation
+            var errors: [String] = []
+            for token in format {
+                switch token {
+                    case .interVar(PlainInterVar.rightPadding.rawValue):
+                        line.append(Cell(value: curCellParts.joined(), rightPadding: true))
+                        curCellParts = []
+                    case .literal(let literal):
+                        curCellParts.append(literal)
+                    case .interVar(let value):
+                        switch value.expandFormatVar(obj: obj) {
+                            case .success(let expanded): curCellParts.append(expanded.toString())
+                            case .failure(let error): errors.append(error)
+                        }
+                }
+            }
+            if !errors.isEmpty { return .failure(errors.joinErrors()) }
+            line.append(Cell(value: curCellParts.joined(), rightPadding: false))
+            cellTable.append(line)
+        }
+        let result = cellTable
+            .transposed()
+            .map { column in
+                let columndWidth = column.map { $0.value.count }.max().orDie()
+                return column.map {
+                    $0.rightPadding
+                        ? $0.value + String(repeating: " ", count: columndWidth - $0.value.count)
+                        : $0.value
+                }
+            }
+            .transposed()
+            .map { line in line.joined(separator: "") }
+        return .success(result)
+    }
+}
+
+enum FormatVar: Equatable {
+    case window(WindowFormatVar)
+    case workspace(WorkspaceFormatVar)
+    case app(AppFormatVar)
+    case monitor(MonitorFormatVar)
+
+    enum WindowFormatVar: String, Equatable, CaseIterable {
+        case windowId = "window-id"
+        case windowIsFullscreen = "window-is-fullscreen"
+        case windowTitle = "window-title"
+    }
+
+    enum WorkspaceFormatVar: String, Equatable, CaseIterable {
+        case workspaceName = "workspace"
+        case workspaceFocused = "workspace-is-focused"
+        case workspaceVisible = "workspace-is-visible"
+    }
+
+    enum AppFormatVar: String, Equatable, CaseIterable {
+        case appBundleId = "app-bundle-id"
+        case appName = "app-name"
+        case appPid = "app-pid"
+        case appExecPath = "app-exec-path"
+        case appBundlePath = "app-bundle-path"
+    }
+
+    enum MonitorFormatVar: String, Equatable, CaseIterable {
+        case monitorId = "monitor-id"
+        case monitorAppKitNsScreenScreensId = "monitor-appkit-nsscreen-screens-id"
+        case monitorName = "monitor-name"
+        case monitorFingerprint = "monitor-fingerprint"
+        case monitorVendorId = "monitor-vendor-id"
+        case monitorModelId = "monitor-model-id"
+        case monitorSerialNumber = "monitor-serial-number"
+        case monitorWidth = "monitor-width"
+        case monitorHeight = "monitor-height"
+    }
+}
+
+enum Primitive: Encodable {
+    case bool(Bool)
+    case int(Int)
+    case int32(Int32)
+    case uint32(UInt32)
+    case string(String)
+
+    func toString() -> String {
+        switch self {
+            case .bool(let x): x.description
+            case .int(let x): x.description
+            case .int32(let x): x.description
+            case .uint32(let x): x.description
+            case .string(let x): x
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        let value: Encodable = switch self {
+            case .bool(let x): x
+            case .int(let x): x
+            case .int32(let x): x
+            case .uint32(let x): x
+            case .string(let x): x
+        }
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
+private func getAvailableInterVars(for kind: AeroObjKind) -> [String] {
+    _getAvailableInterVars(for: kind) + PlainInterVar.allCases.map(\.rawValue)
+}
+
+private func _getAvailableInterVars(for kind: AeroObjKind) -> [String] {
+    switch kind {
+        case .app: FormatVar.AppFormatVar.allCases.map(\.rawValue)
+        case .monitor: FormatVar.MonitorFormatVar.allCases.map(\.rawValue)
+        case .workspace:
+            FormatVar.WorkspaceFormatVar.allCases.map(\.rawValue) +
+                _getAvailableInterVars(for: .monitor)
+        case .window:
+            FormatVar.WindowFormatVar.allCases.map(\.rawValue) +
+                _getAvailableInterVars(for: .workspace) +
+                _getAvailableInterVars(for: .app)
+    }
+}
+
+private struct Cell<T> {
+    let value: T
+    let rightPadding: Bool
+}
+
+extension String {
+    @MainActor
+    func expandFormatVar(obj: AeroObj) -> Result<Primitive, String> {
+        let formatVar = self.toFormatVar()
+        switch (obj, formatVar) {
+            case (_, .none): break
+
+            case (.window(let w, _), .workspace):
+                return w.nodeWorkspace.flatMap(AeroObj.workspace).map(expandFormatVar) ?? .success(.string("NULL-WOKRSPACE"))
+            case (.window(let w, _), .monitor):
+                return w.nodeMonitor.flatMap(AeroObj.monitor).map(expandFormatVar) ?? .success(.string("NULL-MONITOR"))
+            case (.window(let w, _), .app):
+                return expandFormatVar(obj: .app(w.app))
+            case (.window(_, _), .window): break
+
+            case (.workspace(let ws), .monitor):
+                return expandFormatVar(obj: AeroObj.monitor(ws.workspaceMonitor))
+            case (.workspace, _): break
+
+            case (.app(_), _): break
+            case (.monitor(_), _): break
+        }
+        switch (obj, formatVar) {
+            case (.window(let w, let title), .window(let f)):
+                return switch f {
+                    case .windowId: .success(.uint32(w.windowId))
+                    case .windowIsFullscreen: .success(.bool(w.isFullscreen))
+                    case .windowTitle: .success(.string(title))
+                }
+            case (.workspace(let w), .workspace(let f)):
+                return switch f {
+                    case .workspaceName: .success(.string(w.name))
+                    case .workspaceVisible: .success(.bool(w.isVisible))
+                    case .workspaceFocused: .success(.bool(focus.workspace == w))
+                }
+            case (.monitor(let m), .monitor(let f)):
+                return switch f {
+                    case .monitorId: .success(m.monitorId.map { .int($0 + 1) } ?? .string("NULL-MONITOR-ID"))
+                    case .monitorAppKitNsScreenScreensId: .success(.int(m.monitorAppKitNsScreenScreensId))
+                    case .monitorName: .success(.string(m.name))
+                    case .monitorFingerprint:
+                        if let lazyMonitor = m as? LazyMonitor, let fingerprint = lazyMonitor.fingerprint {
+                            .success(.string(fingerprint.description))
+                        } else {
+                            .success(.string(""))
+                        }
+                    case .monitorVendorId:
+                        if let lazyMonitor = m as? LazyMonitor, let fingerprint = lazyMonitor.fingerprint, let vendorId = fingerprint.vendorID {
+                            .success(.string(String(format: "0x%04X", vendorId)))
+                        } else {
+                            .success(.string(""))
+                        }
+                    case .monitorModelId:
+                        if let lazyMonitor = m as? LazyMonitor, let fingerprint = lazyMonitor.fingerprint, let modelId = fingerprint.modelID {
+                            .success(.string(String(format: "0x%04X", modelId)))
+                        } else {
+                            .success(.string(""))
+                        }
+                    case .monitorSerialNumber:
+                        if let lazyMonitor = m as? LazyMonitor, let fingerprint = lazyMonitor.fingerprint, let serial = fingerprint.serialNumber {
+                            .success(.string(serial))
+                        } else {
+                            .success(.string(""))
+                        }
+                    case .monitorWidth: .success(.int(Int(m.width)))
+                    case .monitorHeight: .success(.int(Int(m.height)))
+                }
+            case (.app(let a), .app(let f)):
+                return switch f {
+                    case .appBundleId: .success(.string(a.bundleId ?? "NULL-APP-BUNDLE-ID"))
+                    case .appName: .success(.string(a.name ?? "NULL-APP-NAME"))
+                    case .appPid: .success(.int32(a.pid))
+                    case .appExecPath: .success(.string(a.execPath ?? "NULL-APP-EXEC-PATH"))
+                    case .appBundlePath: .success(.string(a.bundlePath ?? "NULL-APP-BUNDLE-PATH"))
+                }
+            default: break
+        }
+        if self == PlainInterVar.newline.rawValue { return .success(.string("\n")) }
+        if self == PlainInterVar.tab.rawValue { return .success(.string("\t")) }
+        return .failure("Unknown interpolation variable '\(self)'. " +
+            "Possible values: \(getAvailableInterVars(for: obj.kind).joined(separator: "|"))")
+    }
+
+    private func toFormatVar() -> FormatVar? {
+        FormatVar.WindowFormatVar(rawValue: self).flatMap(FormatVar.window)
+            ?? FormatVar.WorkspaceFormatVar(rawValue: self).flatMap(FormatVar.workspace)
+            ?? FormatVar.AppFormatVar(rawValue: self).flatMap(FormatVar.app)
+            ?? FormatVar.MonitorFormatVar(rawValue: self).flatMap(FormatVar.monitor)
+    }
+}

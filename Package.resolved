@@ -1,0 +1,60 @@
+{
+  "originHash" : "ce497cf9fcf14272fedb221cc48e1102e7d3c1bb2ab918cedfbfa9120f32fca3",
+  "pins" : [
+    {
+      "identity" : "antlr4",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/antlr/antlr4",
+      "state" : {
+        "revision" : "7ed420ff2c78d62883875c442d75f32e73bc86c8",
+        "version" : "4.13.1"
+      }
+    },
+    {
+      "identity" : "bluesocket",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Kitura/BlueSocket.git",
+      "state" : {
+        "revision" : "7b23a867008e0027bfd6f4d398d44720707bc8ca",
+        "version" : "2.0.4"
+      }
+    },
+    {
+      "identity" : "hotkey",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/soffes/HotKey",
+      "state" : {
+        "revision" : "a3cf605d7a96f6ff50e04fcb6dea6e2613cfcbe4",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "issoundadditions",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/InerziaSoft/ISSoundAdditions",
+      "state" : {
+        "revision" : "4b555f0354e6c280917bae8a598a258efe87ab98",
+        "version" : "2.0.1"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections",
+      "state" : {
+        "revision" : "671108c96644956dddcd89dd59c203dcdb36cec7",
+        "version" : "1.1.4"
+      }
+    },
+    {
+      "identity" : "tomlkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/LebJe/TOMLKit",
+      "state" : {
+        "revision" : "404c4dd011743461bff12d00a5118d0ed59d630c",
+        "version" : "0.5.5"
+      }
+    }
+  ],
+  "version" : 3
+}

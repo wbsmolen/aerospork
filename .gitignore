@@ -1,0 +1,28 @@
+/.idea
+/.debug
+/.release
+/.shell-completion
+/.site
+/.man
+/Gemfile.lock
+# IDK, AppCode randomly creates this EMPTY file. I have no idea what this is
+/default.profraw
+.DS_Store
+/.xcode-build
+# Swift package manager
+/.build
+/.swiftpm
+/.vscode
+# External dependencies
+/.deps
+# Xcode build products (may contain personal paths)
+/build
+
+# For whatever local files that developers might want to keep there (I personally keep a separate `generated-html` git worktree here)
+/.local
+
+# XCode User settings
+xcuserdata/
+xcshareddata/
+# Shell parser build artifacts
+ShellParserGenerated/build/
