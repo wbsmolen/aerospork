@@ -108,7 +108,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     // New: Workspace Profiles
     "profiles": Parser(\.workspaceProfiles, parseWorkspaceProfiles),
-    "active-profile": Parser(\.activeProfileName) { $0.string.toParsedToml($1) }, // Fix for Optional<String>
+    "active-profile": Parser(\.activeProfileName) { parseString($0, $1).map { $0 as String? } },
 ]
 
 // New parsing function for profiles

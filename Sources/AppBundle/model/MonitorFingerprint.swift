@@ -95,20 +95,16 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
 
     func matches(patternData: MonitorFingerprintPatternData) -> Bool {
         if let patternVendorID = patternData.vendorID, vendorID != patternVendorID {
-            print("[DEBUG] Vendor ID mismatch: \(vendorID?.description ?? "nil") != \(patternVendorID)")
             return false
         }
         if let patternModelID = patternData.modelID, modelID != patternModelID {
-            print("[DEBUG] Model ID mismatch: \(modelID?.description ?? "nil") != \(patternModelID)")
             return false
         }
         if let patternSerial = patternData.serialNumber, serialNumber != patternSerial {
-            print("[DEBUG] Serial number mismatch: \(serialNumber?.description ?? "nil") != \(patternSerial)")
             return false
         }
         if let patternDisplayName = patternData.displayNamePattern {
             guard let displayName else { 
-                print("[DEBUG] Display name is nil but pattern requires: \(patternDisplayName)")
                 return false 
             }
             // First try exact match (case insensitive)
@@ -116,18 +112,12 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
                 return true
             }
             // Then try substring contains
-            let matches = displayName.localizedCaseInsensitiveContains(patternDisplayName)
-            if !matches {
-                print("[DEBUG] Display name mismatch: '\(displayName)' doesn't match '\(patternDisplayName)'")
-            }
-            return matches
+            return displayName.localizedCaseInsensitiveContains(patternDisplayName)
         }
         if let patternWidth = patternData.widthPixels, widthPixels != patternWidth {
-            print("[DEBUG] Width mismatch: \(widthPixels?.description ?? "nil") != \(patternWidth)")
             return false
         }
         if let patternHeight = patternData.heightPixels, heightPixels != patternHeight {
-            print("[DEBUG] Height mismatch: \(heightPixels?.description ?? "nil") != \(patternHeight)")
             return false
         }
         return true

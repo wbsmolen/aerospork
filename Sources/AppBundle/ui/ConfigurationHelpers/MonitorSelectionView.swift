@@ -2,12 +2,12 @@ import SwiftUI
 import Common
 
 struct MonitorSelectionView: View {
-    let assignment: ConfigurationViewModel.WorkspaceAssignment
+    let assignment: Config.WorkspaceAssignment
     let monitors: [ConfigurationViewModel.MonitorInfo]
-    let onSave: (ConfigurationViewModel.WorkspaceAssignment) -> Void
+    let onSave: (Config.WorkspaceAssignment) -> Void
     
     @Environment(\.dismiss) var dismiss
-    @State private var editedAssignment: ConfigurationViewModel.WorkspaceAssignment
+    @State private var editedAssignment: Config.WorkspaceAssignment
     @State private var selectedMonitorId: UUID?
     @State private var customPattern: String = ""
     @State private var useFingerprint: Bool = true
@@ -20,7 +20,7 @@ struct MonitorSelectionView: View {
         var useResolution: Bool = false
     }
     
-    init(assignment: ConfigurationViewModel.WorkspaceAssignment, monitors: [ConfigurationViewModel.MonitorInfo], onSave: @escaping (ConfigurationViewModel.WorkspaceAssignment) -> Void) {
+    init(assignment: Config.WorkspaceAssignment, monitors: [ConfigurationViewModel.MonitorInfo], onSave: @escaping (Config.WorkspaceAssignment) -> Void) {
         self.assignment = assignment
         self.monitors = monitors
         self.onSave = onSave
@@ -188,7 +188,7 @@ struct MonitorSelectionView: View {
     }
     
     private func applyMonitorFingerprint(_ monitor: ConfigurationViewModel.MonitorInfo) {
-        let fp = ConfigurationViewModel.WorkspaceAssignment.MonitorFingerprint(
+        let fp = Config.WorkspaceAssignment.MonitorFingerprint(
             vendorId: partialFingerprint.useVendor ? monitor.fingerprint.vendorId : nil,
             modelId: partialFingerprint.useModel ? monitor.fingerprint.modelId : nil,
             serialNumber: partialFingerprint.useSerial ? monitor.fingerprint.serialNumber : nil,
@@ -248,7 +248,7 @@ struct MonitorSelectionRow: View {
 }
 
 struct AssignmentPreview: View {
-    let assignment: ConfigurationViewModel.WorkspaceAssignment
+    let assignment: Config.WorkspaceAssignment
     
     var body: some View {
         HStack {
@@ -289,7 +289,7 @@ struct AssignmentPreview: View {
         .cornerRadius(8)
     }
     
-    private func fingerprintDescription(_ fp: ConfigurationViewModel.WorkspaceAssignment.MonitorFingerprint) -> String {
+    private func fingerprintDescription(_ fp: Config.WorkspaceAssignment.MonitorFingerprint) -> String {
         var parts: [String] = []
         if let vendor = fp.vendorId { parts.append("Vendor: \(vendor)") }
         if let model = fp.modelId { parts.append("Model: \(model)") }

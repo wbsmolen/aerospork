@@ -12,9 +12,7 @@ struct EnhancedWorkspaceAssignmentTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                workspaceProfileManagementView // New section for profile management
-                Divider()
-                workspaceManagementView // Now displays assignments for the active profile
+                workspaceManagementView
                 Divider()
                 monitorView
             }
@@ -22,74 +20,20 @@ struct EnhancedWorkspaceAssignmentTab: View {
         }
     }
 
-    var workspaceProfileManagementView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Workspace Profiles")
-                    .font(.title2) // Slightly larger font for main section header
-                    .fontWeight(.bold)
-                Spacer()
-                Button("Add Profile") {
-                    viewModel.addWorkspaceProfile(name: "New Profile")
-                }
-                .help("Add a new workspace profile for different monitor setups (e.g., home, home office, external display).")
-                
-                Button("Remove Profile") {
-                    if let activeProfileId = viewModel.activeProfileId {
-                        viewModel.removeWorkspaceProfile(id: activeProfileId)
-                    }
-                }
-                .disabled(viewModel.workspaceProfiles.count <= 1) // Don't allow deleting the last profile
-                .help("Remove the currently selected workspace profile.")
-            }
-            .padding(.bottom, 5) // Add some space below the buttons
-            
-            VStack(alignment: .leading, spacing: 8) { // Group picker and name field
-                Picker("Active Profile:", selection: Binding(
-                    get: { viewModel.activeProfileId ?? UUID() },
-                    set: { newId in
-                        viewModel.activeProfileId = newId
-                    }
-                )) {
-                    ForEach(viewModel.workspaceProfiles) { profile in
-                        Text(profile.name).tag(profile.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .help("Select the active workspace profile. Each profile can have different workspace-to-monitor assignments.")
-                
-                HStack {
-                    Text("Profile Name:")
-                        .frame(width: 100, alignment: .leading) // Align label
-                    TextField("Profile Name", text: Binding(
-                        get: { viewModel.workspaceProfiles.first(where: { $0.id == viewModel.activeProfileId })?.name ?? "" },
-                        set: { newName in
-                            if let index = viewModel.workspaceProfiles.firstIndex(where: { $0.id == viewModel.activeProfileId }) {
-                                viewModel.workspaceProfiles[index].name = newName
-                                viewModel.markAsModified()
-                            }
-                        }
-                    ))
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(maxWidth: 250) // Slightly wider text field
-                    .disabled(viewModel.activeProfileId == nil)
-                }
-            }
-            
-            Text("Use workspace profiles to manage different monitor setups, for example, one for your home desk and another for your office docking station. Each profile saves its own workspace-to-monitor assignments.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.top, 10) // More padding above hint text
-        }
-        .padding(20) // Increased overall padding
-        .background(Color(NSColor.windowBackgroundColor))
-        .cornerRadius(8)
-    }
 
     var workspaceManagementView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header for the table
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Workspace to Monitor Assignments")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text("Configure which monitor each workspace should appear on when connected.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            VStack(alignment: .leading, spacing: 0) {
+                // Header for the table
+                HStack {
                 Text("Workspace Name")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -102,10 +46,10 @@ struct EnhancedWorkspaceAssignmentTab: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
-                Button(action: { viewModel.addWorkspaceAssignment() }) { // Changed to add assignment
+                Button(action: { viewModel.addWorkspaceAssignment() }) {
                     Image(systemName: "plus")
                 }
-                .help("Add a new workspace assignment for the current profile.")
+                .help("Add a new workspace assignment.")
             }
             .padding(.horizontal, 15) // Consistent horizontal padding
             .padding(.vertical, 10) // Increased vertical padding
@@ -115,9 +59,9 @@ struct EnhancedWorkspaceAssignmentTab: View {
             
             // Workspace list
             List {
-                ForEach(viewModel.workspaceAssignments.indices, id: \.self) { index in
+                ForEach(viewModel.workspaceAssignments, id: \.workspaceName) { assignment in
                     WorkspaceConfigRow(
-                        workspace: viewModel.workspaceAssignments[index].workspaceName,
+                        workspace: assignment.workspaceName,
                         viewModel: viewModel
                     )
                 }
@@ -128,6 +72,7 @@ struct EnhancedWorkspaceAssignmentTab: View {
                 }
             }
             .listStyle(InsetListStyle())
+            }
         }
         // Removed .sheet for AddWorkspaceView as assignments are added directly
     }
@@ -345,7 +290,6 @@ struct WorkspaceConfigRow: View {
         // Initialize state
         if let assignment = viewModel.workspaceAssignments.first(where: { $0.workspaceName == workspace }) {
             self._isForceAssignment = State(initialValue: assignment.isForceAssignment)
-            print("[DEBUG] WorkspaceConfigRow init for workspace '\(workspace)' with assignment to '\(assignment.monitorDescription)'")
             // Find monitor index
             if let index = viewModel.connectedMonitors.firstIndex(where: { monitor in
                 switch assignment.monitorType {
@@ -354,36 +298,38 @@ struct WorkspaceConfigRow: View {
                 case .index(let index):
                     return monitor.index == index
                 case .fingerprint(let fp):
-                    // Match by display name first (most reliable)
+                    // Match by display name AND resolution (most reliable)
                     if let fpDisplayName = fp.displayName {
                         let monDisplayName = monitor.fingerprint.displayName
-                        if fpDisplayName.localizedCaseInsensitiveCompare(monDisplayName) == .orderedSame {
-                            // Also check resolution if available
-                            if let fpWidth = fp.width, let fpHeight = fp.height {
-                                return fpWidth == monitor.fingerprint.widthPixels &&
-                                       fpHeight == monitor.fingerprint.heightPixels
-                            }
+                        let displayNameMatches = fpDisplayName.localizedCaseInsensitiveCompare(monDisplayName) == .orderedSame
+                        
+                        // Check resolution if available
+                        let resolutionMatches = (fp.width == nil && fp.height == nil) ||
+                                                (fp.width == monitor.fingerprint.widthPixels && 
+                                                 fp.height == monitor.fingerprint.heightPixels)
+                        
+                        // Both display name and resolution must match
+                        if displayNameMatches && resolutionMatches {
                             return true
                         }
-                        return false  // Display names don't match
                     }
 
-                    // Fall back to vendor/model/serial matching
-                    let vendorMatch = fp.vendorId == nil || fp.vendorId == monitor.fingerprint.vendorId
-                    let modelMatch = fp.modelId == nil || fp.modelId == monitor.fingerprint.modelId
-                    let serialMatch = fp.serialNumber == nil || fp.serialNumber == monitor.fingerprint.serialNumber
+                    // Fall back to vendor/model/serial matching if no display name
+                    if fp.displayName == nil {
+                        let vendorMatch = fp.vendorId == nil || fp.vendorId == monitor.fingerprint.vendorId
+                        let modelMatch = fp.modelId == nil || fp.modelId == monitor.fingerprint.modelId
+                        let serialMatch = fp.serialNumber == nil || fp.serialNumber == monitor.fingerprint.serialNumber
+                        let resolutionMatch = (fp.width == nil && fp.height == nil) ||
+                                              (fp.width == monitor.fingerprint.widthPixels && fp.height == monitor.fingerprint.heightPixels)
 
-                    // Also check resolution
-                    let resolutionMatch = (fp.width == nil && fp.height == nil) ||
-                                          (fp.width == monitor.fingerprint.widthPixels && fp.height == monitor.fingerprint.heightPixels)
-
-                    return vendorMatch && modelMatch && serialMatch && resolutionMatch
+                        return vendorMatch && modelMatch && serialMatch && resolutionMatch
+                    }
+                    
+                    return false
                 }
             }) {
-                print("[DEBUG] Found monitor at index \(index): '\(viewModel.connectedMonitors[index].name)' for workspace '\(workspace)'")
                 self._selectedMonitorIndex = State(initialValue: index + 1)
             } else {
-                print("[DEBUG] No monitor found for workspace '\(workspace)'")
                 self._selectedMonitorIndex = State(initialValue: 0)
             }
         } else {
@@ -423,10 +369,10 @@ struct WorkspaceConfigRow: View {
         if selectedMonitorIndex == 0 {
             viewModel.updateWorkspaceAssignment(workspace: workspace, assignment: nil)
         } else if let monitor = viewModel.connectedMonitors[safe: selectedMonitorIndex - 1] {
-            let assignment = ConfigurationViewModel.WorkspaceAssignment(
+            let assignment = Config.WorkspaceAssignment(
                 workspaceName: workspace,
                 monitorDescription: monitor.name,
-                monitorType: .fingerprint(ConfigurationViewModel.WorkspaceAssignment.MonitorFingerprint(
+                monitorType: .fingerprint(Config.WorkspaceAssignment.MonitorFingerprint(
                     vendorId: monitor.fingerprint.vendorId,
                     modelId: monitor.fingerprint.modelId,
                     serialNumber: monitor.fingerprint.serialNumber,
