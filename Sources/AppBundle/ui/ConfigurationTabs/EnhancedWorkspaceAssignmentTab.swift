@@ -72,8 +72,9 @@ struct EnhancedWorkspaceAssignmentTab: View {
                 }
             }
             .listStyle(InsetListStyle())
-            }
+            .frame(minHeight: 200)
         }
+    }
         // Removed .sheet for AddWorkspaceView as assignments are added directly
     }
     
