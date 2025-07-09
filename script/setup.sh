@@ -7,7 +7,7 @@ set -o pipefail # Any command failed in the pipe fails the whole pipe
 # Don't forget to also update ./ShellParserGenerated/Package.swift
 export antlr_version="4.13.1"
 
-add-optional-dep-to-bin() {
+add_optional_dep_to_bin() {
     if /usr/bin/which "$1" &> /dev/null; then
         /bin/cat > ".deps/bin/${2:-$1}" <<EOF
 #!/bin/bash
@@ -20,17 +20,17 @@ if /bin/test -z "${NUKE_PATH:-}"; then
     /bin/rm -rf .deps/bin
     /bin/mkdir -p .deps/bin
 
-    add-optional-dep-to-bin bash not-outdated-bash # build-shell-completion.sh
-    add-optional-dep-to-bin fish # build-shell-completion.sh
-    add-optional-dep-to-bin rustc # build-shell-completion.sh
-    add-optional-dep-to-bin cargo # build-shell-completion.sh
-    add-optional-dep-to-bin brew # install-from-sources.sh
-    add-optional-dep-to-bin bundle # build-docs.sh
-    add-optional-dep-to-bin bundler # build-docs.sh
-    add-optional-dep-to-bin xcbeautify # build-release.sh
-    add-optional-dep-to-bin git
-    add-optional-dep-to-bin swift
-    add-optional-dep-to-bin swiftly
+    add_optional_dep_to_bin bash not-outdated-bash # build-shell-completion.sh
+    add_optional_dep_to_bin fish # build-shell-completion.sh
+    add_optional_dep_to_bin rustc # build-shell-completion.sh
+    add_optional_dep_to_bin cargo # build-shell-completion.sh
+    add_optional_dep_to_bin brew # install-from-sources.sh
+    add_optional_dep_to_bin bundle # build-docs.sh
+    add_optional_dep_to_bin bundler # build-docs.sh
+    add_optional_dep_to_bin xcbeautify # build-release.sh
+    add_optional_dep_to_bin git
+    add_optional_dep_to_bin swift
+    add_optional_dep_to_bin swiftly
 
     export PATH="${PWD}/.deps/bin:/bin:/usr/bin"
     chmod +x .deps/bin/*

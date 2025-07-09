@@ -31,20 +31,7 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
     }
 }
 
-enum TomlParseError: Error, CustomStringConvertible, Equatable {
-    case semantic(_ backtrace: TomlBacktrace, _ message: String)
-    case syntax(_ message: String)
 
-    var description: String {
-        return switch self {
-            // todo Make 'split' + flatten normalization prettier
-            case .semantic(let backtrace, let message): backtrace.isEmptyRoot ? message : "\(backtrace): \(message)"
-            case .syntax(let message): message
-        }
-    }
-}
-
-typealias ParsedToml<T> = Result<T, TomlParseError>
 
 extension ParserProtocol {
     func transformRawConfig(_ raw: S,
@@ -118,10 +105,52 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     // Deprecated
     "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._nonEmptyWorkspacesRootContainersLayoutOnStartup, parseStartupRootContainerLayout),
     "indent-for-nested-containers-with-the-same-orientation": Parser(\._indentForNestedContainersWithTheSameOrientation, parseIndentForNestedContainersWithTheSameOrientation),
+
+    // New: Workspace Profiles
+    "profiles": Parser(\.workspaceProfiles, parseWorkspaceProfiles),
+    "active-profile": Parser(\.activeProfileName) { $0.string.toParsedToml($1) }, // Fix for Optional<String>
 ]
 
+// New parsing function for profiles
+private func parseWorkspaceProfiles(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<[Config.WorkspaceProfile]> {
+    guard let profilesTable = raw.table else {
+        return .failure(expectedActualTypeError(expected: .table, actual: raw.type, backtrace))
+    }
+
+    var parsedProfiles: [Config.WorkspaceProfile] = []
+    var errors: [TomlParseError] = []
+
+    for (profileName, profileValue) in profilesTable {
+        let profileBacktrace = backtrace + .key(profileName)
+        guard let profileTable = profileValue.table else {
+            errors.append(expectedActualTypeError(expected: .table, actual: profileValue.type, profileBacktrace))
+            continue
+        }
+
+        var assignments: [Config.WorkspaceAssignment] = []
+        if let assignmentsTable = profileTable["workspace-to-monitor-force-assignment"]?.table {
+            let assignmentsBacktrace = profileBacktrace + .key("workspace-to-monitor-force-assignment")
+            for (workspace, value) in assignmentsTable {
+                if var assignment = parseWorkspaceAssignment(workspace: workspace, value: value) {
+                    assignment.isForceAssignment = true
+                    assignments.append(assignment)
+                } else {
+                    errors.append(.semantic(assignmentsBacktrace + .key(workspace), "Failed to parse workspace assignment"))
+                }
+            }
+        }
+        parsedProfiles.append(Config.WorkspaceProfile(name: profileName, assignments: assignments))
+    }
+
+    if errors.isEmpty {
+        return .success(parsedProfiles)
+    } else {
+        return .failure(errors.first!) // Return the first error, or combine them
+    }
+}
+
 extension ParsedCmd where T == any Command {
-    fileprivate func toEither() -> Parsed<T> {
+    internal func toEither() -> Parsed<T> { // Changed to internal
         return switch self {
             case .cmd(let a):
                 a.info.allowInConfig
@@ -303,59 +332,67 @@ private func parseDefaultContainerOrientation(_ raw: TOMLValueConvertible, _ bac
     }
 }
 
-extension Parsed where Failure == String {
-    func toParsedToml(_ backtrace: TomlBacktrace) -> ParsedToml<Success> {
-        mapError { .semantic(backtrace, $0) }
+private func parseWorkspaceAssignment(workspace: String, value: TOMLValueConvertible) -> Config.WorkspaceAssignment? {
+    if let stringValue = value.string {
+        return Config.WorkspaceAssignment(
+            workspaceName: workspace,
+            monitorDescription: stringValue,
+            monitorType: parseMonitorType(from: stringValue)
+        )
+    } else if let intValue = value.int {
+        return Config.WorkspaceAssignment(
+            workspaceName: workspace,
+            monitorDescription: String(intValue),
+            monitorType: .index(intValue)
+        )
+    } else if let table = value.table {
+        let fingerprintTable: TOMLTable?
+        
+        if let fp = table["fingerprint"]?.table {
+            fingerprintTable = fp
+        } else if table.keys.contains(where: { ["vendor_id", "model_id", "serial_number", "display_name", "width", "height"].contains($0) }) {
+            fingerprintTable = table
+        } else if table.count == 1, let firstKey = table.keys.first, firstKey == "fingerprint",
+                  let nestedTable = table[firstKey]?.table {
+            fingerprintTable = nestedTable
+        } else {
+            return nil
+        }
+        
+        if let fingerprint = fingerprintTable {
+            var fp = Config.WorkspaceAssignment.MonitorFingerprint()
+            fp.vendorId = fingerprint["vendor_id"]?.string
+            fp.modelId = fingerprint["model_id"]?.string
+            fp.serialNumber = fingerprint["serial_number"]?.string
+            fp.displayName = fingerprint["display_name"]?.string
+            fp.width = fingerprint["width"]?.int
+            fp.height = fingerprint["height"]?.int
+            
+            return Config.WorkspaceAssignment(
+                workspaceName: workspace,
+                monitorDescription: "Fingerprint",
+                monitorType: .fingerprint(fp)
+            )
+        }
+    }
+    return nil
+}
+
+private func parseMonitorType(from string: String) -> Config.WorkspaceAssignment.MonitorType {
+    if let index = Int(string) {
+        return .index(index)
+    } else {
+        return .name(string)
     }
 }
+
+
 
 func parseBool(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Bool> {
     raw.bool.orFailure(expectedActualTypeError(expected: .bool, actual: raw.type, backtrace))
 }
 
-indirect enum TomlBacktrace: CustomStringConvertible, Equatable {
-    case emptyRoot
-    case rootKey(String)
-    case key(String)
-    case index(Int)
-    case pair(TomlBacktrace, TomlBacktrace)
 
-    var description: String {
-        return switch self {
-            case .emptyRoot: dieT("Impossible")
-            case .rootKey(let value): value
-            case .key(let value): "." + value
-            case .index(let index): "[\(index)]"
-            case .pair(let first, let second): first.description + second.description
-        }
-    }
-
-    var isEmptyRoot: Bool {
-        return switch self {
-            case .emptyRoot: true
-            default: false
-        }
-    }
-
-    var isRootKey: Bool {
-        return switch self {
-            case .rootKey: true
-            default: false
-        }
-    }
-
-    static func + (lhs: TomlBacktrace, rhs: TomlBacktrace) -> TomlBacktrace {
-        if case .emptyRoot = lhs {
-            if case .key(let newRoot) = rhs {
-                return .rootKey(newRoot)
-            } else {
-                die("Impossible")
-            }
-        } else {
-            return pair(lhs, rhs)
-        }
-    }
-}
 
 extension TOMLTable {
     func parseTable<T: ConvenienceCopyable>(

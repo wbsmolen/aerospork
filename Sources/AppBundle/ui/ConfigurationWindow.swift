@@ -34,11 +34,7 @@ public struct ConfigurationWindow: View {
                     }
                     .tag("general")
                 
-                EnhancedWorkspaceAssignmentTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("Workspaces", systemImage: "square.grid.3x3")
-                    }
-                    .tag("workspaces")
+                
                 
                 GapsSettingsTab(viewModel: viewModel)
                     .tabItem {
@@ -51,6 +47,12 @@ public struct ConfigurationWindow: View {
                         Label("Key Bindings", systemImage: "keyboard")
                     }
                     .tag("keybindings")
+                
+                EnhancedWorkspaceAssignmentTab(viewModel: viewModel)
+                    .tabItem {
+                        Label("Workspaces & Monitors", systemImage: "macwindow.on.rectangle")
+                    }
+                    .tag("workspaces_monitors")
             }
             .padding()
             

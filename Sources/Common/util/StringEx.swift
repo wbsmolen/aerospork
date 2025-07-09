@@ -1,4 +1,70 @@
 public typealias Parsed<T> = Result<T, String>
+
+public enum TomlParseError: Error, CustomStringConvertible, Equatable {
+    case semantic(_ backtrace: TomlBacktrace, _ message: String)
+    case syntax(_ message: String)
+
+    public var description: String {
+        return switch self {
+            case .semantic(let backtrace, let message): backtrace.isEmptyRoot ? message : "\(backtrace): \(message)"
+            case .syntax(let message): message
+        }
+    }
+}
+
+public typealias ParsedToml<T> = Result<T, TomlParseError>
+
+public indirect enum TomlBacktrace: CustomStringConvertible, Equatable, Sendable { // Added Sendable
+    case emptyRoot
+    case rootKey(String)
+    case key(String)
+    case index(Int)
+    case pair(TomlBacktrace, TomlBacktrace)
+
+    public var description: String {
+        return switch self {
+            case .emptyRoot: dieT("Impossible")
+            case .rootKey(let value): value
+            case .key(let value): "." + value
+            case .index(let index): "[\(index)]"
+            case .pair(let first, let second): first.description + second.description
+        }
+    }
+
+    public var isEmptyRoot: Bool {
+        return switch self {
+            case .emptyRoot: true
+            default: false
+        }
+    }
+
+    public var isRootKey: Bool {
+        return switch self {
+            case .rootKey: true
+            default: false
+        }
+    }
+
+    public static func + (lhs: TomlBacktrace, rhs: TomlBacktrace) -> TomlBacktrace {
+        if case .emptyRoot = lhs {
+            if case .key(let newRoot) = rhs {
+                return .rootKey(newRoot)
+            } else {
+                die("Impossible")
+            }
+        }
+        else {
+            return pair(lhs, rhs)
+        }
+    }
+}
+
+extension Parsed where Failure == String {
+    public func toParsedToml(_ backtrace: TomlBacktrace) -> ParsedToml<Success> {
+        mapError { .semantic(backtrace, $0) }
+    }
+}
+
 extension String: @retroactive Error {} // Make it possible to use String in Result. todo migrate to self written Result monad
 extension Array: @retroactive Error where Element: Error {} // Make it possible to use [String] in Result. todo migrate to self written Result monad
 

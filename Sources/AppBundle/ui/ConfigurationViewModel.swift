@@ -15,7 +15,46 @@ class ConfigurationViewModel: ObservableObject {
     @Published var enableNormalizationOppositeOrientation: Bool = true
     
     // Workspace assignments
-    @Published var workspaceAssignments: [WorkspaceAssignment] = []
+    var workspaceProfiles: [Config.WorkspaceProfile] {
+        get {
+            config.workspaceProfiles
+        }
+        set {
+            config.workspaceProfiles = newValue
+            markAsModified()
+        }
+    }
+    var activeProfileId: UUID? {
+        get {
+            config.activeProfileName.flatMap { name in
+                config.workspaceProfiles.first(where: { $0.name == name })?.id
+            }
+        }
+        set {
+            if let newId = newValue, let profile = config.workspaceProfiles.first(where: { $0.id == newId }) {
+                config.activeProfileName = profile.name
+            } else {
+                config.activeProfileName = nil
+            }
+            markAsModified()
+        }
+    }
+    
+    var workspaceAssignments: [Config.WorkspaceAssignment] { // Now uses Config.WorkspaceAssignment
+        get {
+            if let activeProfile = workspaceProfiles.first(where: { $0.id == activeProfileId }) {
+                return activeProfile.assignments
+            } else {
+                return []
+            }
+        }
+        set {
+            if let index = workspaceProfiles.firstIndex(where: { $0.id == activeProfileId }) {
+                workspaceProfiles[index].assignments = newValue
+                markAsModified()
+            }
+        }
+    }
     @Published var autoMoveWorkspacesOnMonitorConnect: Bool = true
     @Published var connectedMonitors: [MonitorInfo] = []
     @Published var allWorkspaces: [String] = []
@@ -74,28 +113,7 @@ class ConfigurationViewModel: ObservableObject {
         }
     }
     
-    struct WorkspaceAssignment: Identifiable {
-        let id = UUID()
-        var workspaceName: String
-        var monitorDescription: String
-        var monitorType: MonitorType
-        var isForceAssignment: Bool = false
-        
-        enum MonitorType {
-            case name(String)
-            case index(Int)
-            case fingerprint(MonitorFingerprint)
-        }
-        
-        struct MonitorFingerprint {
-            var vendorId: String?
-            var modelId: String?
-            var serialNumber: String?
-            var displayName: String?
-            var width: Int?
-            var height: Int?
-        }
-    }
+    
     
     func loadConfiguration() async {
         isLoading = true
@@ -155,31 +173,21 @@ class ConfigurationViewModel: ObservableObject {
                 }
             }
             
-            // Load workspace assignments
-            workspaceAssignments = []
+            // Load workspace profiles from global config
+            workspaceProfiles = config.workspaceProfiles
             
-            // Load regular assignments
-            // Note: AeroSpace only has workspace-to-monitor-force-assignment key,
-            // but we'll track regular vs force assignments in our UI
+            if workspaceProfiles.isEmpty {
+                // Create a default profile if none exist
+                let defaultProfile = Config.WorkspaceProfile(name: "Default", assignments: [])
+                workspaceProfiles.append(defaultProfile)
+            }
             
-            // Load force assignments
-            if let assignments = tomlTable["workspace-to-monitor-force-assignment"]?.table {
-                print("[DEBUG] Loading workspace assignments from config")
-                for (workspace, value) in assignments {
-                    print("[DEBUG] Processing workspace '\(workspace)' with value type: \(type(of: value))")
-                    
-                    // Try to parse the assignment
-                    if var assignment = parseWorkspaceAssignment(workspace: workspace, value: value) {
-                        assignment.isForceAssignment = true
-                        workspaceAssignments.append(assignment)
-                        print("[DEBUG] Successfully loaded assignment for workspace '\(workspace)'")
-                    } else {
-                        print("[DEBUG] Failed to parse assignment for workspace '\(workspace)'")
-                    }
-                }
-                print("[DEBUG] Loaded \(workspaceAssignments.count) workspace assignments")
+            // Set active profile
+            if let activeProfileName = config.activeProfileName,
+               let activeProfile = workspaceProfiles.first(where: { $0.name == activeProfileName }) {
+                activeProfileId = activeProfile.id
             } else {
-                print("[DEBUG] No workspace-to-monitor-force-assignment section found")
+                activeProfileId = workspaceProfiles.first?.id
             }
             
             // Load current monitor information
@@ -199,85 +207,7 @@ class ConfigurationViewModel: ObservableObject {
         isLoading = false
     }
     
-    private func parseWorkspaceAssignment(workspace: String, value: TOMLValueConvertible) -> WorkspaceAssignment? {
-        print("[DEBUG] parseWorkspaceAssignment for workspace '\(workspace)'")
-        print("[DEBUG] Value type: \(type(of: value))")
-        
-        if let stringValue = value.string {
-            // Simple string assignment
-            print("[DEBUG] Found string value: \(stringValue)")
-            return WorkspaceAssignment(
-                workspaceName: workspace,
-                monitorDescription: stringValue,
-                monitorType: parseMonitorType(from: stringValue)
-            )
-        } else if let intValue = value.int {
-            // Index assignment
-            print("[DEBUG] Found int value: \(intValue)")
-            return WorkspaceAssignment(
-                workspaceName: workspace,
-                monitorDescription: String(intValue),
-                monitorType: .index(intValue)
-            )
-        } else if let table = value.table {
-            print("[DEBUG] Found table with keys: \(table.keys)")
-            print("[DEBUG] Table contents:")
-            for (key, val) in table {
-                print("[DEBUG]   \(key): \(type(of: val)) = \(val)")
-            }
-            
-            // Table assignment - could be inline or nested section format
-            let fingerprintTable: TOMLTable?
-            
-            if let fp = table["fingerprint"]?.table {
-                // Inline format: { fingerprint = { ... } }
-                print("[DEBUG] Found inline fingerprint table")
-                fingerprintTable = fp
-            } else if table.keys.contains(where: { ["vendor_id", "model_id", "serial_number", "display_name", "width", "height"].contains($0) }) {
-                // Nested section format: the table itself is the fingerprint
-                print("[DEBUG] Table appears to be fingerprint data directly")
-                fingerprintTable = table
-            } else if table.count == 1, let firstKey = table.keys.first, firstKey == "fingerprint",
-                      let nestedTable = table[firstKey]?.table {
-                // Handle case where we have { "fingerprint": <table> } from nested sections
-                print("[DEBUG] Found nested fingerprint structure")
-                fingerprintTable = nestedTable
-            } else {
-                // Unknown table format
-                print("[DEBUG] Unknown table format, keys: \(table.keys)")
-                return nil
-            }
-            
-            if let fingerprint = fingerprintTable {
-                print("[DEBUG] Processing fingerprint with keys: \(fingerprint.keys)")
-                var fp = WorkspaceAssignment.MonitorFingerprint()
-                fp.vendorId = fingerprint["vendor_id"]?.string
-                fp.modelId = fingerprint["model_id"]?.string
-                fp.serialNumber = fingerprint["serial_number"]?.string
-                fp.displayName = fingerprint["display_name"]?.string
-                fp.width = fingerprint["width"]?.int
-                fp.height = fingerprint["height"]?.int
-                
-                print("[DEBUG] Created fingerprint: vendorId=\(fp.vendorId ?? "nil"), modelId=\(fp.modelId ?? "nil"), displayName=\(fp.displayName ?? "nil"), width=\(fp.width?.description ?? "nil"), height=\(fp.height?.description ?? "nil")")
-                
-                return WorkspaceAssignment(
-                    workspaceName: workspace,
-                    monitorDescription: "Fingerprint",
-                    monitorType: .fingerprint(fp)
-                )
-            }
-        }
-        print("[DEBUG] Failed to parse assignment - returning nil")
-        return nil
-    }
     
-    private func parseMonitorType(from string: String) -> WorkspaceAssignment.MonitorType {
-        if let index = Int(string) {
-            return .index(index)
-        } else {
-            return .name(string)
-        }
-    }
     
     private func loadKeyBindings(from toml: TOMLTable) {
         keyBindings = []
@@ -387,76 +317,14 @@ class ConfigurationViewModel: ObservableObject {
                 tomlTable["gaps"] = gaps
             }
             
-            // Update workspace assignments
-            var regularAssignments = TOMLTable()
-            var forceAssignments = TOMLTable()
+            // Update workspace profiles in global config
+            config.workspaceProfiles = workspaceProfiles
             
-            for assignment in workspaceAssignments {
-                switch assignment.monitorType {
-                case .name(let name):
-                    if assignment.isForceAssignment {
-                        forceAssignments[assignment.workspaceName] = name
-                    } else {
-                        regularAssignments[assignment.workspaceName] = name
-                    }
-                case .index(let index):
-                    if assignment.isForceAssignment {
-                        forceAssignments[assignment.workspaceName] = index
-                    } else {
-                        regularAssignments[assignment.workspaceName] = index
-                    }
-                case .fingerprint(let fp):
-                    let fpTable = TOMLTable()
-                    if let vendorId = fp.vendorId { fpTable["vendor_id"] = vendorId }
-                    if let modelId = fp.modelId { fpTable["model_id"] = modelId }
-                    if let serial = fp.serialNumber { fpTable["serial_number"] = serial }
-                    if let name = fp.displayName { fpTable["display_name"] = name }
-                    if let width = fp.width { fpTable["width"] = width }
-                    if let height = fp.height { fpTable["height"] = height }
-                    
-                    let wrapper = TOMLTable()
-                    wrapper["fingerprint"] = fpTable
-                    
-                    if assignment.isForceAssignment {
-                        forceAssignments[assignment.workspaceName] = wrapper
-                    } else {
-                        regularAssignments[assignment.workspaceName] = wrapper
-                    }
-                }
-            }
-            
-            // All workspace assignments go under workspace-to-monitor-force-assignment
-            // The UI tracks regular vs force, but config only has one key
-            let allAssignments = TOMLTable()
-            
-            for assignment in workspaceAssignments {
-                switch assignment.monitorType {
-                case .name(let name):
-                    allAssignments[assignment.workspaceName] = name
-                case .index(let index):
-                    allAssignments[assignment.workspaceName] = index
-                case .fingerprint(let fp):
-                    let fpTable = TOMLTable()
-                    if let vendorId = fp.vendorId { fpTable["vendor_id"] = vendorId }
-                    if let modelId = fp.modelId { fpTable["model_id"] = modelId }
-                    if let serial = fp.serialNumber { fpTable["serial_number"] = serial }
-                    if let name = fp.displayName { fpTable["display_name"] = name }
-                    if let width = fp.width { fpTable["width"] = width }
-                    if let height = fp.height { fpTable["height"] = height }
-                    
-                    let wrapper = TOMLTable()
-                    wrapper["fingerprint"] = fpTable
-                    allAssignments[assignment.workspaceName] = wrapper
-                }
-            }
-            
-            // Set the workspace assignments (only valid key)
-            tomlTable["workspace-to-monitor-force-assignment"] = allAssignments
-            
-            // Debug: Print what we're about to save
-            print("[DEBUG] Workspace assignments being saved:")
-            for (key, value) in allAssignments {
-                print("[DEBUG]   \(key): \(value)")
+            // Save active profile name in global config
+            if let activeProfile = workspaceProfiles.first(where: { $0.id == activeProfileId }) {
+                config.activeProfileName = activeProfile.name
+            } else {
+                config.activeProfileName = nil
             }
             
             // Write to file
@@ -541,19 +409,23 @@ class ConfigurationViewModel: ObservableObject {
     }
     
     func addWorkspaceAssignment() {
-        let newAssignment = WorkspaceAssignment(
-            workspaceName: findNextAvailableWorkspaceName(),
-            monitorDescription: "main",
-            monitorType: .name("main")
-        )
-        workspaceAssignments.append(newAssignment)
-        markAsModified()
+        if let index = workspaceProfiles.firstIndex(where: { $0.id == activeProfileId }) {
+            let newAssignment = Config.WorkspaceAssignment( // Use Config.WorkspaceAssignment
+                workspaceName: findNextAvailableWorkspaceName(),
+                monitorDescription: "main",
+                monitorType: .name("main")
+            )
+            workspaceProfiles[index].assignments.append(newAssignment)
+            markAsModified()
+        }
     }
     
     func removeWorkspaceAssignment(at index: Int) {
-        guard index < workspaceAssignments.count else { return }
-        workspaceAssignments.remove(at: index)
-        markAsModified()
+        if let profileIndex = workspaceProfiles.firstIndex(where: { $0.id == activeProfileId }) {
+            guard index < workspaceProfiles[profileIndex].assignments.count else { return }
+            workspaceProfiles[profileIndex].assignments.remove(at: index)
+            markAsModified()
+        }
     }
     
     private func findNextAvailableWorkspaceName() -> String {
@@ -593,28 +465,30 @@ class ConfigurationViewModel: ObservableObject {
     }
     
     func addWorkspaceAssignment(forMonitor monitor: MonitorInfo? = nil, isForce: Bool = false) {
-        var newAssignment = WorkspaceAssignment(
-            workspaceName: findNextAvailableWorkspaceName(),
-            monitorDescription: monitor?.name ?? "main",
-            monitorType: .name(monitor?.name ?? "main"),
-            isForceAssignment: isForce
-        )
-        
-        if let monitor = monitor {
-            // Create fingerprint from the selected monitor
-            newAssignment.monitorType = .fingerprint(WorkspaceAssignment.MonitorFingerprint(
-                vendorId: monitor.fingerprint.vendorId,
-                modelId: monitor.fingerprint.modelId,
-                serialNumber: monitor.fingerprint.serialNumber,
-                displayName: monitor.fingerprint.displayName,
-                width: monitor.fingerprint.widthPixels,
-                height: monitor.fingerprint.heightPixels
-            ))
-            newAssignment.monitorDescription = monitor.name
+        if let index = workspaceProfiles.firstIndex(where: { $0.id == activeProfileId }) {
+            var newAssignment = Config.WorkspaceAssignment( // Use Config.WorkspaceAssignment
+                workspaceName: findNextAvailableWorkspaceName(),
+                monitorDescription: monitor?.name ?? "main",
+                monitorType: .name(monitor?.name ?? "main"),
+                isForceAssignment: isForce
+            )
+            
+            if let monitor = monitor {
+                // Create fingerprint from the selected monitor
+                newAssignment.monitorType = .fingerprint(Config.WorkspaceAssignment.MonitorFingerprint( // Use Config.WorkspaceAssignment.MonitorFingerprint
+                    vendorId: monitor.fingerprint.vendorId,
+                    modelId: monitor.fingerprint.modelId,
+                    serialNumber: monitor.fingerprint.serialNumber,
+                    displayName: monitor.fingerprint.displayName,
+                    width: monitor.fingerprint.widthPixels,
+                    height: monitor.fingerprint.heightPixels
+                ))
+                newAssignment.monitorDescription = monitor.name
+            }
+            
+            workspaceProfiles[index].assignments.append(newAssignment)
+            markAsModified()
         }
-        
-        workspaceAssignments.append(newAssignment)
-        markAsModified()
     }
     
     // Workspace management methods
@@ -632,15 +506,34 @@ class ConfigurationViewModel: ObservableObject {
         markAsModified()
     }
     
-    func updateWorkspaceAssignment(workspace: String, assignment: WorkspaceAssignment?) {
-        // Remove existing assignment for this workspace
-        workspaceAssignments.removeAll { $0.workspaceName == workspace }
-        
-        // Add new assignment if provided
-        if let assignment = assignment {
-            workspaceAssignments.append(assignment)
+    func updateWorkspaceAssignment(workspace: String, assignment: Config.WorkspaceAssignment?) { // Use Config.WorkspaceAssignment
+        if let profileIndex = workspaceProfiles.firstIndex(where: { $0.id == activeProfileId }) {
+            // Remove existing assignment for this workspace
+            workspaceProfiles[profileIndex].assignments.removeAll { $0.workspaceName == workspace }
+            
+            // Add new assignment if provided
+            if let assignment = assignment {
+                workspaceProfiles[profileIndex].assignments.append(assignment)
+            }
+            
+            markAsModified()
         }
-        
+    }
+    
+    // MARK: - Workspace Profile Management
+    
+    func addWorkspaceProfile(name: String) {
+        let newProfile = Config.WorkspaceProfile(name: name, assignments: []) // Use Config.WorkspaceProfile
+        workspaceProfiles.append(newProfile)
+        activeProfileId = newProfile.id // Automatically select the new profile
+        markAsModified()
+    }
+    
+    func removeWorkspaceProfile(id: UUID) {
+        workspaceProfiles.removeAll { $0.id == id }
+        if activeProfileId == id {
+            activeProfileId = workspaceProfiles.first?.id // Select the first available profile
+        }
         markAsModified()
     }
     

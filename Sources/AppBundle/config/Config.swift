@@ -59,6 +59,42 @@ struct Config: ConvenienceCopyable {
     var preservedWorkspaceNames: [String] = []
     var performanceConfig: PerformanceConfig = PerformanceConfig()
     var autoMoveWorkspacesOnMonitorConnect: Bool = true
+
+    var workspaceProfiles: [WorkspaceProfile] = [] // New
+    var activeProfileName: String? = nil // New
+
+    struct WorkspaceAssignment: Identifiable, Codable, Equatable {
+        let id = UUID()
+        var workspaceName: String
+        var monitorDescription: String
+        var monitorType: MonitorType
+        var isForceAssignment: Bool = false
+        
+        enum MonitorType: Codable, Equatable {
+            case name(String)
+            case index(Int)
+            case fingerprint(MonitorFingerprint)
+        }
+        
+        struct MonitorFingerprint: Codable, Equatable {
+            var vendorId: String?
+            var modelId: String?
+            var serialNumber: String?
+            var displayName: String?
+            var width: Int?
+            var height: Int?
+        }
+    }
+    
+    struct WorkspaceProfile: Identifiable, Codable, Equatable {
+        let id = UUID()
+        var name: String
+        var assignments: [WorkspaceAssignment]
+        
+        static func == (lhs: WorkspaceProfile, rhs: WorkspaceProfile) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
 }
 
 enum DefaultContainerOrientation: String {
