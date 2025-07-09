@@ -1,7 +1,7 @@
 # Xcode project configuration. Managed by https://github.com/yonaskolb/XcodeGen
 # Xcode is only used to build the release App Bundle. Debug builds only use Swift Package Manager
 
-name: AeroSpace
+name: AeroSpork
 
 packages:
   AeroSpacePackage:
@@ -12,12 +12,12 @@ configs:
   Release: release
 
 targets:
-  AeroSpace:
+  AeroSpork:
     type: application
     platform: macOS
     deploymentTarget: "13.0"
     sources:
-      - "Sources/AeroSpaceApp"
+      - "Sources/AeroSporkApp"
       - "resources"
       - "docs/config-examples/default-config.toml"
     dependencies:
@@ -28,21 +28,21 @@ targets:
       base:
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
-        MARKETING_VERSION: ${XCODEGEN_AEROSPACE_VERSION}
+        MARKETING_VERSION: ${XCODEGEN_AEROSPORK_VERSION}
         # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html#//apple_ref/doc/uid/20001431-108256
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window
         INFOPLIST_KEY_LSUIElement: YES
-        CODE_SIGN_IDENTITY: ${XCODEGEN_AEROSPACE_CODE_SIGN_IDENTITY}
+        CODE_SIGN_IDENTITY: ${XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY}
       configs:
         Debug:
-          PRODUCT_NAME: AeroSpace-Debug
-          PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace.debug
+          PRODUCT_NAME: AeroSpork-Debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.aerospork.debug
         Release:
-          PRODUCT_NAME: AeroSpace
-          PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace
+          PRODUCT_NAME: AeroSpork
+          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.aerospork
     entitlements:
-      path: resources/AeroSpace.entitlements
+      path: resources/AeroSpork.entitlements
       properties:
         # Accessibility API doesn't work in sandboxed app
         com.apple.security.app-sandbox: false

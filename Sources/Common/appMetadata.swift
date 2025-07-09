@@ -1,7 +1,7 @@
 #if DEBUG
-    public let aeroSpaceAppId: String = "bobko.aerospace.debug"
-    public let aeroSpaceAppName: String = "AeroSpace-Debug"
+    public let aeroSpaceAppId: String = "com.wbs.aerospork.debug"
+    public let aeroSpaceAppName: String = "AeroSpork-Debug"
 #else
-    public let aeroSpaceAppId: String = "bobko.aerospace"
-    public let aeroSpaceAppName: String = "AeroSpace"
+    public let aeroSpaceAppId: String = "com.wbs.aerospork"
+    public let aeroSpaceAppName: String = "AeroSpork"
 #endif

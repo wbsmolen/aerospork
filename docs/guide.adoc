@@ -17,22 +17,22 @@ https://brew.sh/[Homebrew] is a package manager for macOS
 
 [source,bash]
 ----
-brew install --cask nikitabobko/tap/aerospace
+brew install --cask bsmolen/tap/aerospace
 ----
 
 *(Optional)* You might need to configure your shell to enable completion provided by homebrew packages: https://docs.brew.sh/Shell-Completion
 AeroSpace provides bash, fish and zsh completions.
 
-You can also install specific previous https://github.com/nikitabobko/homebrew-tap/tree/main/Casks[pinned homebrew Casks versions]:
+You can also install specific previous https://github.com/wbsmolen/homebrew-tap/tree/main/Casks[pinned homebrew Casks versions]:
 [source,bash]
 ----
-brew install --cask nikitabobko/tap/aerospace@0.12.0
+brew install --cask bsmolen/tap/aerospace@0.12.0
 ----
 
 [#manual-installation]
 === Manual installation
 
-. Download the latest available zip from https://github.com/nikitabobko/AeroSpace/releases[releases page]
+. Download the latest available zip from https://github.com/wbsmolen/aerospork/releases[releases page]
 . Unpack zip
 . Put unpacked `AeroSpace-v$VERSION/AeroSpace.app` to `/Applications`
 . Put unpacked `AeroSpace-v$VERSION/bin/aerospace` anywhere to `$PATH`
@@ -425,10 +425,10 @@ defaults write com.apple.dock expose-group-apps -bool true && killall Dock
 There is an observation that macOS works better and more stable if you disable `Displays have separate Spaces`. (It's enabled by default)
 People report all sorts of weird issues related to focus and performance when this setting is enabled:
 
-* Wrong window may receive focus in multi monitor setup: https://github.com/nikitabobko/AeroSpace/issues/101[#101] (Bug in Apple API)
-* Wrong borderless Alacritty window may receive focus in *single monitor* setup: https://github.com/nikitabobko/AeroSpace/issues/247[#247] (Bug in Apple API)
-* Performance issues: https://github.com/nikitabobko/AeroSpace/issues/333[#333]
-* macOS randomly switches focus back: https://github.com/nikitabobko/AeroSpace/issues/289[#289]
+* Wrong window may receive focus in multi monitor setup: https://github.com/wbsmolen/aerospork/issues/101[#101] (Bug in Apple API)
+* Wrong borderless Alacritty window may receive focus in *single monitor* setup: https://github.com/wbsmolen/aerospork/issues/247[#247] (Bug in Apple API)
+* Performance issues: https://github.com/wbsmolen/aerospork/issues/333[#333]
+* macOS randomly switches focus back: https://github.com/wbsmolen/aerospork/issues/289[#289]
 
 When `Displays have separate Spaces` is enabled,
 moving windows between monitors causes windows to move between different Spaces which is not correctly handled by the public APIs AeroSpace uses,
@@ -495,7 +495,7 @@ By default, the first callback that matches the criteria is run, and further cal
 (The behavior can be overridden with `check-further-callbacks` option)
 
 For now, only xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] and xref:commands.adoc#layout[layout] commands are supported in the `run` callback.
-Please post your use cases to https://github.com/nikitabobko/AeroSpace/issues/20[the issue] if you want other commands to get supported.
+Please post your use cases to https://github.com/wbsmolen/aerospork/issues/20[the issue] if you want other commands to get supported.
 
 Available window conditions are:
 

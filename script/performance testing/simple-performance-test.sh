@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# Simple performance test for currently running AeroSpace
+# Simple performance test for currently running AeroSpork
 # Does not kill/restart the process
 
-echo "AeroSpace Performance Test (Simple)"
+echo "AeroSpork Performance Test (Simple)"
 echo "=================================="
 echo
 
 # Detect which version is running
-PID=$(pgrep -x "AeroSpace-Debug" || pgrep -x "AeroSpace")
+PID=$(pgrep -x "AeroSpork-Debug" || pgrep -x "AeroSpork")
 if [ -z "$PID" ]; then
-    echo "Error: AeroSpace is not running!"
+    echo "Error: AeroSpork is not running!"
     exit 1
 fi
 
@@ -19,23 +19,23 @@ echo "Testing: $PROCESS_NAME (PID: $PID)"
 echo
 
 # Determine CLI path based on running version
-if [[ "$PROCESS_NAME" == "AeroSpace-Debug" ]]; then
+if [[ "$PROCESS_NAME" == "AeroSpork-Debug" ]]; then
     # Try to find the debug CLI binary dynamically
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     
     # Look for the debug CLI in common locations
-    if [[ -f "$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospace" ]]; then
-        CLI="$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospace"
-    elif [[ -f "$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospace" ]]; then
-        CLI="$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospace"
+    if [[ -f "$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospork" ]]; then
+        CLI="$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospork"
+    elif [[ -f "$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospork" ]]; then
+        CLI="$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospork"
     else
-        echo "Error: Debug CLI not found. Please build with: swift build --configuration debug --product aerospace"
+        echo "Error: Debug CLI not found. Please build with: swift build --configuration debug --product aerospork"
         exit 1
     fi
     VERSION="Optimized Debug Build"
 else
-    CLI="/opt/homebrew/bin/aerospace"
+    CLI="/opt/homebrew/bin/aerospork"
     VERSION="Original Release"
 fi
 
@@ -234,4 +234,4 @@ echo
 echo "Test completed at: $(date)"
 echo
 echo "Note: For comparison, run this test with both the original"
-echo "and optimized versions of AeroSpace."
+echo "and optimized versions of AeroSpork."

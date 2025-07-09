@@ -1,15 +1,15 @@
-= aerospace-trigger-binding(1)
+= aerospork-trigger-binding(1)
 include::util/man-attributes.adoc[]
-:manname: aerospace-trigger-binding
+:manname: aerospork-trigger-binding
 // tag::purpose[]
-:manpurpose: Trigger AeroSpace binding as if it was pressed by user
+:manpurpose: Trigger AeroSpork binding as if it was pressed by user
 // end::purpose[]
 
 // =========================================================== Synopsis
 == Synopsis
 [verse]
 // tag::synopsis[]
-aerospace trigger-binding [-h|--help] <binding> --mode <mode-id>
+aerospork trigger-binding [-h|--help] <binding> --mode <mode-id>
 
 // end::synopsis[]
 
@@ -19,8 +19,8 @@ aerospace trigger-binding [-h|--help] <binding> --mode <mode-id>
 // tag::body[]
 {manpurpose}
 
-You can use aerospace-config command to inspect available bindings: +
-`aerospace config --get mode.main.binding --keys`
+You can use aerospork-config command to inspect available bindings: +
+`aerospork config --get mode.main.binding --keys`
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]

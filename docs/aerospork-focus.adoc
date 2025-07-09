@@ -30,7 +30,7 @@ The technique eliminates the need for an additional binding for floating windows
 This behavior can be disabled with `--ignore-floating` flag.
 
 `focus child|parent` isn't supported because the necessity of this operation is under the question.
-https://github.com/nikitabobko/AeroSpace/issues/5
+https://github.com/wbsmolen/aerospork/issues/5
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]

@@ -2,14 +2,14 @@
 cd "$(dirname "$0")"
 source ./script/setup.sh
 
-export XCODEGEN_AEROSPACE_CODE_SIGN_IDENTITY="aerospace-codesign-certificate"
+export XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY="aerospork-codesign-certificate"
 build_version="0.0.0-SNAPSHOT"
 generate_xcodeproj=1
 all=0
 while test $# -gt 0; do
     case $1 in
         --build-version) build_version="$2"; shift 2 ;;
-        --codesign-identity) XCODEGEN_AEROSPACE_CODE_SIGN_IDENTITY="$2"; shift 2 ;;
+        --codesign-identity) XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY="$2"; shift 2 ;;
         --ignore-xcodeproj) generate_xcodeproj=0; shift 1 ;;
         --all) all=1; shift 1 ;;
         *) echo "Unknown option $1"; exit 1 ;;
@@ -35,18 +35,18 @@ public let aeroSpaceAppVersion = "$build_version"
 EOF
 
 entries() {
-    for file in docs/aerospace-*.adoc; do
+    for file in docs/aerospork-*.adoc; do
         if grep -q 'exec-and-forget' <<< $file; then
             continue
         fi
-        subcommand=$(basename $file | sed 's/^aerospace-//' | sed 's/\.adoc$//')
+        subcommand=$(basename $file | sed 's/^aerospork-//' | sed 's/\.adoc$//')
         desc="$(grep :manpurpose: "$file" | sed -E 's/:manpurpose: //')"
         echo "    [\"  $subcommand\", \"$desc\"],"
     done
 }
 
 cat <<EOF > ./Sources/Cli/subcommandDescriptionsGenerated.swift
-// FILE IS GENERATED FROM docs/aerospace-*.adoc files
+// FILE IS GENERATED FROM docs/aerospork-*.adoc files
 // TO REGENERATE THE FILE RUN generate.sh
 
 let subcommandDescriptions = [
@@ -61,7 +61,7 @@ public let gitShortHash = "SNAPSHOT"
 EOF
 
 if test $generate_xcodeproj = 1; then
-    export XCODEGEN_AEROSPACE_VERSION=$build_version
+    export XCODEGEN_AEROSPORK_VERSION=$build_version
     ./script/install-dep.sh --xcodegen
     ./.deps/xcodegen/xcodegen # https://github.com/yonaskolb/XcodeGen
 fi

@@ -20,7 +20,7 @@ final class MacApp: AbstractApp {
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
     /*conforms*/ var bundlePath: String? { nsApp.bundleURL?.path }
 
-    // todo think if it's possible to integrate this global mutable state to https://github.com/nikitabobko/AeroSpace/issues/1215
+    // todo think if it's possible to integrate this global mutable state to https://github.com/wbsmolen/AeroSpork/issues/1215
     //      and make deinitialization automatic in deinit
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     @MainActor private static var wipPids: Set<pid_t> = []
@@ -377,7 +377,7 @@ extension [UInt32: AxWindow] {
         if let existing = self[id] { return existing }
         // Delay new window detection if mouse is down
         // It helps with apps that allow dragging their tabs out to create new windows
-        // https://github.com/nikitabobko/AeroSpace/issues/1001
+        // https://github.com/wbsmolen/AeroSpork/issues/1001
         if isLeftMouseButtonDown { return nil }
 
         if let window = try AxWindow.new(windowId: id, axWindow, nsApp, job) {
@@ -390,8 +390,8 @@ extension [UInt32: AxWindow] {
 }
 
 private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?) {
-    // Set size and then the position. The order is important https://github.com/nikitabobko/AeroSpace/issues/143
-    //                                                        https://github.com/nikitabobko/AeroSpace/issues/335
+    // Set size and then the position. The order is important https://github.com/wbsmolen/AeroSpork/issues/143
+    //                                                        https://github.com/wbsmolen/AeroSpork/issues/335
     if let size { window.set(Ax.sizeAttr, size) }
     if let topLeft { window.set(Ax.topLeftCornerAttr, topLeft) } else { return }
     if let size { window.set(Ax.sizeAttr, size) }

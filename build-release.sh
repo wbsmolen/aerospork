@@ -3,7 +3,7 @@ cd "$(dirname "$0")"
 source ./script/setup.sh
 
 build_version="0.0.0-SNAPSHOT"
-codesign_identity="aerospace-codesign-certificate"
+codesign_identity="aerospork-codesign-certificate"
 while test $# -gt 0; do
     case $1 in
         --build-version) build_version="$2"; shift 2;;
@@ -31,7 +31,7 @@ EOF
 ./generate.sh --build-version "$build_version" --codesign-identity "$codesign_identity"
 
 generate-git-hash
-swift build -c release --arch arm64 --arch x86_64 --product aerospace # CLI
+swift build -c release --arch arm64 --arch x86_64 --product aerospork # CLI
 
 # todo: make xcodebuild use the same toolchain as swift
 # toolchain="$(plutil -extract CFBundleIdentifier raw ~/Library/Developer/Toolchains/swift-6.1-RELEASE.xctoolchain/Info.plist)"
@@ -47,45 +47,45 @@ rm -rf .release && mkdir .release
 xcode_configuration="Release"
 xcodebuild -version
 xcodebuild-pretty .release/xcodebuild.log clean build \
-    -scheme AeroSpace \
+    -scheme AeroSpork \
     -destination "generic/platform=macOS" \
     -configuration "$xcode_configuration" \
     -derivedDataPath .xcode-build
 
 git checkout .
 
-cp -r ".xcode-build/Build/Products/$xcode_configuration/AeroSpace.app" .release
-cp -r .build/apple/Products/Release/aerospace .release
+cp -r ".xcode-build/Build/Products/$xcode_configuration/AeroSpork.app" .release
+cp -r .build/apple/Products/Release/aerospork .release
 
 ################
 ### SIGN CLI ###
 ################
 
-codesign -s "$codesign_identity" .release/aerospace
+codesign -s "$codesign_identity" .release/aerospork
 
 ################
 ### VALIDATE ###
 ################
 
 expected_layout=$(cat <<EOF
-.release/AeroSpace.app
-.release/AeroSpace.app/Contents
-.release/AeroSpace.app/Contents/_CodeSignature
-.release/AeroSpace.app/Contents/_CodeSignature/CodeResources
-.release/AeroSpace.app/Contents/MacOS
-.release/AeroSpace.app/Contents/MacOS/AeroSpace
-.release/AeroSpace.app/Contents/Resources
-.release/AeroSpace.app/Contents/Resources/default-config.toml
-.release/AeroSpace.app/Contents/Resources/AppIcon.icns
-.release/AeroSpace.app/Contents/Resources/Assets.car
-.release/AeroSpace.app/Contents/Info.plist
-.release/AeroSpace.app/Contents/PkgInfo
+.release/AeroSpork.app
+.release/AeroSpork.app/Contents
+.release/AeroSpork.app/Contents/_CodeSignature
+.release/AeroSpork.app/Contents/_CodeSignature/CodeResources
+.release/AeroSpork.app/Contents/MacOS
+.release/AeroSpork.app/Contents/MacOS/AeroSpace
+.release/AeroSpork.app/Contents/Resources
+.release/AeroSpork.app/Contents/Resources/default-config.toml
+.release/AeroSpork.app/Contents/Resources/AppIcon.icns
+.release/AeroSpork.app/Contents/Resources/Assets.car
+.release/AeroSpork.app/Contents/Info.plist
+.release/AeroSpork.app/Contents/PkgInfo
 EOF
 )
 
-if test "$expected_layout" != "$(find .release/AeroSpace.app)"; then
+if test "$expected_layout" != "$(find .release/AeroSpork.app)"; then
     echo "!!! Expect/Actual layout don't match !!!"
-    find .release/AeroSpace.app
+    find .release/AeroSpork.app
     exit 1
 fi
 
@@ -104,35 +104,35 @@ check-contains-hash() {
     fi
 }
 
-check-universal-binary .release/AeroSpace.app/Contents/MacOS/AeroSpace
-check-universal-binary .release/aerospace
+check-universal-binary .release/AeroSpork.app/Contents/MacOS/AeroSpace
+check-universal-binary .release/aerospork
 
-check-contains-hash .release/AeroSpace.app/Contents/MacOS/AeroSpace
-check-contains-hash .release/aerospace
+check-contains-hash .release/AeroSpork.app/Contents/MacOS/AeroSpace
+check-contains-hash .release/aerospork
 
-codesign -v .release/AeroSpace.app
-codesign -v .release/aerospace
+codesign -v .release/AeroSpork.app
+codesign -v .release/aerospork
 
 ############
 ### PACK ###
 ############
 
-mkdir -p ".release/AeroSpace-v$build_version/manpage" && cp .man/*.1 ".release/AeroSpace-v$build_version/manpage"
-cp -r ./legal ".release/AeroSpace-v$build_version/legal"
-cp -r .shell-completion ".release/AeroSpace-v$build_version/shell-completion"
+mkdir -p ".release/AeroSpork-v$build_version/manpage" && cp .man/*.1 ".release/AeroSpork-v$build_version/manpage"
+cp -r ./legal ".release/AeroSpork-v$build_version/legal"
+cp -r .shell-completion ".release/AeroSpork-v$build_version/shell-completion"
 cd .release
-    mkdir -p "AeroSpace-v$build_version/bin" && cp -r aerospace "AeroSpace-v$build_version/bin"
-    cp -r AeroSpace.app "AeroSpace-v$build_version"
-    zip -r "AeroSpace-v$build_version.zip" "AeroSpace-v$build_version"
+    mkdir -p "AeroSpork-v$build_version/bin" && cp -r aerospork "AeroSpork-v$build_version/bin"
+    cp -r AeroSpork.app "AeroSpork-v$build_version"
+    zip -r "AeroSpork-v$build_version.zip" "AeroSpork-v$build_version"
 cd -
 
 #################
 ### Brew Cask ###
 #################
-for cask_name in aerospace aerospace-dev; do
+for cask_name in aerospork aerospork-dev; do
     ./script/build-brew-cask.sh \
         --cask-name "$cask_name" \
-        --app-bundle-dir-name "AeroSpace.app" \
-        --zip-uri ".release/AeroSpace-v$build_version.zip" \
+        --app-bundle-dir-name "AeroSpork.app" \
+        --zip-uri ".release/AeroSpork-v$build_version.zip" \
         --build-version "$build_version"
 done

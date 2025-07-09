@@ -8,8 +8,14 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
         let shortIdentification = "\(aeroSpaceAppName) v\(aeroSpaceAppVersion) \(gitShortHash)"
         let identification      = "\(aeroSpaceAppName) v\(aeroSpaceAppVersion) \(gitHash)"
         Text(shortIdentification)
-        Button("Copy to clipboard") { identification.copyToClipboard() }
+        Text("A fork of AeroSpace by nikitabobko")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        Button("Copy version to clipboard") { identification.copyToClipboard() }
             .keyboardShortcut("C", modifiers: .command)
+        Button("Original AeroSpace on GitHub") {
+            NSWorkspace.shared.open(URL(string: "https://github.com/nikitabobko/AeroSpace").orDie())
+        }
         Divider()
         if let token: RunSessionGuard = .isServerEnabled {
             Text("Workspaces:")
@@ -26,13 +32,6 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
             }
             Divider()
         }
-        Button {
-            NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/nikitabobko").orDie())
-        } label: {
-            Text("Sponsor AeroSpace on GitHub")
-            Text(sponsorshipPrompts.randomElement().orDie())
-        }
-        Divider()
         Button(viewModel.isEnabled ? "Disable" : "Enable") {
             Task {
                 try await runSession(.menuBarButton, .forceRun) { () throws in

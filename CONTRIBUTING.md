@@ -2,12 +2,12 @@
 
 ## Users cannot create GitHub Issues directly
 
-AeroSpace project doesn't accept Issues directly - we ask you to create a [Discussion](https://github.com/nikitabobko/AeroSpace/discussions) first.
+AeroSpace project doesn't accept Issues directly - we ask you to create a [Discussion](https://github.com/wbsmolen/aerospork/discussions) first.
 
 The submitted Issues are often either obvious duplicates, environmental problems, or configuration errors by the users themselves.
 For a hobby project, I don't have enough time and energy to process every such submitted Issue.
 
-As an alternative, you can start a Discussion on [GitHub discussions](https://github.com/nikitabobko/AeroSpace/discussions) forum.
+As an alternative, you can start a Discussion on [GitHub discussions](https://github.com/wbsmolen/aerospork/discussions) forum.
 Any Discussion which clearly identifies a problem and can be confirmed or reproduced will be converted to an Issue by maintainers.
 
 It's users' responsibility to minimize their bugs as much as possible.
@@ -21,8 +21,8 @@ This pattern makes it easier for maintainers or contributors to find issues to w
 
 ## Submit bugs and feature ideas
 
-Submit bugs to https://github.com/nikitabobko/AeroSpace/discussions/categories/potential-bugs
-Submit feature ideas to https://github.com/nikitabobko/AeroSpace/discussions/categories/feature-ideas
+Submit bugs to https://github.com/wbsmolen/aerospork/discussions/categories/potential-bugs
+Submit feature ideas to https://github.com/wbsmolen/aerospork/discussions/categories/feature-ideas
 
 Rules:
 * Search for duplicates (in GitHub Issues and Discusssions) before creating a new discussion
@@ -62,9 +62,9 @@ Please keep the conversation to the point. Discuss one issue at a time, crossref
 
 You can take a look at the following issues:
 
-* Most voted issues: https://github.com/nikitabobko/AeroSpace/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
-* Sometimes conversations happen on old issues that aren’t yet closed. See https://github.com/nikitabobko/AeroSpace/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc
-* Issues that are unclear on how to fix, or issues that require design of the interface (CLI or config interface) are tagged with `design-needed` tag https://github.com/nikitabobko/AeroSpace/issues?q=is%3Aissue+is%3Aopen+label%3Adesign-needed
+* Most voted issues: https://github.com/wbsmolen/aerospork/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
+* Sometimes conversations happen on old issues that aren’t yet closed. See https://github.com/wbsmolen/aerospork/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc
+* Issues that are unclear on how to fix, or issues that require design of the interface (CLI or config interface) are tagged with `design-needed` tag https://github.com/wbsmolen/aerospork/issues?q=is%3Aissue+is%3Aopen+label%3Adesign-needed
 
 ## Submit Pull Requests
 
@@ -112,8 +112,8 @@ Do you like the project? Does AeroSpace finally fix your problems with windows m
 
 ## Share your workflow and tips
 
-Submit your tips to [the Goodies page](https://nikitabobko.github.io/AeroSpace/goodies). The source code of the page can be found in `./docs` directory
+Submit your tips to [the Goodies page](https://github.com/wbsmolen/aerospork/blob/main/docs/goodies.adoc). The source code of the page can be found in `./docs` directory
 
 ## Support the project financially
 
-Supporting the project financially counts as a contribution (even if it's just a $1/month). https://github.com/sponsors/nikitabobko
+Supporting the project financially counts as a contribution (even if it's just a $1/month).

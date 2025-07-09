@@ -5,10 +5,10 @@ source ./script/setup.sh
 ./build-debug.sh
 ./run-swift-test.sh
 
-./.debug/aerospace -h > /dev/null
-./.debug/aerospace --help > /dev/null
-./.debug/aerospace -v | grep -q "0.0.0-SNAPSHOT SNAPSHOT"
-./.debug/aerospace --version | grep -q "0.0.0-SNAPSHOT SNAPSHOT"
+./.debug/aerospork -h > /dev/null
+./.debug/aerospork --help > /dev/null
+./.debug/aerospork -v | grep -q "0.0.0-SNAPSHOT SNAPSHOT"
+./.debug/aerospork --version | grep -q "0.0.0-SNAPSHOT SNAPSHOT"
 
 ./format.sh
 ./generate.sh --all

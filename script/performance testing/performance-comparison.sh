@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Performance comparison script for AeroSpace
+# Performance comparison script for AeroSpork
 # Tests both original and optimized versions
 
-echo "AeroSpace Performance Comparison Test"
+echo "AeroSpork Performance Comparison Test"
 echo "===================================="
 echo
 
@@ -21,28 +21,28 @@ find_debug_app() {
     # Try Xcode DerivedData locations
     local xcode_derived="$(xcode-select -p 2>/dev/null)/../.."
     if [[ -d "$xcode_derived" ]]; then
-        find "$xcode_derived" -name "AeroSpace-Debug.app" -path "*/Debug/*" 2>/dev/null | head -1
+        find "$xcode_derived" -name "AeroSpork-Debug.app" -path "*/Debug/*" 2>/dev/null | head -1
     fi
 }
 
 DEBUG_APP_PATH="$(find_debug_app)"
 if [[ -n "$DEBUG_APP_PATH" ]]; then
-    DEBUG_PATH="$DEBUG_APP_PATH/Contents/MacOS/AeroSpace-Debug"
+    DEBUG_PATH="$DEBUG_APP_PATH/Contents/MacOS/AeroSpork-Debug"
 else
     DEBUG_PATH="" # Will be detected later or fail gracefully
 fi
 
 # Find debug CLI
-if [[ -f "$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospace" ]]; then
-    DEBUG_CLI="$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospace"
-elif [[ -f "$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospace" ]]; then
-    DEBUG_CLI="$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospace"
+if [[ -f "$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospork" ]]; then
+    DEBUG_CLI="$PROJECT_ROOT/.build/arm64-apple-macosx/debug/aerospork"
+elif [[ -f "$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospork" ]]; then
+    DEBUG_CLI="$PROJECT_ROOT/.build/x86_64-apple-macosx/debug/aerospork"
 else
     DEBUG_CLI="" # Will be detected later or fail gracefully
 fi
 
-ORIGINAL_PATH="/Applications/AeroSpace.app/Contents/MacOS/AeroSpace"
-ORIGINAL_CLI="/opt/homebrew/bin/aerospace"
+ORIGINAL_PATH="/Applications/AeroSpork.app/Contents/MacOS/AeroSpork"
+ORIGINAL_CLI="/opt/homebrew/bin/aerospork"
 
 # Function to get CPU usage
 get_cpu_usage() {
@@ -132,9 +132,9 @@ run_test_suite() {
     echo "Testing: $name"
     echo "----------------------------------------"
     
-    # Kill any existing AeroSpace process
-    killall AeroSpace 2>/dev/null
-    killall AeroSpace-Debug 2>/dev/null
+    # Kill any existing AeroSpork process
+    killall AeroSpork 2>/dev/null
+    killall AeroSpork-Debug 2>/dev/null
     sleep 2
     
     # Start the version we want to test
@@ -195,15 +195,15 @@ run_test_suite() {
 }
 
 # Main test execution
-echo "Note: This test will kill and restart AeroSpace multiple times."
+echo "Note: This test will kill and restart AeroSpork multiple times."
 echo "Please save any work and close unnecessary applications."
 echo "Press Enter to continue or Ctrl+C to cancel..."
 read
 
-# Check if original AeroSpace exists
+# Check if original AeroSpork exists
 if [ ! -f "$ORIGINAL_PATH" ]; then
-    echo "Error: Original AeroSpace not found at $ORIGINAL_PATH"
-    echo "Please install AeroSpace via Homebrew first: brew install --cask nikitabobko/tap/aerospace"
+    echo "Error: Original AeroSpork not found at $ORIGINAL_PATH"
+    echo "Please install AeroSpork via Homebrew first: brew install --cask wbsmolen/tap/aerospork"
     exit 1
 fi
 
@@ -211,23 +211,23 @@ fi
 if [[ -z "$DEBUG_PATH" || ! -f "$DEBUG_PATH" ]]; then
     echo "Error: Debug app binary not found"
     echo "Please build the project with Xcode first"
-    echo "Expected location pattern: */DerivedData/AeroSpace-*/Build/Products/Debug/AeroSpace-Debug.app/Contents/MacOS/AeroSpace-Debug"
+    echo "Expected location pattern: */DerivedData/AeroSpork-*/Build/Products/Debug/AeroSpork-Debug.app/Contents/MacOS/AeroSpork-Debug"
     exit 1
 fi
 
 if [[ -z "$DEBUG_CLI" || ! -f "$DEBUG_CLI" ]]; then
     echo "Error: Debug CLI not found"
-    echo "Please build the CLI with: swift build --configuration debug --product aerospace"
+    echo "Please build the CLI with: swift build --configuration debug --product aerospork"
     exit 1
 fi
 
 # Run tests for original version
 echo
-ORIGINAL_RESULTS=$(run_test_suite "Original AeroSpace" "$ORIGINAL_PATH" "$ORIGINAL_CLI" | tail -1)
+ORIGINAL_RESULTS=$(run_test_suite "Original AeroSpork" "$ORIGINAL_PATH" "$ORIGINAL_CLI" | tail -1)
 
 # Run tests for optimized version
 echo
-OPTIMIZED_RESULTS=$(run_test_suite "Optimized AeroSpace (Debug)" "$DEBUG_PATH" "$DEBUG_CLI" | tail -1)
+OPTIMIZED_RESULTS=$(run_test_suite "Optimized AeroSpork (Debug)" "$DEBUG_PATH" "$DEBUG_CLI" | tail -1)
 
 # Parse results
 IFS='|' read -r orig_idle orig_workspace orig_focus orig_stress orig_init_mem orig_final_mem orig_ws_time orig_focus_time <<< "$ORIGINAL_RESULTS"

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-echo "AeroSpace Performance Test"
+echo "AeroSpork Performance Test"
 echo "========================="
 echo
 
 # Get the PID
-PID=$(pgrep -x "AeroSpace-Debug" || pgrep -x "AeroSpace")
+PID=$(pgrep -x "AeroSpork-Debug" || pgrep -x "AeroSpork")
 if [ -z "$PID" ]; then
-    echo "AeroSpace is not running!"
+    echo "AeroSpork is not running!"
     exit 1
 fi
 
@@ -18,8 +18,8 @@ echo
 echo "Test 1: Rapid workspace switching"
 echo "---------------------------------"
 for i in {1..10}; do
-    ./.debug/aerospace workspace 1
-    ./.debug/aerospace workspace 2
+    ./.debug/aerospork workspace 1
+    ./.debug/aerospork workspace 2
 done
 echo "CPU usage during rapid switching:"
 top -pid $PID -stats pid,cpu -l 5 -s 1 | grep -E "(PID|$PID)"
@@ -28,9 +28,9 @@ echo
 echo "Test 2: Window operations"
 echo "------------------------"
 # Focus different windows rapidly
-./.debug/aerospace list-windows | head -10 | while read line; do
+./.debug/aerospork list-windows | head -10 | while read line; do
     window_id=$(echo $line | awk '{print $1}')
-    ./.debug/aerospace focus --window-id $window_id 2>/dev/null
+    ./.debug/aerospork focus --window-id $window_id 2>/dev/null
 done
 
 echo "CPU usage during window operations:"

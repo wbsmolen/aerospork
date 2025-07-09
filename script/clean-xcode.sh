@@ -4,8 +4,8 @@ source ./script/setup.sh
 
 ./script/check-uncommitted-files.sh
 
-rm -rf ~/Library/Developer/Xcode/DerivedData/AeroSpace-*
+rm -rf ~/Library/Developer/Xcode/DerivedData/AeroSpork-*
 rm -rf ./.xcode-build
 
-rm -rf AeroSpace.xcodeproj
+rm -rf AeroSpork.xcodeproj
 ./generate.sh

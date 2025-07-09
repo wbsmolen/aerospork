@@ -1,18 +1,18 @@
-= aerospace-config(1)
+= aerospork-config(1)
 include::util/man-attributes.adoc[]
-:manname: aerospace-config
+:manname: aerospork-config
 // tag::purpose[]
-:manpurpose: Query AeroSpace config options
+:manpurpose: Query AeroSpork config options
 // end::purpose[]
 
 // =========================================================== Synopsis
 == Synopsis
 [verse]
 // tag::synopsis[]
-aerospace config [-h|--help] --get <name> [--json] [--keys]
-aerospace config [-h|--help] --major-keys
-aerospace config [-h|--help] --all-keys
-aerospace config [-h|--help] --config-path
+aerospork config [-h|--help] --get <name> [--json] [--keys]
+aerospork config [-h|--help] --major-keys
+aerospork config [-h|--help] --all-keys
+aerospork config [-h|--help] --config-path
 
 // end::synopsis[]
 
@@ -46,7 +46,7 @@ include::util/conditional-examples-header.adoc[]
 * List all binding modes:
 +
 ----
-$ aerospace config --get mode --keys
+$ aerospork config --get mode --keys
 main
 service
 ----

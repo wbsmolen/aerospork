@@ -117,7 +117,7 @@ private func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrac
         myErrors.append(.semantic(
             backtrace,
             "For now, 'layout floating', 'layout tiling' and 'move-node-to-workspace' are the only commands that are supported in 'on-window-detected'. " +
-                "Please report your use cases to https://github.com/nikitabobko/AeroSpace/issues/20",
+                "Please report your use cases to https://github.com/wbsmolen/AeroSpork/issues/20",
         ))
     }
 
@@ -126,7 +126,7 @@ private func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrac
         myErrors.append(.semantic(
             backtrace,
             "For now, 'move-node-to-workspace' must be the latest instruction in the callback (otherwise it's error-prone). " +
-                "Please report your use cases to https://github.com/nikitabobko/AeroSpace/issues/20",
+                "Please report your use cases to https://github.com/wbsmolen/AeroSpork/issues/20",
         ))
     }
 
@@ -134,7 +134,7 @@ private func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrac
         myErrors.append(.semantic(
             backtrace,
             "For now, 'move-node-to-workspace' can be mentioned only once in 'run' callback. " +
-                "Please report your use cases to https://github.com/nikitabobko/AeroSpace/issues/20",
+                "Please report your use cases to https://github.com/wbsmolen/AeroSpork/issues/20",
         ))
     }
 

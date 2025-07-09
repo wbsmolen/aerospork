@@ -4,7 +4,7 @@ source ./script/setup.sh
 
 out_file='./Sources/Common/cmdHelpGenerated.swift'
 
-aerospace_prefix="aerospace"
+aerospace_prefix="aerospork"
 ____usage_prefix="   USAGE:"
 _______or_prefix="      OR:"
 ____strip_prefix="   "
@@ -12,13 +12,13 @@ ____strip_prefix="   "
 triple_quote='"""'
 
 cat << EOF > $out_file
-// FILE IS GENERATED FROM docs/aerospace-*.adoc files
+// FILE IS GENERATED FROM docs/aerospork-*.adoc files
 // TO REGENERATE THE FILE RUN generate.sh --all
 
 EOF
 
-for file in docs/aerospace-*.adoc; do
-    subcommand=$(basename "$file" | sed 's/^aerospace-//' | sed 's/\.adoc$//' | sed 's/-/_/g')
+for file in docs/aerospork-*.adoc; do
+    subcommand=$(basename "$file" | sed 's/^aerospork-//' | sed 's/\.adoc$//' | sed 's/-/_/g')
     sed -n -E '/tag::synopsis/, /end::synopsis/ p' "$file" | \
         sed '1d' | \
         sed '$d' | \

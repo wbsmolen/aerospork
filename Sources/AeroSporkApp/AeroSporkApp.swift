@@ -5,7 +5,7 @@ import SwiftUI
 
 @MainActor // macOS 13
 @main
-struct AeroSpaceApp: App {
+struct AeroSporkApp: App {
     @MainActor // macOS 13
     @StateObject var viewModel = TrayMenuModel.shared
 
