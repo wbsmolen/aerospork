@@ -4,9 +4,9 @@ import Common
 public struct ConfigurationWindow: View {
     @StateObject private var viewModel = ConfigurationViewModel()
     @State private var selectedTab = "general"
-    
+
     public init() {}
-    
+
     public var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -23,9 +23,9 @@ public struct ConfigurationWindow: View {
             }
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
-            
+
             Divider()
-            
+
             // Tab View
             TabView(selection: $selectedTab) {
                 GeneralSettingsTab(viewModel: viewModel)
@@ -33,19 +33,19 @@ public struct ConfigurationWindow: View {
                         Label("General", systemImage: "gear")
                     }
                     .tag("general")
-                
+
                 EnhancedWorkspaceAssignmentTab(viewModel: viewModel)
                     .tabItem {
                         Label("Workspaces & Monitors", systemImage: "macwindow.on.rectangle")
                     }
                     .tag("workspaces_monitors")
-                
+
                 GapsSettingsTab(viewModel: viewModel)
                     .tabItem {
                         Label("Gaps", systemImage: "ruler")
                     }
                     .tag("gaps")
-                
+
                 KeyBindingsTab(viewModel: viewModel)
                     .tabItem {
                         Label("Key Bindings", systemImage: "keyboard")
@@ -53,18 +53,18 @@ public struct ConfigurationWindow: View {
                     .tag("keybindings")
             }
             .padding()
-            
+
             Divider()
-            
+
             // Footer with buttons
             HStack {
                 Button("Revert") {
                     viewModel.revertChanges()
                 }
                 .disabled(!viewModel.hasUnsavedChanges)
-                
+
                 Spacer()
-                
+
                 if let error = viewModel.errorMessage {
                     Text(error)
                         .foregroundColor(.red)
@@ -72,9 +72,9 @@ public struct ConfigurationWindow: View {
                         .lineLimit(2)
                         .frame(maxWidth: 300)
                 }
-                
+
                 Spacer()
-                
+
                 Button("Cancel") {
                     if viewModel.hasUnsavedChanges {
                         // Show confirmation dialog
@@ -84,9 +84,9 @@ public struct ConfigurationWindow: View {
                     }
                 }
                 .keyboardShortcut(.cancelAction)
-                
+
                 Button("Save") {
-                    Task {
+                    Task { @MainActor in
                         await viewModel.saveConfiguration()
                         if viewModel.errorMessage == nil {
                             closeWindow()
@@ -94,7 +94,7 @@ public struct ConfigurationWindow: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!viewModel.hasUnsavedChanges)
+                .disabled(!viewModel.hasUnsavedChanges || viewModel.isSaving)
             }
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
@@ -105,11 +105,11 @@ public struct ConfigurationWindow: View {
             await viewModel.loadConfiguration()
         }
     }
-    
+
     private func closeWindow() {
         NSApplication.shared.keyWindow?.close()
     }
-    
+
     private func showUnsavedChangesAlert() {
         let alert = NSAlert()
         alert.messageText = "Unsaved Changes"
@@ -118,20 +118,20 @@ public struct ConfigurationWindow: View {
         alert.addButton(withTitle: "Discard")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
-        
+
         let response = alert.runModal()
         switch response {
-        case .alertFirstButtonReturn:
-            Task {
-                await viewModel.saveConfiguration()
-                if viewModel.errorMessage == nil {
-                    closeWindow()
+            case .alertFirstButtonReturn:
+                Task { @MainActor in
+                    await viewModel.saveConfiguration()
+                    if viewModel.errorMessage == nil {
+                        closeWindow()
+                    }
                 }
-            }
-        case .alertSecondButtonReturn:
-            closeWindow()
-        default:
-            break
+            case .alertSecondButtonReturn:
+                closeWindow()
+            default:
+                break
         }
     }
 }

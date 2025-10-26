@@ -2,9 +2,15 @@ import SwiftUI
 import Common
 import TOMLKit
 import AppKit
+import os.log
+
+private let viewModelLogger = Logger(subsystem: "com.wbs.aerospork", category: "config-viewmodel")
 
 @MainActor
 class ConfigurationViewModel: ObservableObject {
+    // Service layer
+    private let configService: ConfigurationService = DefaultConfigurationService()
+
     // General settings
     @Published var startAtLogin: Bool = false
     @Published var automaticallyUnhideMacosHiddenApps: Bool = false
@@ -34,6 +40,7 @@ class ConfigurationViewModel: ObservableObject {
     @Published var hasUnsavedChanges: Bool = false
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isSaving: Bool = false
     
     private var originalTomlTable: TOMLTable?
     private var configFilePath: String?
@@ -89,9 +96,14 @@ class ConfigurationViewModel: ObservableObject {
                 return
             }
             configFilePath = configUrl.path
-            
+
             // Read and parse TOML
-            let content = try String(contentsOfFile: configFilePath!)
+            guard let path = configFilePath else {
+                errorMessage = "Configuration file path is invalid"
+                isLoading = false
+                return
+            }
+            let content = try String(contentsOfFile: path)
             let tomlTable = try TOMLTable(string: content)
             originalTomlTable = tomlTable
             
@@ -123,8 +135,16 @@ class ConfigurationViewModel: ObservableObject {
             
             // Load gaps
             if let gaps = tomlTable["gaps"]?.table {
-                if let inner = gaps["inner"]?.table?["horizontal"]?.int {
-                    innerGaps = inner
+                if let innerTable = gaps["inner"]?.table {
+                    let horizontal = innerTable["horizontal"]?.int ?? 0
+                    let vertical = innerTable["vertical"]?.int ?? 0
+
+                    // If horizontal and vertical differ, use horizontal and show warning
+                    if horizontal != vertical {
+                        viewModelLogger.warning("Inner gaps differ: horizontal=\(horizontal), vertical=\(vertical). Using horizontal value. Both will be set to the same value on save.")
+                        // Could set errorMessage here to warn user in UI
+                    }
+                    innerGaps = horizontal
                 }
                 if let outer = gaps["outer"]?.table {
                     if let top = outer["top"]?.int { outerGapsTop = top }
@@ -136,12 +156,12 @@ class ConfigurationViewModel: ObservableObject {
             
             // Load workspace assignments directly from TOML
             workspaceAssignments = []
-            print("[DEBUG] Loading workspace assignments from TOML")
-            
+            viewModelLogger.info("Loading workspace assignments from TOML")
+
             if let wsAssignments = tomlTable["workspace-to-monitor-force-assignment"]?.table {
-                print("[DEBUG] Found workspace-to-monitor-force-assignment with \(wsAssignments.count) entries")
+                viewModelLogger.info("Found workspace-to-monitor-force-assignment with \(wsAssignments.count) entries")
                 for (workspace, value) in wsAssignments {
-                    print("[DEBUG] Processing workspace '\(workspace)' with value type: \(type(of: value))")
+                    viewModelLogger.debug("Processing workspace '\(workspace)' with value type: \(String(describing: type(of: value)))")
                     
                     // Parse the monitor assignment
                     if let stringValue = value.string {
@@ -153,7 +173,7 @@ class ConfigurationViewModel: ObservableObject {
                             isForceAssignment: true
                         )
                         workspaceAssignments.append(assignment)
-                        print("[DEBUG] Added assignment for workspace \(workspace) to monitor \(stringValue)")
+                        viewModelLogger.debug("Added assignment for workspace \(workspace) to monitor \(stringValue)")
                     } else if let tableValue = value.table, let fingerprintTable = tableValue["fingerprint"]?.table {
                         // Fingerprint format
                         let displayName = fingerprintTable["display_name"]?.string ?? "Unknown"
@@ -176,7 +196,7 @@ class ConfigurationViewModel: ObservableObject {
                             isForceAssignment: true
                         )
                         workspaceAssignments.append(assignment)
-                        print("[DEBUG] Added fingerprint assignment for workspace \(workspace) to monitor \(displayName)")
+                        viewModelLogger.debug("Added fingerprint assignment for workspace \(workspace) to monitor \(displayName)")
                     } else if let intValue = value.int {
                         // Sequence number
                         let assignment = Config.WorkspaceAssignment(
@@ -186,16 +206,16 @@ class ConfigurationViewModel: ObservableObject {
                             isForceAssignment: true
                         )
                         workspaceAssignments.append(assignment)
-                        print("[DEBUG] Added assignment for workspace \(workspace) to monitor index \(intValue)")
+                        viewModelLogger.debug("Added assignment for workspace \(workspace) to monitor index \(intValue)")
                     }
                 }
             } else {
-                print("[DEBUG] No workspace-to-monitor-force-assignment found in TOML")
+                viewModelLogger.debug("No workspace-to-monitor-force-assignment found in TOML")
             }
-            
+
             // Sort assignments by workspace name for consistent display
             workspaceAssignments.sort { $0.workspaceName < $1.workspaceName }
-            print("[DEBUG] Loaded \(workspaceAssignments.count) total workspace assignments")
+            viewModelLogger.info("Loaded \(self.workspaceAssignments.count) total workspace assignments")
             
             // Load current monitor information
             loadConnectedMonitors()
@@ -207,10 +227,10 @@ class ConfigurationViewModel: ObservableObject {
             extractAllWorkspaces(from: tomlTable)
             
             hasUnsavedChanges = false
-            print("[DEBUG] Configuration loaded successfully with \(workspaceAssignments.count) assignments")
+            viewModelLogger.info("Configuration loaded successfully with \(self.workspaceAssignments.count) assignments")
         } catch {
             errorMessage = "Failed to load configuration: \(error.localizedDescription)"
-            print("[DEBUG] Error loading configuration: \(error)")
+            viewModelLogger.error("Error loading configuration: \(error.localizedDescription)")
         }
         
         isLoading = false
@@ -283,91 +303,116 @@ class ConfigurationViewModel: ObservableObject {
     }
     
     func saveConfiguration() async {
+        guard !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
+
         errorMessage = nil
-        
+
         do {
-            // Create new TOML table with updated values
-            var tomlTable = originalTomlTable ?? TOMLTable()
-            
-            // Update general settings
-            tomlTable["start-at-login"] = startAtLogin
-            tomlTable["automatically-unhide-macos-hidden-apps"] = automaticallyUnhideMacosHiddenApps
-            tomlTable["default-root-container-layout"] = defaultRootContainerLayout
-            tomlTable["default-root-container-orientation"] = defaultRootContainerOrientation
-            tomlTable["accordion-padding"] = accordionPadding
-            tomlTable["enable-normalization-flatten-containers"] = enableNormalizationFlattenContainers
-            tomlTable["enable-normalization-opposite-orientation-for-nested-containers"] = enableNormalizationOppositeOrientation
-            tomlTable["auto-move-workspaces-on-monitor-connect"] = autoMoveWorkspacesOnMonitorConnect
-            
-            // Update gaps
-            if tomlTable["gaps"] == nil {
-                tomlTable["gaps"] = TOMLTable()
+            // Build configuration data from current state
+            let configData = buildConfigurationData()
+
+            // Validate before saving
+            let validationErrors = configService.validate(configData)
+            let criticalErrors = validationErrors.filter { $0.severity == .error }
+
+            if !criticalErrors.isEmpty {
+                errorMessage = criticalErrors.map(\.formattedMessage).joined(separator: "\n")
+                return
             }
-            if let gaps = tomlTable["gaps"] as? TOMLTable {
-                if gaps["inner"] == nil {
-                    gaps["inner"] = TOMLTable()
-                }
-                if let inner = gaps["inner"] as? TOMLTable {
-                    inner["horizontal"] = innerGaps
-                    inner["vertical"] = innerGaps
-                    gaps["inner"] = inner
-                }
-                
-                if gaps["outer"] == nil {
-                    gaps["outer"] = TOMLTable()
-                }
-                if let outer = gaps["outer"] as? TOMLTable {
-                    outer["top"] = outerGapsTop
-                    outer["bottom"] = outerGapsBottom
-                    outer["left"] = outerGapsLeft
-                    outer["right"] = outerGapsRight
-                    gaps["outer"] = outer
-                }
-                tomlTable["gaps"] = gaps
+
+            // Show warnings but allow save
+            let warnings = validationErrors.filter { $0.severity == .warning }
+            if !warnings.isEmpty {
+                viewModelLogger.warning("Configuration has warnings: \(warnings.map(\.message).joined(separator: "; "))")
             }
-            
-            // Update workspace-to-monitor-force-assignment from assignments
-            var newAssignments: [String: [MonitorDescription]] = [:]
-            for assignment in workspaceAssignments where assignment.isForceAssignment {
-                let monitorDesc = convertAssignmentToMonitorDescription(assignment)
-                newAssignments[assignment.workspaceName] = [monitorDesc]
-            }
-            config.workspaceToMonitorForceAssignment = newAssignments
-            
-            // Update TOML table
-            var assignmentTable = TOMLTable()
-            for (workspace, descriptions) in newAssignments {
-                if let desc = descriptions.first {
-                    assignmentTable[workspace] = createTOMLValueForMonitorDescription(desc)
-                }
-            }
-            tomlTable["workspace-to-monitor-force-assignment"] = assignmentTable
-            
-            // Write to file
-            guard let configPath = configFilePath else {
-                throw ConfigError.noConfigFile
-            }
-            
-            // Backup existing file
-            let backupPath = configPath + ".backup"
-            try FileManager.default.copyItem(atPath: configPath, toPath: backupPath)
-            
-            // Write new configuration
-            let tomlString = serializeTomlWithInlineTables(tomlTable)
-            print("[DEBUG] Saving configuration to: \(configPath)")
-            print("[DEBUG] Saving \(workspaceAssignments.count) workspace assignments")
-            try tomlString.write(toFile: configPath, atomically: true, encoding: .utf8)
-            
-            // Reload configuration
-            _ = reloadConfig()
-            
+
+            // Save using service (this preserves keybindings and comments)
+            try await configService.saveConfiguration(configData)
+
             hasUnsavedChanges = false
-            
-            // Clean up backup
-            try? FileManager.default.removeItem(atPath: backupPath)
         } catch {
             errorMessage = "Failed to save configuration: \(error.localizedDescription)"
         }
+    }
+
+    /// Build ConfigurationData from current ViewModel state
+    private func buildConfigurationData() -> ConfigurationData {
+        let general = GeneralSettings(
+            startAtLogin: startAtLogin,
+            automaticallyUnhideMacosHiddenApps: automaticallyUnhideMacosHiddenApps,
+            defaultRootContainerLayout: defaultRootContainerLayout,
+            defaultRootContainerOrientation: defaultRootContainerOrientation,
+            accordionPadding: accordionPadding,
+            enableNormalizationFlattenContainers: enableNormalizationFlattenContainers,
+            enableNormalizationOppositeOrientation: enableNormalizationOppositeOrientation,
+            autoMoveWorkspacesOnMonitorConnect: autoMoveWorkspacesOnMonitorConnect
+        )
+
+        let gaps = GapsSettings(
+            innerHorizontal: innerGaps,
+            innerVertical: innerGaps,
+            outerTop: outerGapsTop,
+            outerBottom: outerGapsBottom,
+            outerLeft: outerGapsLeft,
+            outerRight: outerGapsRight
+        )
+
+        // Convert workspace assignments to DTO format
+        let assignments = workspaceAssignments.filter { $0.isForceAssignment }.map { assignment in
+            convertToWorkspaceAssignmentData(assignment)
+        }
+
+        // Get original content from file (needed for preservation)
+        let originalContent: String
+        if let path = configFilePath {
+            originalContent = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+        } else {
+            originalContent = ""
+        }
+
+        return ConfigurationData(
+            general: general,
+            gaps: gaps,
+            workspaceAssignments: assignments,
+            originalContent: originalContent
+        )
+    }
+
+    /// Convert Config.WorkspaceAssignment to WorkspaceAssignmentData
+    private func convertToWorkspaceAssignmentData(_ assignment: Config.WorkspaceAssignment) -> WorkspaceAssignmentData {
+        let monitorType: WorkspaceAssignmentData.MonitorTypeData
+
+        switch assignment.monitorType {
+        case .name(let name):
+            monitorType = .name(name)
+        case .index(let idx):
+            monitorType = .index(idx)
+        case .fingerprint(let fp):
+            let fingerprintData = MonitorFingerprintData(
+                displayName: fp.displayName,
+                vendorId: fp.vendorId.flatMap { hexString in
+                    let cleanHex = hexString.hasPrefix("0x") ? String(hexString.dropFirst(2)) : hexString
+                    return UInt32(cleanHex, radix: 16)
+                },
+                modelId: fp.modelId.flatMap { hexString in
+                    let cleanHex = hexString.hasPrefix("0x") ? String(hexString.dropFirst(2)) : hexString
+                    return UInt32(cleanHex, radix: 16)
+                },
+                serialNumber: fp.serialNumber,
+                width: fp.width,
+                height: fp.height
+            )
+            monitorType = .fingerprint(fingerprintData)
+        }
+
+        return WorkspaceAssignmentData(
+            workspaceName: assignment.workspaceName,
+            monitorDescription: assignment.monitorDescription,
+            monitorType: monitorType,
+            isForceAssignment: assignment.isForceAssignment
+        )
     }
     
     func revertChanges() {
@@ -469,7 +514,7 @@ class ConfigurationViewModel: ObservableObject {
             monitorType: .name("main"),
             isForceAssignment: true
         )
-        print("[DEBUG] Adding new workspace assignment: \(newAssignment.workspaceName)")
+        viewModelLogger.info("Adding new workspace assignment: \(newAssignment.workspaceName)")
         workspaceAssignments.append(newAssignment)
         objectWillChange.send()
         markAsModified()
@@ -478,7 +523,7 @@ class ConfigurationViewModel: ObservableObject {
     func removeWorkspaceAssignment(at index: Int) {
         guard index < workspaceAssignments.count else { return }
         let removed = workspaceAssignments[index]
-        print("[DEBUG] Removing workspace assignment: \(removed.workspaceName)")
+        viewModelLogger.info("Removing workspace assignment: \(removed.workspaceName)")
         workspaceAssignments.remove(at: index)
         objectWillChange.send()
         markAsModified()
@@ -486,6 +531,7 @@ class ConfigurationViewModel: ObservableObject {
     
     private func findNextAvailableWorkspaceName() -> String {
         let existingNames = Set(workspaceAssignments.map { $0.workspaceName })
+            .union(allWorkspaces)
         var counter = 1
         while existingNames.contains(String(counter)) {
             counter += 1
@@ -560,14 +606,14 @@ class ConfigurationViewModel: ObservableObject {
     }
     
     func updateWorkspaceAssignment(workspace: String, assignment: Config.WorkspaceAssignment?) {
-        print("[DEBUG] Updating workspace assignment for: \(workspace)")
+        viewModelLogger.info("Updating workspace assignment for: \(workspace)")
         // Remove existing assignment for this workspace
         workspaceAssignments.removeAll { $0.workspaceName == workspace }
-        
+
         // Add new assignment if provided
         if let assignment = assignment {
             workspaceAssignments.append(assignment)
-            print("[DEBUG] New assignment: \(assignment.monitorDescription)")
+            viewModelLogger.debug("New assignment: \(assignment.monitorDescription)")
         }
         
         objectWillChange.send()
@@ -586,16 +632,6 @@ class ConfigurationViewModel: ObservableObject {
         }
     }
     
-    // Helper method to serialize TOML with proper inline table formatting for workspace assignments
-    private func serializeTomlWithInlineTables(_ tomlTable: TOMLTable) -> String {
-        // For now, just use the default serialization
-        // The issue is that we need to convert the result to use inline tables for workspace assignments
-        let defaultSerialization = String(describing: tomlTable)
-        
-        // Post-process to convert workspace assignment nested tables to inline format
-        return convertWorkspaceAssignmentsToInlineFormat(defaultSerialization)
-    }
-    
     private func convertAssignmentToMonitorDescription(_ assignment: Config.WorkspaceAssignment) -> MonitorDescription {
         switch assignment.monitorType {
         case .name(let name):
@@ -604,7 +640,13 @@ class ConfigurationViewModel: ObservableObject {
             } else if name == "secondary" {
                 return .secondary
             } else {
-                return .pattern(name, try! SendableRegex(name))
+                // Try to create regex pattern; fallback to literal match if invalid
+                guard let regex = try? SendableRegex(name) else {
+                    // Use a safe regex that matches the exact string
+                    let escapedName = NSRegularExpression.escapedPattern(for: name)
+                    return .pattern(name, try! SendableRegex(escapedName))
+                }
+                return .pattern(name, regex)
             }
         case .index(let index):
             return .sequenceNumber(index)
@@ -627,93 +669,8 @@ class ConfigurationViewModel: ObservableObject {
         }
     }
     
-    private func createTOMLValueForMonitorDescription(_ desc: MonitorDescription) -> any TOMLValueConvertible {
-        switch desc {
-        case .main:
-            return "main"
-        case .secondary:
-            return "secondary"
-        case .sequenceNumber(let num):
-            return num
-        case .pattern(let pattern, _):
-            return pattern
-        case .fingerprint(let data):
-            let fingerprintTable = TOMLTable()
-            if let displayName = data.displayNamePattern {
-                fingerprintTable["display_name"] = displayName
-            }
-            if let width = data.widthPixels {
-                fingerprintTable["width"] = TOMLInt(width)
-            }
-            if let height = data.heightPixels {
-                fingerprintTable["height"] = TOMLInt(height)
-            }
-            if let vendorId = data.vendorID {
-                fingerprintTable["vendor_id"] = String(format: "0x%04X", vendorId)
-            }
-            if let modelId = data.modelID {
-                fingerprintTable["model_id"] = String(format: "0x%04X", modelId)
-            }
-            if let serial = data.serialNumber {
-                fingerprintTable["serial_number"] = serial
-            }
-            
-            let wrapper = TOMLTable()
-            wrapper["fingerprint"] = fingerprintTable
-            return wrapper
-        }
-    }
-    
-    private func convertWorkspaceAssignmentsToInlineFormat(_ tomlString: String) -> String {
-        let lines = tomlString.components(separatedBy: "\n")
-        var result: [String] = []
-        var i = 0
-        
-        while i < lines.count {
-            let line = lines[i]
-            
-            // Check if this is a workspace assignment nested table
-            if line.matches(regex: #"^\[workspace-to-monitor-force-assignment\.(.+)\.fingerprint\]$"#) {
-                // Extract workspace name
-                let workspaceMatch = line.replacingOccurrences(of: "[workspace-to-monitor-force-assignment.", with: "")
-                    .replacingOccurrences(of: ".fingerprint]", with: "")
-                
-                // Collect fingerprint properties
-                var fingerprintProps: [String] = []
-                i += 1
-                while i < lines.count && !lines[i].starts(with: "[") && !lines[i].isEmpty {
-                    let propLine = lines[i].trimmingCharacters(in: .whitespaces)
-                    if !propLine.isEmpty {
-                        fingerprintProps.append(propLine)
-                    }
-                    i += 1
-                }
-                
-                // Only add the header once
-                if !result.contains("[workspace-to-monitor-force-assignment]") {
-                    if !result.isEmpty && !result.last!.isEmpty {
-                        result.append("")
-                    }
-                    result.append("[workspace-to-monitor-force-assignment]")
-                }
-                
-                // Format as inline table
-                let propsString = fingerprintProps.joined(separator: ", ")
-                result.append("\(workspaceMatch) = { fingerprint = { \(propsString) } }")
-                
-                // Back up one since the outer loop will increment
-                i -= 1
-            } else {
-                result.append(line)
-            }
-            
-            i += 1
-        }
-        
-        return result.joined(separator: "\n")
-    }
-    
 }
+
 
 extension String {
     func matches(regex: String) -> Bool {
