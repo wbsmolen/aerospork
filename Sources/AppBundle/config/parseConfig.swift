@@ -6,9 +6,14 @@ import TOMLKit
 @MainActor
 func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
     let customConfigUrl: URL
+    let isUserConfig: Bool
     switch findCustomConfigUrl() {
-        case .file(let url): customConfigUrl = url
-        case .noCustomConfigExists: customConfigUrl = defaultConfigUrl
+        case .file(let url): 
+            customConfigUrl = url
+            isUserConfig = true
+        case .noCustomConfigExists: 
+            customConfigUrl = defaultConfigUrl
+            isUserConfig = false
         case .ambiguousConfigError(let candidates):
             let msg = """
                 Ambiguous config error. Several configs found:
@@ -17,7 +22,8 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
             return .failure(msg)
     }
     let configUrl: URL = forceConfigUrl ?? customConfigUrl
-    let (parsedConfig, errors) = (try? String(contentsOf: configUrl)).map { parseConfig($0) } ?? (defaultConfig, [])
+    let finalIsUserConfig = forceConfigUrl != nil ? true : isUserConfig
+    let (parsedConfig, errors) = (try? String(contentsOf: configUrl)).map { parseConfig($0, isUserConfig: finalIsUserConfig) } ?? (defaultConfig, [])
 
     if errors.isEmpty {
         return .success((parsedConfig, configUrl))
@@ -192,7 +198,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 }
 
-@MainActor func parseConfig(_ rawToml: String) -> (config: Config, errors: [TomlParseError]) { // todo change return value to Result
+@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true) -> (config: Config, errors: [TomlParseError]) { // todo change return value to Result
     let rawTable: TOMLTable
     do {
         rawTable = try TOMLTable(string: rawToml)
@@ -214,13 +220,19 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
         config.modes = modes
     }
 
-    config.preservedWorkspaceNames = config.modes.values.lazy
-        .flatMap { (mode: Mode) -> [HotkeyBinding] in Array(mode.bindings.values) }
-        .flatMap { (binding: HotkeyBinding) -> [String] in
-            binding.commands.filterIsInstance(of: WorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw } +
-                binding.commands.filterIsInstance(of: MoveNodeToWorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw }
-        }
-        + (config.workspaceToMonitorForceAssignment).keys
+    // Only preserve workspace names if this is a user config, not the default config
+    if isUserConfig {
+        config.preservedWorkspaceNames = config.modes.values.lazy
+            .flatMap { (mode: Mode) -> [HotkeyBinding] in Array(mode.bindings.values) }
+            .flatMap { (binding: HotkeyBinding) -> [String] in
+                binding.commands.filterIsInstance(of: WorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw } +
+                    binding.commands.filterIsInstance(of: MoveNodeToWorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw }
+            }
+            + (config.workspaceToMonitorForceAssignment).keys
+    } else {
+        // For default config, only preserve workspaces with force assignments
+        config.preservedWorkspaceNames = Array(config.workspaceToMonitorForceAssignment.keys)
+    }
 
     if config.enableNormalizationFlattenContainers {
         let containsSplitCommand = config.modes.values.lazy.flatMap { $0.bindings.values }
