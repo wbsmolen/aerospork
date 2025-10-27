@@ -11,7 +11,7 @@ public struct ConfigurationWindow: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("j4 Configuration")
+                Text("j4")
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
