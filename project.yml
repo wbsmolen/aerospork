@@ -1,10 +1,10 @@
 # Xcode project configuration. Managed by https://github.com/yonaskolb/XcodeGen
 # Xcode is only used to build the release App Bundle. Debug builds only use Swift Package Manager
 
-name: AeroSpork
+name: j4
 
 packages:
-  AeroSpacePackage:
+  j4Package:
     path: .
 
 configs:
@@ -12,16 +12,16 @@ configs:
   Release: release
 
 targets:
-  AeroSpork:
+  j4:
     type: application
     platform: macOS
     deploymentTarget: "13.0"
     sources:
-      - "Sources/AeroSporkApp"
+      - "Sources/j4App"
       - "resources"
       - "docs/config-examples/default-config.toml"
     dependencies:
-      - package: AeroSpacePackage
+      - package: j4Package
         product: AppBundle
     # https://developer.apple.com/documentation/xcode/build-settings-reference
     settings:
@@ -34,15 +34,21 @@ targets:
         # Agent apps do not appear in the Dock or in the Force Quit window
         INFOPLIST_KEY_LSUIElement: YES
         CODE_SIGN_IDENTITY: ${XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY}
+        # App Store submission requirements
+        ENABLE_HARDENED_RUNTIME: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 j4. All rights reserved."
+        # App icon
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Debug:
-          PRODUCT_NAME: AeroSpork-Debug
-          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.aerospork.debug
+          PRODUCT_NAME: j4-Debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.j4.debug
         Release:
-          PRODUCT_NAME: AeroSpork
-          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.aerospork
+          PRODUCT_NAME: j4
+          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.j4
     entitlements:
-      path: resources/AeroSpork.entitlements
+      path: resources/j4.entitlements
       properties:
         # Accessibility API doesn't work in sandboxed app
         com.apple.security.app-sandbox: false

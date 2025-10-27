@@ -1,10 +1,10 @@
 import Foundation
 import os.log
 
-/// Debug logging configuration for AeroSpork
+/// Debug logging configuration for j4
 /// This module sets up enhanced logging when running in debug mode
 
-private let subsystem = "com.wbs.aerospork.debug"
+private let subsystem = "com.wbs.j4.debug"
 
 // MARK: - Logger Instances
 
@@ -40,7 +40,7 @@ func initDebugLogging() {
     }
 
     configLogger.info("📄 Config file: \(configUrl.path)")
-    debugLogger.info("🚀 AeroSpork debug mode ready")
+    debugLogger.info("🚀 j4 debug mode ready")
 }
 
 // MARK: - Command Execution Tracing
@@ -153,7 +153,7 @@ func printLogViewingInstructions() {
     1. Open Console.app
     2. Filter by:
        • Subsystem: \(subsystem)
-       • Process: AeroSporkApp
+       • Process: j4App
 
     Categories available:
        • debug       - General debug information

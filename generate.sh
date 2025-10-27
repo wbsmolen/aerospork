@@ -2,7 +2,7 @@
 cd "$(dirname "$0")"
 source ./script/setup.sh
 
-export XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY="aerospork-codesign-certificate"
+export XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY="j4-codesign-certificate"
 build_version="0.0.0-SNAPSHOT"
 generate_xcodeproj=1
 all=0

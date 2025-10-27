@@ -39,7 +39,7 @@ struct ReloadConfigCommand: Command {
             if !args.noGui {
                 showMessageInGui(
                     filenameIfConsoleApp: nil,
-                    title: "AeroSpork Config Error",
+                    title: "j4 Config Error",
                     message: msg,
                 )
             }

@@ -3,7 +3,7 @@ cd "$(dirname "$0")"
 source ./script/setup.sh
 
 build_version="0.0.0-SNAPSHOT"
-codesign_identity="aerospork-codesign-certificate"
+codesign_identity="j4-codesign-certificate"
 while test $# -gt 0; do
     case $1 in
         --build-version) build_version="$2"; shift 2;;
@@ -31,7 +31,7 @@ EOF
 ./generate.sh --build-version "$build_version" --codesign-identity "$codesign_identity"
 
 generate-git-hash
-swift build -c release --arch arm64 --arch x86_64 --product aerospork # CLI
+swift build -c release --arch arm64 --arch x86_64 --product j4 # CLI
 
 # todo: make xcodebuild use the same toolchain as swift
 # toolchain="$(plutil -extract CFBundleIdentifier raw ~/Library/Developer/Toolchains/swift-6.1-RELEASE.xctoolchain/Info.plist)"
@@ -47,45 +47,45 @@ rm -rf .release && mkdir .release
 xcode_configuration="Release"
 xcodebuild -version
 xcodebuild-pretty .release/xcodebuild.log clean build \
-    -scheme AeroSpork \
+    -scheme j4 \
     -destination "generic/platform=macOS" \
     -configuration "$xcode_configuration" \
     -derivedDataPath .xcode-build
 
 git checkout .
 
-cp -r ".xcode-build/Build/Products/$xcode_configuration/AeroSpork.app" .release
-cp -r .build/apple/Products/Release/aerospork .release
+cp -r ".xcode-build/Build/Products/$xcode_configuration/j4.app" .release
+cp -r .build/apple/Products/Release/j4 .release
 
 ################
 ### SIGN CLI ###
 ################
 
-codesign -s "$codesign_identity" .release/aerospork
+codesign -s "$codesign_identity" .release/j4
 
 ################
 ### VALIDATE ###
 ################
 
 expected_layout=$(cat <<EOF
-.release/AeroSpork.app
-.release/AeroSpork.app/Contents
-.release/AeroSpork.app/Contents/_CodeSignature
-.release/AeroSpork.app/Contents/_CodeSignature/CodeResources
-.release/AeroSpork.app/Contents/MacOS
-.release/AeroSpork.app/Contents/MacOS/AeroSpace
-.release/AeroSpork.app/Contents/Resources
-.release/AeroSpork.app/Contents/Resources/default-config.toml
-.release/AeroSpork.app/Contents/Resources/AppIcon.icns
-.release/AeroSpork.app/Contents/Resources/Assets.car
-.release/AeroSpork.app/Contents/Info.plist
-.release/AeroSpork.app/Contents/PkgInfo
+.release/j4.app
+.release/j4.app/Contents
+.release/j4.app/Contents/_CodeSignature
+.release/j4.app/Contents/_CodeSignature/CodeResources
+.release/j4.app/Contents/MacOS
+.release/j4.app/Contents/MacOS/j4
+.release/j4.app/Contents/Resources
+.release/j4.app/Contents/Resources/default-config.toml
+.release/j4.app/Contents/Resources/AppIcon.icns
+.release/j4.app/Contents/Resources/Assets.car
+.release/j4.app/Contents/Info.plist
+.release/j4.app/Contents/PkgInfo
 EOF
 )
 
-if test "$expected_layout" != "$(find .release/AeroSpork.app)"; then
+if test "$expected_layout" != "$(find .release/j4.app)"; then
     echo "!!! Expect/Actual layout don't match !!!"
-    find .release/AeroSpork.app
+    find .release/j4.app
     exit 1
 fi
 
@@ -104,35 +104,35 @@ check-contains-hash() {
     fi
 }
 
-check-universal-binary .release/AeroSpork.app/Contents/MacOS/AeroSpace
-check-universal-binary .release/aerospork
+check-universal-binary .release/j4.app/Contents/MacOS/j4
+check-universal-binary .release/j4
 
-check-contains-hash .release/AeroSpork.app/Contents/MacOS/AeroSpace
-check-contains-hash .release/aerospork
+check-contains-hash .release/j4.app/Contents/MacOS/j4
+check-contains-hash .release/j4
 
-codesign -v .release/AeroSpork.app
-codesign -v .release/aerospork
+codesign -v .release/j4.app
+codesign -v .release/j4
 
 ############
 ### PACK ###
 ############
 
-mkdir -p ".release/AeroSpork-v$build_version/manpage" && cp .man/*.1 ".release/AeroSpork-v$build_version/manpage"
-cp -r ./legal ".release/AeroSpork-v$build_version/legal"
-cp -r .shell-completion ".release/AeroSpork-v$build_version/shell-completion"
+mkdir -p ".release/j4-v$build_version/manpage" && cp .man/*.1 ".release/j4-v$build_version/manpage"
+cp -r ./legal ".release/j4-v$build_version/legal"
+cp -r .shell-completion ".release/j4-v$build_version/shell-completion"
 cd .release
-    mkdir -p "AeroSpork-v$build_version/bin" && cp -r aerospork "AeroSpork-v$build_version/bin"
-    cp -r AeroSpork.app "AeroSpork-v$build_version"
-    zip -r "AeroSpork-v$build_version.zip" "AeroSpork-v$build_version"
+    mkdir -p "j4-v$build_version/bin" && cp -r j4 "j4-v$build_version/bin"
+    cp -r j4.app "j4-v$build_version"
+    zip -r "j4-v$build_version.zip" "j4-v$build_version"
 cd -
 
 #################
 ### Brew Cask ###
 #################
-for cask_name in aerospork aerospork-dev; do
+for cask_name in j4 j4-dev; do
     ./script/build-brew-cask.sh \
         --cask-name "$cask_name" \
-        --app-bundle-dir-name "AeroSpork.app" \
-        --zip-uri ".release/AeroSpork-v$build_version.zip" \
+        --app-bundle-dir-name "j4.app" \
+        --zip-uri ".release/j4-v$build_version.zip" \
         --build-version "$build_version"
 done

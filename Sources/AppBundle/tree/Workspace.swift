@@ -2,7 +2,7 @@ import AppKit
 import Common
 import os.log
 
-private let workspaceLogger = Logger(subsystem: "com.aerospork", category: "workspace")
+private let workspaceLogger = Logger(subsystem: "com.wbs.j4", category: "workspace")
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 

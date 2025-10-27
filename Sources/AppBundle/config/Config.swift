@@ -31,7 +31,7 @@ var defaultConfigUrl: URL {
         return parsedConfig.config
     } else {
         // Use hardcoded fallback config - all Config fields have sensible defaults
-        // Users can override these by creating ~/.aerospork.toml or ~/.aerospork-debug.toml
+        // Users can override these by creating ~/.j4.toml or ~/.j4-debug.toml
         return Config()
     }
 }()

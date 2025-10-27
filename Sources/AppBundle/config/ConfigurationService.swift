@@ -3,7 +3,7 @@ import Common
 import TOMLKit
 import os.log
 
-private let serviceLogger = Logger(subsystem: "com.wbs.aerospork", category: "config-service")
+private let serviceLogger = Logger(subsystem: "com.wbs.j4", category: "config-service")
 
 /// Service layer for configuration management
 /// Provides clean API for UI to read/write configuration

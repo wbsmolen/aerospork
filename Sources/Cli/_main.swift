@@ -5,7 +5,7 @@ import Socket
 
 let usage =
     """
-    USAGE: \(CommandLine.arguments.first ?? "aerospork") [-h|--help] [-v|--version] <subcommand> [<args>...]
+    USAGE: \(CommandLine.arguments.first ?? "j4") [-h|--help] [-v|--version] <subcommand> [<args>...]
 
     SUBCOMMANDS:
     \(subcommandDescriptions.sortedBy { $0[0] }.toPaddingTable(columnSeparator: "   ").joined(separator: "\n"))
@@ -50,7 +50,7 @@ struct Main {
             if isVersion {
                 printVersionAndExit(serverVersion: nil)
             } else {
-                cliError("Can't connect to AeroSpork server. Is AeroSpork.app running?\n\(e.localizedDescription)")
+                cliError("Can't connect to j4 server. Is j4.app running?\n\(e.localizedDescription)")
             }
         }
 
@@ -76,12 +76,12 @@ struct Main {
         if ans.exitCode != 0 && ans.serverVersionAndHash != cliClientVersionAndHash {
             printStderr(
                 """
-                Warning: AeroSpork client/server versions don't match
-                    - aerospork CLI client version: \(cliClientVersionAndHash)
-                    - AeroSpork.app server version: \(ans.serverVersionAndHash)
+                Warning: j4 client/server versions don't match
+                    - j4 CLI client version: \(cliClientVersionAndHash)
+                    - j4.app server version: \(ans.serverVersionAndHash)
                     Possible fixes:
-                    - Restart AeroSpork.app (server restart is required after each update)
-                    - Reinstall and restart AeroSpork (corrupted installation)
+                    - Restart j4.app (server restart is required after each update)
+                    - Reinstall and restart j4 (corrupted installation)
                 """,
             )
         }
@@ -92,8 +92,8 @@ struct Main {
 func printVersionAndExit(serverVersion: String?) -> Never {
     print(
         """
-        aerospork CLI client version: \(cliClientVersionAndHash)
-        AeroSpork.app server version: \(serverVersion ?? "Unknown. The server is not running")
+        j4 CLI client version: \(cliClientVersionAndHash)
+        j4.app server version: \(serverVersion ?? "Unknown. The server is not running")
         """,
     )
     exit(0)

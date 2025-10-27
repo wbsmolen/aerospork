@@ -4,15 +4,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "AeroSporkPackage",
+    name: "j4Package",
     // Runtime support for parameterized protocol types is only available in macOS 13.0.0 or newer
     // And it specifies deploymentTarget for CLI
     platforms: [.macOS(.v13)],
     // Products define the executables and libraries a package produces, making them visible to other packages.
     products: [
-        .executable(name: "aerospork", targets: ["Cli"]),
+        .executable(name: "j4", targets: ["Cli"]),
         // Don't use this build for release, use xcode instead
-        .executable(name: "AeroSporkApp", targets: ["AeroSporkApp"]),
+        .executable(name: "j4App", targets: ["j4App"]),
         // We only need to expose this as a product for xcode
         .library(name: "AppBundle", targets: ["AppBundle"]),
     ],
@@ -53,7 +53,7 @@ let package = Package(
             ],
         ),
         .executableTarget(
-            name: "AeroSporkApp",
+            name: "j4App",
             dependencies: [
                 .target(name: "AppBundle"),
             ],

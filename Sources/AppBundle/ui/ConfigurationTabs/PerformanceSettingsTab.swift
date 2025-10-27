@@ -11,7 +11,7 @@ struct PerformanceSettingsTab: View {
                     .font(.headline)
                     .padding(.bottom, 10)
 
-                Text("Fine-tune AeroSpork's performance for your system")
+                Text("Fine-tune j4's performance for your system")
                     .font(.caption)
                     .foregroundColor(.secondary)
 

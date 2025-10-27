@@ -1,49 +1,19 @@
-# AeroSpork
+# j4
 
-**An i3-like tiling window manager for macOS, focused on performance and user experience**
+**An i3-like tiling window manager for macOS**
 
-AeroSpork is a fork of [AeroSpace](https://github.com/nikitabobko/AeroSpace) by nikitabobko, enhanced with significant performance improvements, a polished settings GUI, and refined stability features.
-
----
-
-## What is AeroSpork?
-
-AeroSpork builds on the solid foundation of AeroSpace to provide an even better tiling window management experience for macOS. While maintaining compatibility with AeroSpace configurations, AeroSpork adds:
-
-### Key Enhancements
-
-- **🚀 26-53% Performance Improvements**
-  - Thread-per-application architecture to circumvent macOS blocking AX API
-  - Intelligent layout caching with memoization
-  - Adaptive debouncing based on system load
-  - Background layout calculation for complex workspaces
-
-- **⚙️ Settings GUI**
-  - Full settings interface for all configuration options (except keyboard shortcuts)
-  - Monitor fingerprinting for persistent workspace-to-monitor assignments
-  - Visual gaps preview
-  - Configuration validation before saving
-
-- **🔍 Enhanced Debugging**
-  - Comprehensive performance monitoring and metrics
-  - Structured logging with os.log
-  - Debug builds with enhanced telemetry
-
-- **✅ Configuration Safety**
-  - Pre-save validation prevents invalid configs
-  - TOML format and comment preservation
-  - Automatic backups before writing
+j4 is a tiling window manager for macOS that provides i3-inspired window management with a native macOS experience. Built with performance and usability in mind, j4 offers fast workspace switching, comprehensive configuration options, and a modern settings GUI.
 
 ---
 
-## Key Features (Inherited from AeroSpace)
+## Key Features
 
-- **Tiling window manager** based on a tree paradigm
-- **i3-inspired** keybindings and workflow
-- **Fast workspace switching** without animations, no need to disable SIP
-- **Virtual workspaces** - AeroSpork uses its own workspace emulation instead of macOS Spaces
-- **Plain text configuration** - Dotfiles friendly TOML format
-- **CLI first** - Full command-line interface with manpages and shell completion
+- **🪟 Tiling Window Management** - Tree-based layout paradigm inspired by i3
+- **⚡ Fast Workspace Switching** - Instant workspace changes without animations
+- **⚙️ Settings GUI** - Visual configuration interface for all major settings
+- **📝 Plain Text Configuration** - TOML-based config files, dotfiles friendly
+- **🔧 CLI First** - Full command-line interface with shell completion
+- **🎯 Accessibility-Based** - Uses macOS Accessibility APIs for window control
 
 ---
 
@@ -51,39 +21,59 @@ AeroSpork builds on the solid foundation of AeroSpace to provide an even better 
 
 ### Build from Source
 
-**Debug build** (uses `~/.aerospork-debug.toml`):
+**Debug build** (uses `~/.j4-debug.toml`):
 ```bash
 ./build-debug.sh
 ./run-debug.sh
 ```
 
-**Release build** (uses `~/.aerospork.toml`):
+**Release build** (uses `~/.j4.toml`):
 ```bash
 ./build-release.sh
-# Installs to Applications folder
+# Output in .release/j4.app
 ```
 
 ### Requirements
 
-- macOS 12.0 (Monterey) or later
+- macOS 13.0 (Ventura) or later
 - Swift 6.2+
 - Accessibility permissions
 
 ---
 
-## Configuration
+## Quick Start
 
-AeroSpork uses TOML configuration files:
-- **Debug**: `~/.aerospork-debug.toml`
-- **Release**: `~/.aerospork.toml`
+### Configuration
 
-Create your config file based on the patterns from the original AeroSpace project, or use the Settings GUI to manage most options.
+j4 uses TOML configuration files:
+- **Debug**: `~/.j4-debug.toml`
+- **Release**: `~/.j4.toml`
+- **Alternative**: `${XDG_CONFIG_HOME}/j4/j4.toml`
 
-### Opening Settings GUI
+### Settings GUI
+
+Open the settings window to configure j4 visually:
 
 ```bash
-# Launch the settings window
-aerospork config
+j4 config
+```
+
+The GUI provides access to:
+- General settings (start at login, accordion padding)
+- Workspace-to-monitor assignments
+- Gaps configuration with preview
+- Performance tuning
+- Key bindings overview
+- Advanced settings (read-only display)
+
+### CLI Usage
+
+```bash
+j4 focus left              # Focus window to the left
+j4 workspace 1             # Switch to workspace 1
+j4 move-node-to-workspace 2  # Move window to workspace 2
+j4 layout tiles            # Change layout mode
+j4 --help                  # Show all commands
 ```
 
 ---
@@ -94,8 +84,8 @@ aerospork config
 
 ```bash
 ./build-debug.sh              # Build debug version to .debug/
-./run-debug.sh                # Run AeroSpace.app debug build
-./run-cli.sh [args]           # Run aerospork CLI
+./run-debug.sh                # Run j4.app debug build
+./run-cli.sh [args]           # Run j4 CLI
 ./build-release.sh            # Build release to .release/
 ```
 
@@ -104,22 +94,22 @@ aerospork config
 ```bash
 ./run-tests.sh                # Full test suite + lint
 ./run-swift-test.sh           # Swift tests only
-./format.sh                   # Format code
+./format.sh                   # Format code with swiftformat
 ```
 
 ### Project Structure
 
 ```
 Sources/
-├── AeroSporkApp/          # Main app entry point
+├── j4App/                 # Main app entry point
 ├── AppBundle/             # Core window management logic
-│   ├── tree/              # Tree data structure
+│   ├── tree/              # Tree data structure (Workspace, Window, Container)
 │   ├── command/           # Command implementations
 │   ├── config/            # Configuration parsing + validation
 │   ├── layout/            # Layout calculation engine
 │   ├── monitoring/        # Performance monitoring
 │   ├── cache/             # Caching infrastructure
-│   └── ui/                # Settings GUI
+│   └── ui/                # Settings GUI (SwiftUI)
 ├── Cli/                   # Command-line client
 └── Common/                # Shared utilities
 ```
@@ -128,35 +118,88 @@ See `CLAUDE.md` for detailed development guidance.
 
 ---
 
-## Performance
+## Architecture
 
-AeroSpork achieves **26-53% performance improvements** over stock AeroSpace through:
+### Tree-Based Layout
 
-1. **Thread-per-Application**: Accessibility API calls run in parallel
-2. **Layout Caching**: Memoization prevents redundant calculations
-3. **Adaptive Debouncing**: Delays adjust based on workspace complexity
-4. **Background Calculation**: Complex layouts (>10 windows) computed async
+j4 manages windows in a tree structure similar to i3:
+- **Workspaces** are root nodes
+- **Containers** have orientation (horizontal/vertical) and layout (tiles/accordion)
+- **Windows** are leaf nodes
 
-Benchmarks show:
-- **Medium workspaces** (6-10 windows): 26% faster
-- **Complex workspaces** (15+ windows): 53% faster
+### Virtual Workspaces
+
+j4 implements its own workspace system instead of using native macOS Spaces. This enables:
+- Instant workspace switching without animations
+- No need to disable System Integrity Protection (SIP)
+- Flexible workspace-to-monitor assignments
+
+### Monitor Fingerprinting
+
+Workspaces can be assigned to specific monitors using fingerprints (vendor ID, model, serial). This allows persistent workspace assignments across docking/undocking.
 
 ---
 
-## Credits
+## Configuration Examples
 
-**Original Project**: [AeroSpace](https://github.com/nikitabobko/AeroSpace) by [nikitabobko](https://github.com/nikitabobko)
+### Basic Window Management
 
-AeroSpork maintains the core functionality and philosophy of AeroSpace. All credit for the foundational window management system goes to the original AeroSpace project and its contributors.
+```toml
+[mode.main.binding]
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-l = 'focus right'
+
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+```
+
+### Workspace Assignments
+
+```toml
+[workspace-to-monitor-force-assignment]
+1 = 'main'
+2 = 'main'
+3 = 'secondary'
+4 = 'secondary'
+```
+
+### Gaps
+
+```toml
+[gaps]
+inner.horizontal = 10
+inner.vertical = 10
+outer.left = 10
+outer.bottom = 10
+outer.top = 10
+outer.right = 10
+```
+
+---
+
+## Performance
+
+j4 includes several performance optimizations:
+
+- **Layout Caching**: Memoization prevents redundant calculations
+- **Adaptive Debouncing**: Adjusts delays based on workspace complexity
+- **Background Calculation**: Complex layouts computed asynchronously
+- **Window Property Caching**: Reduces Accessibility API calls
+
+Performance can be tuned via the Settings GUI or config file.
 
 ---
 
 ## License
 
-Same as original AeroSpace project (MIT License)
+MIT License
 
 ---
 
 ## Status
 
-**Active Development** - AeroSpork is being actively developed with a focus on performance, stability, and user experience. Breaking changes may occur as we refine features and architecture.
+**Active Development** - j4 is under active development. Features and configuration format may change.

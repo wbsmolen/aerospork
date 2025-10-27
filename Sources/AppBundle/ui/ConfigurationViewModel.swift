@@ -4,7 +4,7 @@ import TOMLKit
 import AppKit
 import os.log
 
-private let viewModelLogger = Logger(subsystem: "com.wbs.aerospork", category: "config-viewmodel")
+private let viewModelLogger = Logger(subsystem: "com.wbs.j4", category: "config-viewmodel")
 
 @MainActor
 class ConfigurationViewModel: ObservableObject {
@@ -147,7 +147,7 @@ class ConfigurationViewModel: ObservableObject {
             } else {
                 // No config file exists - use hardcoded defaults
                 // This matches the fallback behavior in Config.swift
-                let fileName = isDebug ? ".aerospork-debug.toml" : ".aerospork.toml"
+                let fileName = isDebug ? ".j4-debug.toml" : ".j4.toml"
                 let defaultPath = FileManager.default.homeDirectoryForCurrentUser
                     .appending(path: fileName).path
                 configFilePath = defaultPath

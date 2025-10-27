@@ -188,7 +188,7 @@ struct AdvancedSettingsTab: View {
                         title: "After Startup",
                         icon: "power",
                         commands: viewModel.afterStartupCommands,
-                        description: "Runs once when AeroSpork starts"
+                        description: "Runs once when j4 starts"
                     )
                 }
 
@@ -350,7 +350,7 @@ struct AdvancedSettingsTab: View {
                 }
 
                 if rule.duringStartup {
-                    Text("• Only during AeroSpork startup")
+                    Text("• Only during j4 startup")
                         .font(.caption)
                         .foregroundColor(.primary)
                 }

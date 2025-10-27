@@ -3,7 +3,7 @@ import Common
 import TOMLKit
 import os.log
 
-private let writerLogger = Logger(subsystem: "com.wbs.aerospork", category: "config-writer")
+private let writerLogger = Logger(subsystem: "com.wbs.j4", category: "config-writer")
 
 /// Writes configuration back to TOML file while preserving formatting, comments, and sections
 /// that are not managed by the UI
