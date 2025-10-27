@@ -51,5 +51,6 @@ targets:
     entitlements:
       path: resources/j4.entitlements
       properties:
-        # Accessibility API doesn't work in sandboxed app
-        com.apple.security.app-sandbox: false
+        com.apple.security.app-sandbox: true
+        com.apple.security.automation.apple-events: true
+        com.apple.security.temporary-exception.apple-events: com.apple.systemevents
