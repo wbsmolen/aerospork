@@ -26,16 +26,34 @@ class ConfigurationViewModel: ObservableObject {
     @Published var connectedMonitors: [MonitorInfo] = []
     @Published var allWorkspaces: [String] = []
     
-    // Gaps
-    @Published var innerGaps: Int = 5
+    // Gaps - split inner gaps into separate horizontal and vertical fields
+    @Published var innerGapsHorizontal: Int = 5
+    @Published var innerGapsVertical: Int = 5
     @Published var outerGapsTop: Int = 20
     @Published var outerGapsBottom: Int = 20
     @Published var outerGapsLeft: Int = 20
     @Published var outerGapsRight: Int = 20
-    
+
+    // Performance settings
+    @Published var useBackgroundLayoutCalculation: Bool = true
+    @Published var useLayoutMemoization: Bool = true
+    @Published var useAdaptiveDebouncing: Bool = true
+    @Published var backgroundLayoutThreshold: Int = 10
+    @Published var layoutCacheSize: Int = 100
+    @Published var layoutCacheTimeout: Double = 30.0
+    @Published var debounceBaseDelay: Double = 50.0
+    @Published var debounceMinDelay: Double = 10.0
+    @Published var debounceMaxDelay: Double = 200.0
+    @Published var debounceCpuLoadFactor: Double = 1.5
+    @Published var debounceFrequencyFactor: Double = 1.2
+    @Published var enablePerformanceMetrics: Bool = false
+    @Published var enablePerformanceDebugLogging: Bool = false
+    @Published var metricsInterval: Double = 60.0
+    @Published var maxPerformanceSamples: Int = 1000
+
     // Key bindings (read-only display)
     @Published var keyBindings: [(mode: String, bindings: [(key: String, command: String)])] = []
-    
+
     // State management
     @Published var hasUnsavedChanges: Bool = false
     @Published var errorMessage: String?
@@ -157,23 +175,74 @@ class ConfigurationViewModel: ObservableObject {
             autoMoveWorkspacesOnMonitorConnect = autoMove
         }
 
-        // Load gaps
+        // Load gaps - now loads horizontal and vertical separately
         if let gaps = tomlTable["gaps"]?.table {
             if let innerTable = gaps["inner"]?.table {
-                let horizontal = innerTable["horizontal"]?.int ?? 0
-                let vertical = innerTable["vertical"]?.int ?? 0
-
-                // If horizontal and vertical differ, use horizontal and show warning
-                if horizontal != vertical {
-                    viewModelLogger.warning("Inner gaps differ: horizontal=\(horizontal), vertical=\(vertical). Using horizontal value. Both will be set to the same value on save.")
-                }
-                innerGaps = horizontal
+                innerGapsHorizontal = innerTable["horizontal"]?.int ?? 0
+                innerGapsVertical = innerTable["vertical"]?.int ?? 0
             }
             if let outer = gaps["outer"]?.table {
                 if let top = outer["top"]?.int { outerGapsTop = top }
                 if let bottom = outer["bottom"]?.int { outerGapsBottom = bottom }
                 if let left = outer["left"]?.int { outerGapsLeft = left }
                 if let right = outer["right"]?.int { outerGapsRight = right }
+            }
+        }
+
+        // Load performance settings from TOML
+        if let performance = tomlTable["performance"]?.table {
+            if let useBgLayout = performance["use-background-layout-calculation"]?.bool {
+                useBackgroundLayoutCalculation = useBgLayout
+            }
+            if let useMemo = performance["use-layout-memoization"]?.bool {
+                useLayoutMemoization = useMemo
+            }
+            if let useAdaptive = performance["use-adaptive-debouncing"]?.bool {
+                useAdaptiveDebouncing = useAdaptive
+            }
+            if let threshold = performance["background-layout-threshold"]?.int {
+                backgroundLayoutThreshold = threshold
+            }
+            if let cacheSize = performance["layout-cache-size"]?.int {
+                layoutCacheSize = cacheSize
+            }
+            if let cacheTimeout = performance["layout-cache-timeout"]?.double {
+                layoutCacheTimeout = cacheTimeout
+            }
+
+            // Debouncing config
+            if let debouncing = performance["debouncing"]?.table {
+                if let baseDelay = debouncing["base-delay"]?.double {
+                    debounceBaseDelay = baseDelay
+                }
+                if let minDelay = debouncing["min-delay"]?.double {
+                    debounceMinDelay = minDelay
+                }
+                if let maxDelay = debouncing["max-delay"]?.double {
+                    debounceMaxDelay = maxDelay
+                }
+                if let cpuFactor = debouncing["cpu-load-factor"]?.double {
+                    debounceCpuLoadFactor = cpuFactor
+                }
+                if let freqFactor = debouncing["frequency-factor"]?.double {
+                    debounceFrequencyFactor = freqFactor
+                }
+            }
+
+            // Monitoring config
+            if let monitoring = performance["monitoring"]?.table {
+                if let enableMetrics = monitoring["enable-metrics"]?.bool {
+                    enablePerformanceMetrics = enableMetrics
+                }
+                if let enableDebug = monitoring["enable-debug-logging"]?.bool {
+                    enablePerformanceDebugLogging = enableDebug
+                }
+                if let interval = monitoring["metrics-interval"]?.double {
+                    metricsInterval = interval
+                }
+                if let maxSamples = monitoring["max-samples-retained"]?.int {
+                    maxPerformanceSamples = maxSamples
+                }
             }
         }
 
@@ -258,12 +327,30 @@ class ConfigurationViewModel: ObservableObject {
         enableNormalizationOppositeOrientation = config.enableNormalizationOppositeOrientationForNestedContainers
         autoMoveWorkspacesOnMonitorConnect = config.autoMoveWorkspacesOnMonitorConnect
 
-        // Load gaps - extract constant values from DynamicConfigValue
-        innerGaps = extractConstantValue(config.gaps.inner.horizontal)
+        // Load gaps - extract constant values from DynamicConfigValue, separate H/V
+        innerGapsHorizontal = extractConstantValue(config.gaps.inner.horizontal)
+        innerGapsVertical = extractConstantValue(config.gaps.inner.vertical)
         outerGapsTop = extractConstantValue(config.gaps.outer.top)
         outerGapsBottom = extractConstantValue(config.gaps.outer.bottom)
         outerGapsLeft = extractConstantValue(config.gaps.outer.left)
         outerGapsRight = extractConstantValue(config.gaps.outer.right)
+
+        // Load performance settings
+        useBackgroundLayoutCalculation = config.performanceConfig.useBackgroundLayoutCalculation
+        useLayoutMemoization = config.performanceConfig.useLayoutMemoization
+        useAdaptiveDebouncing = config.performanceConfig.useAdaptiveDebouncing
+        backgroundLayoutThreshold = config.performanceConfig.backgroundLayoutThreshold
+        layoutCacheSize = config.performanceConfig.layoutCacheSize
+        layoutCacheTimeout = config.performanceConfig.layoutCacheTimeout
+        debounceBaseDelay = config.performanceConfig.debouncingConfig.baseDelay
+        debounceMinDelay = config.performanceConfig.debouncingConfig.minimumDelay
+        debounceMaxDelay = config.performanceConfig.debouncingConfig.maximumDelay
+        debounceCpuLoadFactor = config.performanceConfig.debouncingConfig.cpuLoadFactor
+        debounceFrequencyFactor = config.performanceConfig.debouncingConfig.frequencyFactor
+        enablePerformanceMetrics = config.performanceConfig.monitoringConfig.enableMetrics
+        enablePerformanceDebugLogging = config.performanceConfig.monitoringConfig.enableDebugLogging
+        metricsInterval = config.performanceConfig.monitoringConfig.metricsInterval
+        maxPerformanceSamples = config.performanceConfig.monitoringConfig.maxSamplesRetained
 
         // Convert workspace assignments
         workspaceAssignments = config.workspaceToMonitorForceAssignment.flatMap { (workspace, monitors) in
@@ -292,9 +379,112 @@ class ConfigurationViewModel: ObservableObject {
             return defaultValue
         }
     }
-    
-    
-    
+
+    // MARK: - Validation Methods
+
+    /// Validate gaps configuration
+    func validateGaps() -> [String] {
+        var errors: [String] = []
+
+        // Inner gaps validation (0-500 pixels is reasonable)
+        if innerGapsHorizontal < 0 {
+            errors.append("Inner horizontal gap cannot be negative")
+        } else if innerGapsHorizontal > 500 {
+            errors.append("Inner horizontal gap is unusually large (>500px). Consider reducing.")
+        }
+
+        if innerGapsVertical < 0 {
+            errors.append("Inner vertical gap cannot be negative")
+        } else if innerGapsVertical > 500 {
+            errors.append("Inner vertical gap is unusually large (>500px). Consider reducing.")
+        }
+
+        // Outer gaps validation
+        if outerGapsTop < 0 {
+            errors.append("Outer top gap cannot be negative")
+        } else if outerGapsTop > 500 {
+            errors.append("Outer top gap is unusually large (>500px). Consider reducing.")
+        }
+
+        if outerGapsBottom < 0 {
+            errors.append("Outer bottom gap cannot be negative")
+        } else if outerGapsBottom > 500 {
+            errors.append("Outer bottom gap is unusually large (>500px). Consider reducing.")
+        }
+
+        if outerGapsLeft < 0 {
+            errors.append("Outer left gap cannot be negative")
+        } else if outerGapsLeft > 500 {
+            errors.append("Outer left gap is unusually large (>500px). Consider reducing.")
+        }
+
+        if outerGapsRight < 0 {
+            errors.append("Outer right gap cannot be negative")
+        } else if outerGapsRight > 500 {
+            errors.append("Outer right gap is unusually large (>500px). Consider reducing.")
+        }
+
+        return errors
+    }
+
+    /// Validate general settings
+    func validateGeneral() -> [String] {
+        var errors: [String] = []
+
+        // Accordion padding validation (0-1000 pixels)
+        if accordionPadding < 0 {
+            errors.append("Accordion padding cannot be negative")
+        } else if accordionPadding > 1000 {
+            errors.append("Accordion padding is unusually large (>1000px). Consider reducing.")
+        }
+
+        // Layout validation
+        let validLayouts = ["tiles", "accordion"]
+        if !validLayouts.contains(defaultRootContainerLayout) {
+            errors.append("Invalid layout '\(defaultRootContainerLayout)'. Must be 'tiles' or 'accordion'.")
+        }
+
+        // Orientation validation
+        let validOrientations = ["auto", "horizontal", "vertical"]
+        if !validOrientations.contains(defaultRootContainerOrientation) {
+            errors.append("Invalid orientation '\(defaultRootContainerOrientation)'. Must be 'auto', 'horizontal', or 'vertical'.")
+        }
+
+        return errors
+    }
+
+    /// Validate all settings
+    func validateAll() -> [String] {
+        var allErrors: [String] = []
+        allErrors.append(contentsOf: validateGaps())
+        allErrors.append(contentsOf: validateGeneral())
+        return allErrors
+    }
+
+    // MARK: - Performance Preset Methods
+
+    /// Apply a performance preset
+    func applyPerformancePreset(_ preset: PerformanceConfig) {
+        useBackgroundLayoutCalculation = preset.useBackgroundLayoutCalculation
+        useLayoutMemoization = preset.useLayoutMemoization
+        useAdaptiveDebouncing = preset.useAdaptiveDebouncing
+        backgroundLayoutThreshold = preset.backgroundLayoutThreshold
+        layoutCacheSize = preset.layoutCacheSize
+        layoutCacheTimeout = preset.layoutCacheTimeout
+        debounceBaseDelay = preset.debouncingConfig.baseDelay
+        debounceMinDelay = preset.debouncingConfig.minimumDelay
+        debounceMaxDelay = preset.debouncingConfig.maximumDelay
+        debounceCpuLoadFactor = preset.debouncingConfig.cpuLoadFactor
+        debounceFrequencyFactor = preset.debouncingConfig.frequencyFactor
+        enablePerformanceMetrics = preset.monitoringConfig.enableMetrics
+        enablePerformanceDebugLogging = preset.monitoringConfig.enableDebugLogging
+        metricsInterval = preset.monitoringConfig.metricsInterval
+        maxPerformanceSamples = preset.monitoringConfig.maxSamplesRetained
+        markAsModified()
+    }
+
+
+
     private func loadKeyBindings(from toml: TOMLTable) {
         keyBindings = []
         
@@ -408,8 +598,8 @@ class ConfigurationViewModel: ObservableObject {
         )
 
         let gaps = GapsSettings(
-            innerHorizontal: innerGaps,
-            innerVertical: innerGaps,
+            innerHorizontal: innerGapsHorizontal,
+            innerVertical: innerGapsVertical,
             outerTop: outerGapsTop,
             outerBottom: outerGapsBottom,
             outerLeft: outerGapsLeft,

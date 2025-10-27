@@ -4,6 +4,15 @@ import Common
 struct GapsSettingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
 
+    // Compute validation errors
+    private var validationErrors: [String] {
+        viewModel.validateGaps()
+    }
+
+    private var hasErrors: Bool {
+        !validationErrors.isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Window Gaps Configuration")
@@ -13,24 +22,46 @@ struct GapsSettingsTab: View {
             HStack(alignment: .top, spacing: 40) {
                 // Left side - Settings
                 VStack(alignment: .leading, spacing: 16) {
-                    // Inner gaps
+                    // Inner gaps - now split into horizontal and vertical
                     Section {
                         Text("Inner Gaps")
                             .font(.subheadline)
                             .fontWeight(.semibold)
 
-                        HStack {
-                            Text("Between windows:")
-                            TextField("", value: Binding(
-                                get: { viewModel.innerGaps },
-                                set: {
-                                    viewModel.innerGaps = max(0, $0)
-                                    viewModel.markAsModified()
-                                },
-                            ), format: .number)
-                                .frame(width: 60)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                            Text("pixels")
+                        Text("Space between windows")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Horizontal:")
+                                    .frame(width: 80, alignment: .trailing)
+                                TextField("", value: Binding(
+                                    get: { viewModel.innerGapsHorizontal },
+                                    set: {
+                                        viewModel.innerGapsHorizontal = max(0, $0)
+                                        viewModel.markAsModified()
+                                    },
+                                ), format: .number)
+                                    .frame(width: 60)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                Text("pixels")
+                            }
+
+                            HStack {
+                                Text("Vertical:")
+                                    .frame(width: 80, alignment: .trailing)
+                                TextField("", value: Binding(
+                                    get: { viewModel.innerGapsVertical },
+                                    set: {
+                                        viewModel.innerGapsVertical = max(0, $0)
+                                        viewModel.markAsModified()
+                                    },
+                                ), format: .number)
+                                    .frame(width: 60)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                Text("pixels")
+                            }
                         }
                     }
 
@@ -113,14 +144,34 @@ struct GapsSettingsTab: View {
                         .fontWeight(.semibold)
 
                     GapsPreview(
-                        innerGaps: viewModel.innerGaps,
+                        innerGapsHorizontal: viewModel.innerGapsHorizontal,
+                        innerGapsVertical: viewModel.innerGapsVertical,
                         outerGapsTop: viewModel.outerGapsTop,
                         outerGapsBottom: viewModel.outerGapsBottom,
                         outerGapsLeft: viewModel.outerGapsLeft,
-                        outerGapsRight: viewModel.outerGapsRight,
+                        outerGapsRight: viewModel.outerGapsRight
                     )
                     .frame(width: 250, height: 200)
                 }
+            }
+
+            // Validation errors section
+            if hasErrors {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Validation Errors", systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.orange)
+
+                    ForEach(validationErrors, id: \.self) { error in
+                        Text("• \(error)")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding()
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
             }
 
             Spacer()
@@ -135,7 +186,8 @@ struct GapsSettingsTab: View {
 }
 
 struct GapsPreview: View {
-    let innerGaps: Int
+    let innerGapsHorizontal: Int
+    let innerGapsVertical: Int
     let outerGapsTop: Int
     let outerGapsBottom: Int
     let outerGapsLeft: Int
@@ -157,8 +209,8 @@ struct GapsPreview: View {
                 let availableWidth = totalWidth - CGFloat(outerGapsLeft + outerGapsRight)
                 let availableHeight = totalHeight - CGFloat(outerGapsTop + outerGapsBottom)
 
-                // Two windows side by side
-                let windowWidth = (availableWidth - CGFloat(innerGaps)) / 2
+                // Two windows side by side (uses horizontal gap)
+                let windowWidth = (availableWidth - CGFloat(innerGapsHorizontal)) / 2
                 let windowHeight = availableHeight
 
                 // Left window
@@ -175,8 +227,8 @@ struct GapsPreview: View {
                     .fill(Color.green.opacity(0.3))
                     .frame(width: max(0, windowWidth), height: max(0, windowHeight))
                     .position(
-                        x: CGFloat(outerGapsLeft) + windowWidth + CGFloat(innerGaps) + windowWidth / 2,
-                        y: CGFloat(outerGapsTop) + windowHeight / 2,
+                        x: CGFloat(outerGapsLeft) + windowWidth + CGFloat(innerGapsHorizontal) + windowWidth / 2,
+                        y: CGFloat(outerGapsTop) + windowHeight / 2
                     )
 
                 // Gap indicators
@@ -201,12 +253,12 @@ struct GapsPreview: View {
                             .position(x: totalWidth / 2, y: CGFloat(outerGapsTop) / 2)
                     }
 
-                    // Inner gap
-                    if innerGaps > 0 {
+                    // Inner gap (horizontal)
+                    if innerGapsHorizontal > 0 {
                         Path { path in
                             let y = totalHeight / 2
                             let x1 = CGFloat(outerGapsLeft) + windowWidth
-                            let x2 = x1 + CGFloat(innerGaps)
+                            let x2 = x1 + CGFloat(innerGapsHorizontal)
                             path.move(to: CGPoint(x: x1, y: y))
                             path.addLine(to: CGPoint(x: x2, y: y))
                             path.move(to: CGPoint(x: x1 + 5, y: y - 5))
@@ -218,10 +270,10 @@ struct GapsPreview: View {
                         }
                         .stroke(Color.orange, lineWidth: 1)
 
-                        Text("\(innerGaps)")
+                        Text("\(innerGapsHorizontal)")
                             .font(.caption2)
                             .foregroundColor(.orange)
-                            .position(x: CGFloat(outerGapsLeft) + windowWidth + CGFloat(innerGaps) / 2, y: totalHeight / 2 + 15)
+                            .position(x: CGFloat(outerGapsLeft) + windowWidth + CGFloat(innerGapsHorizontal) / 2, y: totalHeight / 2 + 15)
                     }
                 }
             }

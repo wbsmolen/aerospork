@@ -46,6 +46,12 @@ public struct ConfigurationWindow: View {
                     }
                     .tag("gaps")
 
+                PerformanceSettingsTab(viewModel: viewModel)
+                    .tabItem {
+                        Label("Performance", systemImage: "speedometer")
+                    }
+                    .tag("performance")
+
                 KeyBindingsTab(viewModel: viewModel)
                     .tabItem {
                         Label("Key Bindings", systemImage: "keyboard")
