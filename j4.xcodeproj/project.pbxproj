@@ -3,124 +3,120 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2225F915AB97B4806A059313 /* AeroSporkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9134D606B963EB6843D01E1C /* AeroSporkApp.swift */; };
-		9C4259B08D7BC457F631DEDE /* AppBundle in Frameworks */ = {isa = PBXBuildFile; productRef = B873750DAD430B408A7CE51F /* AppBundle */; };
-		C325AB066EFE8717EC5992C7 /* default-config.toml in Resources */ = {isa = PBXBuildFile; fileRef = B2CC472CF0CBFF8565D7791F /* default-config.toml */; };
-		D0D71CB746DB124375B73175 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9DA43B41558368B3FC7D6FEF /* Assets.xcassets */; };
+		36B5789FCE23A9E89E315458 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BC6359E2A838ABFEFBE27CA3 /* PrivacyInfo.xcprivacy */; };
+		4AFF18C8AFABC1DCCF9FC0C6 /* AppBundle in Frameworks */ = {isa = PBXBuildFile; productRef = 67C879C545F64B1060FA8285 /* AppBundle */; };
+		4DD2F2AF008A308E29904A9C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A972C7E74664205B56926F9B /* Assets.xcassets */; };
+		6D08CA29109A81F2F9D84C32 /* Info-Debug.plist in Resources */ = {isa = PBXBuildFile; fileRef = 929E0EF128B8A23F95B49EF5 /* Info-Debug.plist */; };
+		C7285640ECF82C95EB21790D /* j4App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4FCC9F10502398DD4A1C4C /* j4App.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		233E2E6992E5B8D045882C06 /* AeroSpork-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AeroSpork-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		237811D2D30699BB3E0E6517 /* aerospork */ = {isa = PBXFileReference; lastKnownFileType = folder; name = aerospork; path = .; sourceTree = SOURCE_ROOT; };
-		87234DD589033C66539A48D5 /* AeroSpork.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AeroSpork.entitlements; sourceTree = "<group>"; };
-		9134D606B963EB6843D01E1C /* AeroSporkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AeroSporkApp.swift; sourceTree = "<group>"; };
-		9DA43B41558368B3FC7D6FEF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		B2CC472CF0CBFF8565D7791F /* default-config.toml */ = {isa = PBXFileReference; lastKnownFileType = text; path = "default-config.toml"; sourceTree = "<group>"; };
+		2D4FCC9F10502398DD4A1C4C /* j4App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = j4App.swift; sourceTree = "<group>"; };
+		484E804C0AF2D6487B69ED37 /* j4.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = j4.entitlements; sourceTree = "<group>"; };
+		929E0EF128B8A23F95B49EF5 /* Info-Debug.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-Debug.plist"; sourceTree = "<group>"; };
+		A972C7E74664205B56926F9B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BC6359E2A838ABFEFBE27CA3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D6E549348AD38001629AFEF8 /* j4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = j4.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F065CA57A7D2E5B2D4959EF0 /* aerospork */ = {isa = PBXFileReference; lastKnownFileType = folder; name = aerospork; path = .; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		AE850A5354D11BC991F29F79 /* Frameworks */ = {
+		199CCDF911DBA839B2B23967 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9C4259B08D7BC457F631DEDE /* AppBundle in Frameworks */,
+				4AFF18C8AFABC1DCCF9FC0C6 /* AppBundle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		37DBFF2E5651EE1A0D5B2AE1 /* Packages */ = {
+		3E125984AD89B99F49DE7528 /* j4App */ = {
 			isa = PBXGroup;
 			children = (
-				237811D2D30699BB3E0E6517 /* aerospork */,
+				2D4FCC9F10502398DD4A1C4C /* j4App.swift */,
 			);
-			name = Packages;
+			name = j4App;
+			path = Sources/j4App;
 			sourceTree = "<group>";
 		};
-		6CA74BBAA605661F7074123F = {
+		4B783050A7C227EF61D52872 /* resources */ = {
 			isa = PBXGroup;
 			children = (
-				DC049B869774FF51308AB905 /* AeroSporkApp */,
-				FCB2475E1F2B0BC059C798BF /* config-examples */,
-				37DBFF2E5651EE1A0D5B2AE1 /* Packages */,
-				F9D1DAEC9536C681C49D24BE /* resources */,
-				9B9622EC97CA2EBC197F979E /* Products */,
-			);
-			sourceTree = "<group>";
-		};
-		9B9622EC97CA2EBC197F979E /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				233E2E6992E5B8D045882C06 /* AeroSpork-Debug.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		DC049B869774FF51308AB905 /* AeroSporkApp */ = {
-			isa = PBXGroup;
-			children = (
-				9134D606B963EB6843D01E1C /* AeroSporkApp.swift */,
-			);
-			name = AeroSporkApp;
-			path = Sources/AeroSporkApp;
-			sourceTree = "<group>";
-		};
-		F9D1DAEC9536C681C49D24BE /* resources */ = {
-			isa = PBXGroup;
-			children = (
-				87234DD589033C66539A48D5 /* AeroSpork.entitlements */,
-				9DA43B41558368B3FC7D6FEF /* Assets.xcassets */,
+				A972C7E74664205B56926F9B /* Assets.xcassets */,
+				929E0EF128B8A23F95B49EF5 /* Info-Debug.plist */,
+				484E804C0AF2D6487B69ED37 /* j4.entitlements */,
+				BC6359E2A838ABFEFBE27CA3 /* PrivacyInfo.xcprivacy */,
 			);
 			path = resources;
 			sourceTree = "<group>";
 		};
-		FCB2475E1F2B0BC059C798BF /* config-examples */ = {
+		6AD995F712CAFCDB83761E4B /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				B2CC472CF0CBFF8565D7791F /* default-config.toml */,
+				F065CA57A7D2E5B2D4959EF0 /* aerospork */,
 			);
-			name = "config-examples";
-			path = "docs/config-examples";
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		773DDCAE2D4B739138B92AC1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D6E549348AD38001629AFEF8 /* j4.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		895352C6C8EB704DF0B94496 = {
+			isa = PBXGroup;
+			children = (
+				3E125984AD89B99F49DE7528 /* j4App */,
+				6AD995F712CAFCDB83761E4B /* Packages */,
+				4B783050A7C227EF61D52872 /* resources */,
+				773DDCAE2D4B739138B92AC1 /* Products */,
+			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3A09C8289A55A198F5F905D1 /* AeroSpork */ = {
+		CFF786C153634E9FCB909A6E /* j4 */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 9524648FDFB08929FAA3930A /* Build configuration list for PBXNativeTarget "AeroSpork" */;
+			buildConfigurationList = 615A79FC9F9E2424BD81281C /* Build configuration list for PBXNativeTarget "j4" */;
 			buildPhases = (
-				DFA0181D9FC0261E1D64A5DD /* Sources */,
-				16225631CB1E2F40BE02CDED /* Resources */,
-				AE850A5354D11BC991F29F79 /* Frameworks */,
+				C6105E575EFFC06871FC077D /* Sources */,
+				198589F231494288B1B4684C /* Resources */,
+				199CCDF911DBA839B2B23967 /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = AeroSpork;
+			name = j4;
 			packageProductDependencies = (
-				B873750DAD430B408A7CE51F /* AppBundle */,
+				67C879C545F64B1060FA8285 /* AppBundle */,
 			);
-			productName = AeroSpork;
-			productReference = 233E2E6992E5B8D045882C06 /* AeroSpork-Debug.app */;
+			productName = j4;
+			productReference = D6E549348AD38001629AFEF8 /* j4.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		A89EBA7B7DD6B8205EB0A977 /* Project object */ = {
+		4D4F5C55E1C471785BD90DA2 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
 			};
-			buildConfigurationList = 5D7D98C3A3C62F13613AE95E /* Build configuration list for PBXProject "AeroSpork" */;
+			buildConfigurationList = 6C58353C1A7CB43C75A5F72B /* Build configuration list for PBXProject "j4" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -128,99 +124,96 @@
 				Base,
 				en,
 			);
-			mainGroup = 6CA74BBAA605661F7074123F;
+			mainGroup = 895352C6C8EB704DF0B94496;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				59576CFEDB25051DDDF6D296 /* XCLocalSwiftPackageReference "." */,
+				B798243B20A1697B12780709 /* XCLocalSwiftPackageReference "." */,
 			);
+			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3A09C8289A55A198F5F905D1 /* AeroSpork */,
+				CFF786C153634E9FCB909A6E /* j4 */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		16225631CB1E2F40BE02CDED /* Resources */ = {
+		198589F231494288B1B4684C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D0D71CB746DB124375B73175 /* Assets.xcassets in Resources */,
-				C325AB066EFE8717EC5992C7 /* default-config.toml in Resources */,
+				4DD2F2AF008A308E29904A9C /* Assets.xcassets in Resources */,
+				6D08CA29109A81F2F9D84C32 /* Info-Debug.plist in Resources */,
+				36B5789FCE23A9E89E315458 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		DFA0181D9FC0261E1D64A5DD /* Sources */ = {
+		C6105E575EFFC06871FC077D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2225F915AB97B4806A059313 /* AeroSporkApp.swift in Sources */,
+				C7285640ECF82C95EB21790D /* j4App.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		3327C37878AF75405613AAFF /* Release */ = {
+		211F3C8A424330777C2D62E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = resources/j4.entitlements;
+				CODE_SIGN_IDENTITY = "j4-codesign-certificate";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 j4. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = "0.0.0-SNAPSHOT";
+				PRODUCT_BUNDLE_IDENTIFIER = com.wbs.j4.debug;
+				PRODUCT_NAME = "j4-Debug";
 				SDKROOT = macosx;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		21B508AC51D027F60AA7B34D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = resources/j4.entitlements;
+				CODE_SIGN_IDENTITY = "j4-codesign-certificate";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 j4. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = "0.0.0-SNAPSHOT";
+				PRODUCT_BUNDLE_IDENTIFIER = com.wbs.j4;
+				PRODUCT_NAME = j4;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
-		4EEA6E4C71573CC42A35DCF2 /* Debug */ = {
+		D8F9174C84049C162AF5812F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -282,74 +275,78 @@
 			};
 			name = Debug;
 		};
-		8A46E409FFC7A312ACA9A3F6 /* Release */ = {
+		EE3C5CA751F47A5EFA9B56CA /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = resources/AeroSpork.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = PRWUVMURYJ;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = "0.0.0-SNAPSHOT";
-				PRODUCT_BUNDLE_IDENTIFIER = com.wbs.aerospork;
-				PRODUCT_NAME = AeroSpork;
-				PROVISIONING_PROFILE_SPECIFIER = "";
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				SWIFT_VERSION = 6.0;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
-		};
-		E9B544A229BE0B0A9EE5748C /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = resources/AeroSpork.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = PRWUVMURYJ;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = "0.0.0-SNAPSHOT";
-				PRODUCT_BUNDLE_IDENTIFIER = com.wbs.aerospork.debug;
-				PRODUCT_NAME = "AeroSpork-Debug";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SDKROOT = macosx;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		5D7D98C3A3C62F13613AE95E /* Build configuration list for PBXProject "AeroSpork" */ = {
+		615A79FC9F9E2424BD81281C /* Build configuration list for PBXNativeTarget "j4" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				4EEA6E4C71573CC42A35DCF2 /* Debug */,
-				3327C37878AF75405613AAFF /* Release */,
+				211F3C8A424330777C2D62E2 /* Debug */,
+				21B508AC51D027F60AA7B34D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		9524648FDFB08929FAA3930A /* Build configuration list for PBXNativeTarget "AeroSpork" */ = {
+		6C58353C1A7CB43C75A5F72B /* Build configuration list for PBXProject "j4" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E9B544A229BE0B0A9EE5748C /* Debug */,
-				8A46E409FFC7A312ACA9A3F6 /* Release */,
+				D8F9174C84049C162AF5812F /* Debug */,
+				EE3C5CA751F47A5EFA9B56CA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -357,18 +354,18 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		59576CFEDB25051DDDF6D296 /* XCLocalSwiftPackageReference "." */ = {
+		B798243B20A1697B12780709 /* XCLocalSwiftPackageReference "." */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = .;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B873750DAD430B408A7CE51F /* AppBundle */ = {
+		67C879C545F64B1060FA8285 /* AppBundle */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppBundle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = A89EBA7B7DD6B8205EB0A977 /* Project object */;
+	rootObject = 4D4F5C55E1C471785BD90DA2 /* Project object */;
 }

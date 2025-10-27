@@ -19,7 +19,6 @@ targets:
     sources:
       - "Sources/j4App"
       - "resources"
-      - "docs/config-examples/default-config.toml"
     dependencies:
       - package: j4Package
         product: AppBundle
