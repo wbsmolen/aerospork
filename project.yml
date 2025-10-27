@@ -51,6 +51,6 @@ targets:
     entitlements:
       path: resources/j4.entitlements
       properties:
-        com.apple.security.app-sandbox: true
-        com.apple.security.automation.apple-events: true
-        com.apple.security.temporary-exception.apple-events: com.apple.systemevents
+        # Accessibility API required for window management doesn't work in sandboxed apps
+        # Therefore, j4 is distributed outside Mac App Store (notarized for security)
+        com.apple.security.app-sandbox: false

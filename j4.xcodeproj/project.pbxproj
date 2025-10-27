@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -19,8 +19,8 @@
 		484E804C0AF2D6487B69ED37 /* j4.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = j4.entitlements; sourceTree = "<group>"; };
 		929E0EF128B8A23F95B49EF5 /* Info-Debug.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-Debug.plist"; sourceTree = "<group>"; };
 		A972C7E74664205B56926F9B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		BC6359E2A838ABFEFBE27CA3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		D6E549348AD38001629AFEF8 /* j4-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "j4-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC6359E2A838ABFEFBE27CA3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D6E549348AD38001629AFEF8 /* j4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = j4.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F065CA57A7D2E5B2D4959EF0 /* aerospork */ = {isa = PBXFileReference; lastKnownFileType = folder; name = aerospork; path = .; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -67,7 +67,7 @@
 		773DDCAE2D4B739138B92AC1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D6E549348AD38001629AFEF8 /* j4-Debug.app */,
+				D6E549348AD38001629AFEF8 /* j4.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,7 +102,7 @@
 				67C879C545F64B1060FA8285 /* AppBundle */,
 			);
 			productName = j4;
-			productReference = D6E549348AD38001629AFEF8 /* j4-Debug.app */;
+			productReference = D6E549348AD38001629AFEF8 /* j4.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -113,6 +113,11 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					CFF786C153634E9FCB909A6E = {
+						ProvisioningStyle = Manual;
+					};
+				};
 			};
 			buildConfigurationList = 6C58353C1A7CB43C75A5F72B /* Build configuration list for PBXProject "j4" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -127,6 +132,7 @@
 			packageReferences = (
 				B798243B20A1697B12780709 /* XCLocalSwiftPackageReference "." */,
 			);
+			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -165,11 +171,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = resources/j4.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PRWUVMURYJ;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -183,7 +188,6 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wbs.j4.debug;
 				PRODUCT_NAME = "j4-Debug";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
@@ -194,11 +198,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = resources/j4.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PRWUVMURYJ;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -212,7 +215,6 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wbs.j4;
 				PRODUCT_NAME = j4;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
