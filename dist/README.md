@@ -4,7 +4,18 @@ This directory contains a pre-built macOS application bundle for j4.
 
 ## Distribution Note
 
-**j4 is distributed outside the Mac App Store** because it requires Accessibility API access for window management, which is not available to sandboxed Mac App Store apps. The app is code-signed and can be notarized for secure distribution.
+**j4 is distributed outside the Mac App Store** because it requires Accessibility API access for window management, which is not available to sandboxed Mac App Store apps. The app uses automatic code signing and notarization for secure distribution outside the App Store.
+
+### Why Not App Store?
+
+macOS Accessibility API (required for window manipulation) is blocked in sandboxed apps. This is a fundamental limitation affecting all advanced window managers. Apps like Rectangle, Amethyst, yabai, and Moom 4 use the same distribution approach.
+
+### Security
+
+The app is:
+- Signed with a valid Apple Developer ID certificate (automatic signing)
+- Notarized by Apple for Gatekeeper verification
+- Requires explicit user permission for Accessibility access
 
 ## Quick Start
 

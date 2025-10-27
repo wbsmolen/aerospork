@@ -33,9 +33,9 @@ targets:
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window
         INFOPLIST_KEY_LSUIElement: YES
-        CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_STYLE: Manual
-        # App Store submission requirements
+        # Automatic signing for notarization (not App Store - requires Accessibility API)
+        CODE_SIGN_STYLE: Automatic
+        # Notarization requirements
         ENABLE_HARDENED_RUNTIME: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 j4. All rights reserved."
