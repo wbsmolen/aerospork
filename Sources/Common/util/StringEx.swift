@@ -52,8 +52,7 @@ public indirect enum TomlBacktrace: CustomStringConvertible, Equatable, Sendable
             } else {
                 die("Impossible")
             }
-        }
-        else {
+        } else {
             return pair(lhs, rhs)
         }
     }
@@ -133,7 +132,7 @@ extension [[String]] {
     }
 }
 
-extension Array { // todo move to ArrayEx.swift
+extension Array {
     public func transposed<T>() -> [[T]] where Self.Element == [T] {
         if isEmpty {
             return []

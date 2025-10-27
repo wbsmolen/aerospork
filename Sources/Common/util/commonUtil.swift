@@ -216,10 +216,10 @@ public func debugLog(_ message: String, file: String = #file, function: String =
     let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
     let fileName = URL(fileURLWithPath: file).lastPathComponent
     let logMessage = "[\(timestamp)] \(fileName):\(line) \(function) - \(message)"
-    
+
     // Log to OSLog for Console.app visibility
     os_log(.debug, log: debugLogger, "%{public}s", logMessage)
-    
+
     // Also print to stderr for immediate visibility
     printStderr("[DEBUG] \(logMessage)")
 }

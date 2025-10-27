@@ -38,14 +38,13 @@ private func parsePreset(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace
 
 private func parseKeyNotationToKeyCode(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> [String: Key] {
     var result: [String: Key] = [:]
-    guard let table = raw.table else {
-        errors.append(expectedActualTypeError(expected: .table, actual: raw.type, backtrace))
+    guard let table = raw.expectTable(backtrace).unwrapOrCollect(&errors) else {
         return result
     }
     for (key, value): (String, TOMLValueConvertible) in table {
         if isValidKeyNotation(key) {
             let backtrace = backtrace + .key(key)
-            if let value = parseString(value, backtrace).getOrNil(appendErrorTo: &errors) {
+            if let value = value.expectString(backtrace).unwrapOrCollect(&errors) {
                 if let value = keyNotationToKeyCode[value] {
                     result[key] = value
                 } else {

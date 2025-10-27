@@ -86,154 +86,211 @@ class ConfigurationViewModel: ObservableObject {
     func loadConfiguration() async {
         isLoading = true
         errorMessage = nil
-        
+
         do {
             // Get config file path
             let configFile = findCustomConfigUrl()
-            guard let configUrl = configFile.urlOrNil else {
-                errorMessage = "No configuration file found"
-                isLoading = false
-                return
-            }
-            configFilePath = configUrl.path
 
-            // Read and parse TOML
-            guard let path = configFilePath else {
-                errorMessage = "Configuration file path is invalid"
-                isLoading = false
-                return
-            }
-            let content = try String(contentsOfFile: path)
-            let tomlTable = try TOMLTable(string: content)
-            originalTomlTable = tomlTable
-            
-            // Load general settings
-            if let startAtLoginValue = tomlTable["start-at-login"]?.bool {
-                startAtLogin = startAtLoginValue
-            }
-            if let autoUnhide = tomlTable["automatically-unhide-macos-hidden-apps"]?.bool {
-                automaticallyUnhideMacosHiddenApps = autoUnhide
-            }
-            if let layout = tomlTable["default-root-container-layout"]?.string {
-                defaultRootContainerLayout = layout
-            }
-            if let orientation = tomlTable["default-root-container-orientation"]?.string {
-                defaultRootContainerOrientation = orientation
-            }
-            if let padding = tomlTable["accordion-padding"]?.int {
-                accordionPadding = padding
-            }
-            if let flatten = tomlTable["enable-normalization-flatten-containers"]?.bool {
-                enableNormalizationFlattenContainers = flatten
-            }
-            if let opposite = tomlTable["enable-normalization-opposite-orientation-for-nested-containers"]?.bool {
-                enableNormalizationOppositeOrientation = opposite
-            }
-            if let autoMove = tomlTable["auto-move-workspaces-on-monitor-connect"]?.bool {
-                autoMoveWorkspacesOnMonitorConnect = autoMove
-            }
-            
-            // Load gaps
-            if let gaps = tomlTable["gaps"]?.table {
-                if let innerTable = gaps["inner"]?.table {
-                    let horizontal = innerTable["horizontal"]?.int ?? 0
-                    let vertical = innerTable["vertical"]?.int ?? 0
+            if let configUrl = configFile.urlOrNil {
+                // Config file exists - load from file
+                configFilePath = configUrl.path
+                let content = try String(contentsOfFile: configUrl.path)
+                let tomlTable = try TOMLTable(string: content)
+                originalTomlTable = tomlTable
 
-                    // If horizontal and vertical differ, use horizontal and show warning
-                    if horizontal != vertical {
-                        viewModelLogger.warning("Inner gaps differ: horizontal=\(horizontal), vertical=\(vertical). Using horizontal value. Both will be set to the same value on save.")
-                        // Could set errorMessage here to warn user in UI
-                    }
-                    innerGaps = horizontal
-                }
-                if let outer = gaps["outer"]?.table {
-                    if let top = outer["top"]?.int { outerGapsTop = top }
-                    if let bottom = outer["bottom"]?.int { outerGapsBottom = bottom }
-                    if let left = outer["left"]?.int { outerGapsLeft = left }
-                    if let right = outer["right"]?.int { outerGapsRight = right }
-                }
-            }
-            
-            // Load workspace assignments directly from TOML
-            workspaceAssignments = []
-            viewModelLogger.info("Loading workspace assignments from TOML")
+                // Load settings from TOML
+                loadSettingsFromToml(tomlTable)
 
-            if let wsAssignments = tomlTable["workspace-to-monitor-force-assignment"]?.table {
-                viewModelLogger.info("Found workspace-to-monitor-force-assignment with \(wsAssignments.count) entries")
-                for (workspace, value) in wsAssignments {
-                    viewModelLogger.debug("Processing workspace '\(workspace)' with value type: \(String(describing: type(of: value)))")
-                    
-                    // Parse the monitor assignment
-                    if let stringValue = value.string {
-                        // Simple string like "main" or "secondary"
-                        let assignment = Config.WorkspaceAssignment(
-                            workspaceName: workspace,
-                            monitorDescription: stringValue,
-                            monitorType: .name(stringValue),
-                            isForceAssignment: true
-                        )
-                        workspaceAssignments.append(assignment)
-                        viewModelLogger.debug("Added assignment for workspace \(workspace) to monitor \(stringValue)")
-                    } else if let tableValue = value.table, let fingerprintTable = tableValue["fingerprint"]?.table {
-                        // Fingerprint format
-                        let displayName = fingerprintTable["display_name"]?.string ?? "Unknown"
-                        let width = fingerprintTable["width"]?.int
-                        let height = fingerprintTable["height"]?.int
-                        
-                        let fingerprint = Config.WorkspaceAssignment.MonitorFingerprint(
-                            vendorId: fingerprintTable["vendor_id"]?.string,
-                            modelId: fingerprintTable["model_id"]?.string,
-                            serialNumber: fingerprintTable["serial_number"]?.string,
-                            displayName: displayName,
-                            width: width,
-                            height: height
-                        )
-                        
-                        let assignment = Config.WorkspaceAssignment(
-                            workspaceName: workspace,
-                            monitorDescription: displayName,
-                            monitorType: .fingerprint(fingerprint),
-                            isForceAssignment: true
-                        )
-                        workspaceAssignments.append(assignment)
-                        viewModelLogger.debug("Added fingerprint assignment for workspace \(workspace) to monitor \(displayName)")
-                    } else if let intValue = value.int {
-                        // Sequence number
-                        let assignment = Config.WorkspaceAssignment(
-                            workspaceName: workspace,
-                            monitorDescription: "Monitor \(intValue)",
-                            monitorType: .index(intValue),
-                            isForceAssignment: true
-                        )
-                        workspaceAssignments.append(assignment)
-                        viewModelLogger.debug("Added assignment for workspace \(workspace) to monitor index \(intValue)")
-                    }
-                }
+                viewModelLogger.info("Configuration loaded from file: \(configUrl.path)")
             } else {
-                viewModelLogger.debug("No workspace-to-monitor-force-assignment found in TOML")
+                // No config file exists - use hardcoded defaults
+                // This matches the fallback behavior in Config.swift
+                let fileName = isDebug ? ".aerospork-debug.toml" : ".aerospork.toml"
+                let defaultPath = FileManager.default.homeDirectoryForCurrentUser
+                    .appending(path: fileName).path
+                configFilePath = defaultPath
+                originalTomlTable = nil
+
+                // Populate UI with hardcoded defaults from Config()
+                let defaultConfig = Config()
+                loadSettingsFromConfig(defaultConfig)
+
+                viewModelLogger.info("No config file found. Using hardcoded defaults. Config will be created at: \(defaultPath)")
             }
 
-            // Sort assignments by workspace name for consistent display
-            workspaceAssignments.sort { $0.workspaceName < $1.workspaceName }
-            viewModelLogger.info("Loaded \(self.workspaceAssignments.count) total workspace assignments")
-            
             // Load current monitor information
             loadConnectedMonitors()
-            
-            // Load key bindings for display
-            loadKeyBindings(from: tomlTable)
-            
-            // Extract all workspace names from keybindings and assignments
-            extractAllWorkspaces(from: tomlTable)
-            
+
             hasUnsavedChanges = false
-            viewModelLogger.info("Configuration loaded successfully with \(self.workspaceAssignments.count) assignments")
         } catch {
             errorMessage = "Failed to load configuration: \(error.localizedDescription)"
             viewModelLogger.error("Error loading configuration: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
+    }
+
+    private func loadSettingsFromToml(_ tomlTable: TOMLTable) {
+        // Load general settings
+        if let startAtLoginValue = tomlTable["start-at-login"]?.bool {
+            startAtLogin = startAtLoginValue
+        }
+        if let autoUnhide = tomlTable["automatically-unhide-macos-hidden-apps"]?.bool {
+            automaticallyUnhideMacosHiddenApps = autoUnhide
+        }
+        if let layout = tomlTable["default-root-container-layout"]?.string {
+            defaultRootContainerLayout = layout
+        }
+        if let orientation = tomlTable["default-root-container-orientation"]?.string {
+            defaultRootContainerOrientation = orientation
+        }
+        if let padding = tomlTable["accordion-padding"]?.int {
+            accordionPadding = padding
+        }
+        if let flatten = tomlTable["enable-normalization-flatten-containers"]?.bool {
+            enableNormalizationFlattenContainers = flatten
+        }
+        if let opposite = tomlTable["enable-normalization-opposite-orientation-for-nested-containers"]?.bool {
+            enableNormalizationOppositeOrientation = opposite
+        }
+        if let autoMove = tomlTable["auto-move-workspaces-on-monitor-connect"]?.bool {
+            autoMoveWorkspacesOnMonitorConnect = autoMove
+        }
+
+        // Load gaps
+        if let gaps = tomlTable["gaps"]?.table {
+            if let innerTable = gaps["inner"]?.table {
+                let horizontal = innerTable["horizontal"]?.int ?? 0
+                let vertical = innerTable["vertical"]?.int ?? 0
+
+                // If horizontal and vertical differ, use horizontal and show warning
+                if horizontal != vertical {
+                    viewModelLogger.warning("Inner gaps differ: horizontal=\(horizontal), vertical=\(vertical). Using horizontal value. Both will be set to the same value on save.")
+                }
+                innerGaps = horizontal
+            }
+            if let outer = gaps["outer"]?.table {
+                if let top = outer["top"]?.int { outerGapsTop = top }
+                if let bottom = outer["bottom"]?.int { outerGapsBottom = bottom }
+                if let left = outer["left"]?.int { outerGapsLeft = left }
+                if let right = outer["right"]?.int { outerGapsRight = right }
+            }
+        }
+
+        // Load workspace assignments directly from TOML
+        workspaceAssignments = []
+        viewModelLogger.info("Loading workspace assignments from TOML")
+
+        if let wsAssignments = tomlTable["workspace-to-monitor-force-assignment"]?.table {
+            viewModelLogger.info("Found workspace-to-monitor-force-assignment with \(wsAssignments.count) entries")
+            for (workspace, value) in wsAssignments {
+                viewModelLogger.debug("Processing workspace '\(workspace)' with value type: \(String(describing: type(of: value)))")
+
+                // Parse the monitor assignment
+                if let stringValue = value.string {
+                    // Simple string like "main" or "secondary"
+                    let assignment = Config.WorkspaceAssignment(
+                        workspaceName: workspace,
+                        monitorDescription: stringValue,
+                        monitorType: .name(stringValue),
+                        isForceAssignment: true
+                    )
+                    workspaceAssignments.append(assignment)
+                    viewModelLogger.debug("Added assignment for workspace \(workspace) to monitor \(stringValue)")
+                } else if let tableValue = value.table, let fingerprintTable = tableValue["fingerprint"]?.table {
+                    // Fingerprint format
+                    let displayName = fingerprintTable["display_name"]?.string ?? "Unknown"
+                    let width = fingerprintTable["width"]?.int
+                    let height = fingerprintTable["height"]?.int
+
+                    let fingerprint = Config.WorkspaceAssignment.MonitorFingerprint(
+                        vendorId: fingerprintTable["vendor_id"]?.string,
+                        modelId: fingerprintTable["model_id"]?.string,
+                        serialNumber: fingerprintTable["serial_number"]?.string,
+                        displayName: displayName,
+                        width: width,
+                        height: height
+                    )
+
+                    let assignment = Config.WorkspaceAssignment(
+                        workspaceName: workspace,
+                        monitorDescription: displayName,
+                        monitorType: .fingerprint(fingerprint),
+                        isForceAssignment: true
+                    )
+                    workspaceAssignments.append(assignment)
+                    viewModelLogger.debug("Added fingerprint assignment for workspace \(workspace) to monitor \(displayName)")
+                } else if let intValue = value.int {
+                    // Sequence number
+                    let assignment = Config.WorkspaceAssignment(
+                        workspaceName: workspace,
+                        monitorDescription: "Monitor \(intValue)",
+                        monitorType: .index(intValue),
+                        isForceAssignment: true
+                    )
+                    workspaceAssignments.append(assignment)
+                    viewModelLogger.debug("Added assignment for workspace \(workspace) to monitor index \(intValue)")
+                }
+            }
+        } else {
+            viewModelLogger.debug("No workspace-to-monitor-force-assignment found in TOML")
+        }
+
+        // Sort assignments by workspace name for consistent display
+        workspaceAssignments.sort { $0.workspaceName < $1.workspaceName }
+        viewModelLogger.info("Loaded \(self.workspaceAssignments.count) total workspace assignments")
+
+        // Load key bindings for display
+        loadKeyBindings(from: tomlTable)
+
+        // Extract all workspace names from keybindings and assignments
+        extractAllWorkspaces(from: tomlTable)
+    }
+
+    private func loadSettingsFromConfig(_ config: Config) {
+        // Load general settings from Config struct defaults
+        startAtLogin = config.startAtLogin
+        automaticallyUnhideMacosHiddenApps = config.automaticallyUnhideMacosHiddenApps
+        defaultRootContainerLayout = String(describing: config.defaultRootContainerLayout)
+        defaultRootContainerOrientation = String(describing: config.defaultRootContainerOrientation)
+        accordionPadding = config.accordionPadding
+        enableNormalizationFlattenContainers = config.enableNormalizationFlattenContainers
+        enableNormalizationOppositeOrientation = config.enableNormalizationOppositeOrientationForNestedContainers
+        autoMoveWorkspacesOnMonitorConnect = config.autoMoveWorkspacesOnMonitorConnect
+
+        // Load gaps - extract constant values from DynamicConfigValue
+        innerGaps = extractConstantValue(config.gaps.inner.horizontal)
+        outerGapsTop = extractConstantValue(config.gaps.outer.top)
+        outerGapsBottom = extractConstantValue(config.gaps.outer.bottom)
+        outerGapsLeft = extractConstantValue(config.gaps.outer.left)
+        outerGapsRight = extractConstantValue(config.gaps.outer.right)
+
+        // Convert workspace assignments
+        workspaceAssignments = config.workspaceToMonitorForceAssignment.flatMap { (workspace, monitors) in
+            monitors.map { monitor in
+                Config.WorkspaceAssignment(
+                    workspaceName: workspace,
+                    monitorDescription: descriptionString(for: monitor),
+                    monitorType: convertMonitorDescription(monitor),
+                    isForceAssignment: true
+                )
+            }
+        }.sorted { $0.workspaceName < $1.workspaceName }
+
+        // No key bindings in default config
+        keyBindings = []
+        allWorkspaces = []
+
+        viewModelLogger.info("Loaded settings from hardcoded Config() defaults")
+    }
+
+    private func extractConstantValue(_ dynamicValue: DynamicConfigValue<Int>) -> Int {
+        switch dynamicValue {
+        case .constant(let value):
+            return value
+        case .perMonitor(_, let defaultValue):
+            return defaultValue
+        }
     }
     
     

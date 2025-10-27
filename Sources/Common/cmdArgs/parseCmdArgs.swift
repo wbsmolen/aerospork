@@ -8,12 +8,12 @@ public func parseCmdArgs(_ args: [String]) -> ParsedCmd<any CmdArgs> {
         debugLog("PARSECMDARGS: Found parser for subcommand '\(subcommand)'")
         let result = subcommandParser.parse(args: Array(args.dropFirst()))
         switch result {
-        case .cmd(let cmdArgs):
-            debugLog("PARSECMDARGS: Successfully parsed to \(type(of: cmdArgs))")
-        case .failure(let error):
-            debugLog("PARSECMDARGS: Failed to parse: \(error)")
-        case .help:
-            debugLog("PARSECMDARGS: Help requested")
+            case .cmd(let cmdArgs):
+                debugLog("PARSECMDARGS: Successfully parsed to \(type(of: cmdArgs))")
+            case .failure(let error):
+                debugLog("PARSECMDARGS: Failed to parse: \(error)")
+            case .help:
+                debugLog("PARSECMDARGS: Help requested")
         }
         return result
     } else {

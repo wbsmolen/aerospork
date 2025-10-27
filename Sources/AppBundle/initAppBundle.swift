@@ -15,6 +15,12 @@ import Foundation
         check(reloadConfig(forceConfigUrl: defaultConfigUrl))
     }
 
+    // Initialize debug logging and performance monitoring
+    if isDebug {
+        initDebugLogging()
+        printLogViewingInstructions()
+    }
+
     checkAccessibilityPermissions()
     startUnixSocketServer()
     GlobalObserver.initObserver()

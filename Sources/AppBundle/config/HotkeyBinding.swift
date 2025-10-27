@@ -35,17 +35,17 @@ extension HotKey {
                 if let activeMode {
                     let startTime = Date()
                     debugLog("HOTKEY: \(binding.descriptionWithKeyNotation) pressed")
-                    
+
                     if let commands = config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands {
                         let commandCount = commands.count
                         debugLog("HOTKEY: Will execute \(commandCount) command(s)")
                     }
-                    
+
                     try await runSession(.hotkeyBinding, .checkServerIsEnabledOrDie) { () throws in
                         _ = try await config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands
                             .runCmdSeq(.defaultEnv, .emptyStdin)
                     }
-                    
+
                     let elapsed = Date().timeIntervalSince(startTime) * 1000
                     debugLog("HOTKEY: Completed in \(String(format: "%.1f", elapsed))ms")
                 }

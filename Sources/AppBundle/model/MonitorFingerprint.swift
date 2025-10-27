@@ -104,8 +104,8 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
             return false
         }
         if let patternDisplayName = patternData.displayNamePattern {
-            guard let displayName else { 
-                return false 
+            guard let displayName else {
+                return false
             }
             // First try exact match (case insensitive)
             if displayName.localizedCaseInsensitiveCompare(patternDisplayName) == .orderedSame {

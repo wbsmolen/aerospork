@@ -97,7 +97,7 @@ func getTextEditorToOpenConfig() -> URL {
 
 struct ConfigurationMenuButton: View {
     @Environment(\.openWindow) private var openWindow
-    
+
     var body: some View {
         Button("Open Configuration...") {
             NSApplication.shared.activate(ignoringOtherApps: true)

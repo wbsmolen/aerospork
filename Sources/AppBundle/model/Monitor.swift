@@ -65,7 +65,7 @@ class LazyMonitor: Monitor {
 // 2. It's inaccurate because NSScreen.main doesn't work correctly from NSWorkspace.didActivateApplicationNotification &
 //    kAXFocusedWindowChangedNotification callbacks.
 extension NSScreen {
-    fileprivate func toMonitor(monitorAppKitNsScreenScreensId: Int) -> Monitor {
+    private func toMonitor(monitorAppKitNsScreenScreensId: Int) -> Monitor {
         MonitorImpl(
             monitorAppKitNsScreenScreensId: monitorAppKitNsScreenScreensId,
             name: localizedName,

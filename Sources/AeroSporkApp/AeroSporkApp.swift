@@ -16,7 +16,7 @@ struct AeroSporkApp: App {
     @MainActor // macOS 13
     var body: some Scene {
         menuBar(viewModel: viewModel)
-        
+
         WindowGroup(id: "configuration") {
             AppBundle.ConfigurationWindow()
         }

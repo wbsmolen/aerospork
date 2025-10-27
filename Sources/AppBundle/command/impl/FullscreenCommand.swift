@@ -6,19 +6,15 @@ struct FullscreenCommand: Command {
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
-        guard let window = target.windowOrNil else {
-            return io.err(noWindowIsFocused)
-        }
-        let newState: Bool = switch args.toggle {
-            case .on: true
-            case .off: false
-            case .toggle: !window.isFullscreen
-        }
+        guard let window = requireWindow(from: target, io) else { return false }
+
+        let newState = resolveToggle(args.toggle, current: window.isFullscreen)
+
         if newState == window.isFullscreen {
-            io.err((newState ? "Already fullscreen. " : "Already not fullscreen. ") +
-                "Tip: use --fail-if-noop to exit with non-zero code")
-            return !args.failIfNoop
+            let message = newState ? "Already fullscreen." : "Already not fullscreen."
+            return handleNoop(message, failIfNoop: args.failIfNoop, io: io)
         }
+
         window.isFullscreen = newState
         window.noOuterGapsInFullscreen = args.noOuterGaps
 
@@ -27,5 +23,3 @@ struct FullscreenCommand: Command {
         return true
     }
 }
-
-let noWindowIsFocused = "No window is focused"

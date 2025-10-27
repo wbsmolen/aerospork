@@ -5,16 +5,16 @@ struct KeyBindingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
     @State private var selectedMode: String = "main"
     @State private var searchText: String = ""
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
                 Text("Key Bindings")
                     .font(.headline)
-                
+
                 Spacer()
-                
+
                 // Mode selector
                 if !viewModel.keyBindings.isEmpty {
                     Picker("Mode:", selection: $selectedMode) {
@@ -25,7 +25,7 @@ struct KeyBindingsTab: View {
                     .pickerStyle(MenuPickerStyle())
                     .frame(width: 150)
                 }
-                
+
                 // Search field
                 HStack {
                     Image(systemName: "magnifyingglass")
@@ -36,24 +36,24 @@ struct KeyBindingsTab: View {
                 .frame(width: 200)
             }
             .padding()
-            
+
             Divider()
-            
+
             // Bindings list
             if let modeBindings = viewModel.keyBindings.first(where: { $0.mode == selectedMode }) {
                 let filteredBindings = modeBindings.bindings.filter { binding in
                     searchText.isEmpty ||
-                    binding.key.localizedCaseInsensitiveContains(searchText) ||
-                    binding.command.localizedCaseInsensitiveContains(searchText)
+                        binding.key.localizedCaseInsensitiveContains(searchText) ||
+                        binding.command.localizedCaseInsensitiveContains(searchText)
                 }
-                
+
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(filteredBindings.indices, id: \.self) { index in
                             KeyBindingRow(
                                 key: filteredBindings[index].key,
                                 command: filteredBindings[index].command,
-                                isEven: index % 2 == 0
+                                isEven: index % 2 == 0,
                             )
                         }
                     }
@@ -66,9 +66,9 @@ struct KeyBindingsTab: View {
                     Spacer()
                 }
             }
-            
+
             Divider()
-            
+
             // Footer
             HStack {
                 Image(systemName: "info.circle")
@@ -88,17 +88,17 @@ struct KeyBindingRow: View {
     let key: String
     let command: String
     let isEven: Bool
-    
+
     var body: some View {
         HStack {
             Text(formatKeyBinding(key))
                 .font(.system(.body, design: .monospaced))
                 .frame(width: 200, alignment: .leading)
                 .padding(.horizontal)
-            
+
             Text("→")
                 .foregroundColor(.secondary)
-            
+
             Text(command)
                 .font(.system(.body))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -107,12 +107,12 @@ struct KeyBindingRow: View {
         .padding(.vertical, 6)
         .background(isEven ? Color(NSColor.controlBackgroundColor) : Color.clear)
     }
-    
+
     private func formatKeyBinding(_ key: String) -> String {
         // Format the key binding for better display
         key.replacingOccurrences(of: "cmd", with: "⌘")
-           .replacingOccurrences(of: "alt", with: "⌥")
-           .replacingOccurrences(of: "shift", with: "⇧")
-           .replacingOccurrences(of: "ctrl", with: "⌃")
+            .replacingOccurrences(of: "alt", with: "⌥")
+            .replacingOccurrences(of: "shift", with: "⇧")
+            .replacingOccurrences(of: "ctrl", with: "⌃")
     }
 }

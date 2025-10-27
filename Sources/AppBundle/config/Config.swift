@@ -22,11 +22,18 @@ var defaultConfigUrl: URL {
     }
 }
 @MainActor let defaultConfig: Config = {
-    let parsedConfig = parseConfig((try? String(contentsOf: defaultConfigUrl)).orDie(), isUserConfig: false)
-    if !parsedConfig.errors.isEmpty {
-        die("Can't parse default config: \(parsedConfig.errors)")
+    // Try to load default config from file, but use hardcoded defaults if not available
+    if let configString = try? String(contentsOf: defaultConfigUrl) {
+        let parsedConfig = parseConfig(configString, isUserConfig: false)
+        if !parsedConfig.errors.isEmpty {
+            die("Can't parse default config: \(parsedConfig.errors)")
+        }
+        return parsedConfig.config
+    } else {
+        // Use hardcoded fallback config - all Config fields have sensible defaults
+        // Users can override these by creating ~/.aerospork.toml or ~/.aerospork-debug.toml
+        return Config()
     }
-    return parsedConfig.config
 }()
 @MainActor var config: Config = defaultConfig // todo move to Ctx?
 @MainActor var configUrl: URL = defaultConfigUrl
@@ -69,13 +76,13 @@ struct Config: ConvenienceCopyable {
         var monitorDescription: String
         var monitorType: MonitorType
         var isForceAssignment: Bool = false
-        
+
         enum MonitorType: Codable, Equatable {
             case name(String)
             case index(Int)
             case fingerprint(MonitorFingerprint)
         }
-        
+
         struct MonitorFingerprint: Codable, Equatable {
             var vendorId: String?
             var modelId: String?
@@ -85,12 +92,12 @@ struct Config: ConvenienceCopyable {
             var height: Int?
         }
     }
-    
+
     struct WorkspaceProfile: Identifiable, Codable, Equatable {
         let id = UUID()
         var name: String
         var assignments: [WorkspaceAssignment]
-        
+
         static func == (lhs: WorkspaceProfile, rhs: WorkspaceProfile) -> Bool {
             lhs.id == rhs.id
         }

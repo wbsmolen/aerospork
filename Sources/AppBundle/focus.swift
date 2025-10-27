@@ -93,7 +93,7 @@ extension Window {
     @MainActor func toLiveFocusOrNil() -> LiveFocus? { visualWorkspace.map { LiveFocus(windowOrNil: self, workspace: $0) } }
 }
 extension Workspace {
-    @MainActor func focusWorkspace() -> Bool { 
+    @MainActor func focusWorkspace() -> Bool {
         let result = setFocus(to: toLiveFocus())
         // Mark workspace as needing layout when focus changes
         if result {

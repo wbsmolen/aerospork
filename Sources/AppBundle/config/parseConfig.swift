@@ -8,10 +8,10 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
     let customConfigUrl: URL
     let isUserConfig: Bool
     switch findCustomConfigUrl() {
-        case .file(let url): 
+        case .file(let url):
             customConfigUrl = url
             isUserConfig = true
-        case .noCustomConfigExists: 
+        case .noCustomConfigExists:
             customConfigUrl = defaultConfigUrl
             isUserConfig = false
         case .ambiguousConfigError(let candidates):
@@ -349,28 +349,29 @@ private func parseWorkspaceAssignment(workspace: String, value: TOMLValueConvert
         return Config.WorkspaceAssignment(
             workspaceName: workspace,
             monitorDescription: stringValue,
-            monitorType: parseMonitorType(from: stringValue)
+            monitorType: parseMonitorType(from: stringValue),
         )
     } else if let intValue = value.int {
         return Config.WorkspaceAssignment(
             workspaceName: workspace,
             monitorDescription: String(intValue),
-            monitorType: .index(intValue)
+            monitorType: .index(intValue),
         )
     } else if let table = value.table {
         let fingerprintTable: TOMLTable?
-        
+
         if let fp = table["fingerprint"]?.table {
             fingerprintTable = fp
         } else if table.keys.contains(where: { ["vendor_id", "model_id", "serial_number", "display_name", "width", "height"].contains($0) }) {
             fingerprintTable = table
         } else if table.count == 1, let firstKey = table.keys.first, firstKey == "fingerprint",
-                  let nestedTable = table[firstKey]?.table {
+                  let nestedTable = table[firstKey]?.table
+        {
             fingerprintTable = nestedTable
         } else {
             return nil
         }
-        
+
         if let fingerprint = fingerprintTable {
             var fp = Config.WorkspaceAssignment.MonitorFingerprint()
             fp.vendorId = fingerprint["vendor_id"]?.string
@@ -379,11 +380,11 @@ private func parseWorkspaceAssignment(workspace: String, value: TOMLValueConvert
             fp.displayName = fingerprint["display_name"]?.string
             fp.width = fingerprint["width"]?.int
             fp.height = fingerprint["height"]?.int
-            
+
             return Config.WorkspaceAssignment(
                 workspaceName: workspace,
                 monitorDescription: "Fingerprint",
-                monitorType: .fingerprint(fp)
+                monitorType: .fingerprint(fp),
             )
         }
     }

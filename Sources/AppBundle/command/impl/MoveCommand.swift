@@ -8,7 +8,7 @@ struct MoveCommand: Command {
         let startTime = Date()
         let direction = args.direction.val
         debugLog("COMMAND: MoveCommand starting - direction: \(direction)")
-        
+
         guard let target = args.resolveTargetOrReportError(env, io) else {
             debugLog("COMMAND: MoveCommand failed - no target resolved")
             return false
@@ -17,12 +17,12 @@ struct MoveCommand: Command {
             debugLog("COMMAND: MoveCommand failed - no window focused")
             return io.err(noWindowIsFocused)
         }
-        
+
         defer {
             let elapsed = Date().timeIntervalSince(startTime) * 1000
             debugLog("COMMAND: MoveCommand completed in \(String(format: "%.1f", elapsed))ms")
         }
-        
+
         debugLog("COMMAND: Moving window: \(currentWindow.windowId)")
         guard let parent = currentWindow.parent else { return false }
         switch parent.cases {
@@ -102,7 +102,7 @@ struct MoveCommand: Command {
     }
 }
 
-private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimized windows and windows of hidden apps isn't yet supported. This behavior is subject to change"
+// moveOutMacosUnconventionalWindow is now defined in CommandErrors.swift
 
 @MainActor private func moveOut(
     window: Window,

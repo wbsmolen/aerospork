@@ -9,9 +9,7 @@ struct MacosNativeMinimizeCommand: Command {
         // resolveTargetOrReportError on already minimized windows will alwyas fail
         // It would be easier if minimized windows were part of the workspace in tree hierarchy
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
-        guard let window = target.windowOrNil else {
-            return io.err(noWindowIsFocused)
-        }
+        guard let window = requireWindow(from: target, io) else { return false }
         let newState: Bool = try await !window.isMacosMinimized
         window.asMacWindow().setNativeMinimized(newState)
         if newState { // minimize

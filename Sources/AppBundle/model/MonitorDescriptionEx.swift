@@ -11,9 +11,9 @@ extension MonitorDescription {
                     .first { $0.rect.topLeftCorner != mainMonitor.rect.topLeftCorner }
             case .fingerprint(let patternData):
                 sortedMonitors.first { monitor in
-                    guard let fingerprint = (monitor as? LazyMonitor)?.fingerprint else { 
+                    guard let fingerprint = (monitor as? LazyMonitor)?.fingerprint else {
                         print("[DEBUG] Monitor '\(monitor.name)' has no fingerprint data")
-                        return false 
+                        return false
                     }
                     let matches = fingerprint.matches(patternData: patternData)
                     print("[DEBUG] Comparing monitor '\(monitor.name)' fingerprint with pattern:")

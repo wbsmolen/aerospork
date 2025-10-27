@@ -49,7 +49,7 @@ func runRefreshSessionBlocking(
 ) async throws {
     let startTime = Date()
     debugLog("REFRESH: Starting blocking refresh for event: \(event)")
-    
+
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer {
         signposter.endInterval(#function, state)
@@ -84,7 +84,7 @@ func runSession<T>(
 ) async throws -> T {
     let startTime = Date()
     debugLog("SESSION: Starting session for event: \(event)")
-    
+
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer {
         signposter.endInterval(#function, state)

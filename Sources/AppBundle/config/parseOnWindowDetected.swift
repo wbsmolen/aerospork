@@ -82,12 +82,10 @@ private func upcast<T>(_ fun: @escaping @Sendable (TOMLValueConvertible, TomlBac
 }
 
 func parseOnWindowDetectedArray(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> [WindowDetectedCallback] {
-    if let array = raw.array {
-        return array.enumerated().map { (index, raw) in parseWindowDetectedCallback(raw, backtrace + .index(index), &errors) }.filterNotNil()
-    } else {
-        errors += [expectedActualTypeError(expected: .array, actual: raw.type, backtrace)]
+    guard let array = raw.expectArray(backtrace).unwrapOrCollect(&errors) else {
         return []
     }
+    return array.enumerated().map { (index, raw) in parseWindowDetectedCallback(raw, backtrace + .index(index), &errors) }.filterNotNil()
 }
 
 private func parseCasInsensitiveRegex(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Regex<AnyRegexOutput>> {

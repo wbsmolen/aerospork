@@ -30,7 +30,7 @@ struct MoveNodeToWorkspaceCommand: Command {
 @MainActor
 func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io: CmdIo, focusFollowsWindow: Bool, failIfNoop: Bool, index: Int = INDEX_BIND_LAST) -> Bool {
     if window.nodeWorkspace == targetWorkspace {
-        io.err("Window '\(window.windowId)' already belongs to workspace '\(targetWorkspace.name)'. Tip: use --fail-if-noop to exit with non-zero code")
+        io.err("Window '\(window.windowId)' already belongs to workspace '\(targetWorkspace.name)'. \(noopTip)")
         return !failIfNoop
     }
     let targetContainer: NonLeafTreeNodeObject = window.isFloating ? targetWorkspace : targetWorkspace.rootTilingContainer

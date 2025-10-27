@@ -6,15 +6,11 @@ struct EnableCommand: Command {
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let prevState = TrayMenuModel.shared.isEnabled
-        let newState: Bool = switch args.targetState.val {
-            case .on: true
-            case .off: false
-            case .toggle: !TrayMenuModel.shared.isEnabled
-        }
+        let newState = resolveToggle(args.targetState.val, current: prevState)
+
         if newState == prevState {
-            io.out((newState ? "Already enabled" : "Already disabled") +
-                "Tip: use --fail-if-noop to exit with non-zero code")
-            return !args.failIfNoop
+            let message = newState ? "Already enabled" : "Already disabled"
+            return handleNoop(message, failIfNoop: args.failIfNoop, io: io)
         }
 
         TrayMenuModel.shared.isEnabled = newState

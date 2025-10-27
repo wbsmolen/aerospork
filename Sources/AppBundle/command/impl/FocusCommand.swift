@@ -7,7 +7,7 @@ struct FocusCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         debugLog("COMMAND: FocusCommand starting - target: \(args.target)")
         let startTime = Date()
-        
+
         guard let target = args.resolveTargetOrReportError(env, io) else {
             debugLog("COMMAND: FocusCommand failed - no target resolved")
             return false
@@ -28,7 +28,8 @@ struct FocusCommand: Command {
                 let window = target.windowOrNil
                 if let (parent, ownIndex) = window?.closestParent(hasChildrenInDirection: direction, withLayout: nil) {
                     guard let windowToFocus = parent.children[ownIndex + direction.focusOffset]
-                        .findFocusTargetRecursive(snappedTo: direction.opposite) else {
+                        .findFocusTargetRecursive(snappedTo: direction.opposite)
+                    else {
                         debugLog("COMMAND: No window to focus found in direction \(direction)")
                         return false
                     }

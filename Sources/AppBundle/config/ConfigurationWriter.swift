@@ -143,24 +143,34 @@ struct ConfigurationWriter {
         // Remove existing gaps sections
         sections.removeAll { $0.name.starts(with: "gaps") }
 
-        // Build new gaps section
+        // Build new gaps section - extract constant values from DynamicConfigValue
         var gapsLines: [String] = []
         gapsLines.append("")
         gapsLines.append("[gaps]")
         gapsLines.append("[gaps.inner]")
-        gapsLines.append("horizontal = \(config.gaps.inner.horizontal)")
-        gapsLines.append("vertical = \(config.gaps.inner.vertical)")
+        gapsLines.append("horizontal = \(extractConstantValue(config.gaps.inner.horizontal))")
+        gapsLines.append("vertical = \(extractConstantValue(config.gaps.inner.vertical))")
         gapsLines.append("")
         gapsLines.append("[gaps.outer]")
-        gapsLines.append("top = \(config.gaps.outer.top)")
-        gapsLines.append("bottom = \(config.gaps.outer.bottom)")
-        gapsLines.append("left = \(config.gaps.outer.left)")
-        gapsLines.append("right = \(config.gaps.outer.right)")
+        gapsLines.append("top = \(extractConstantValue(config.gaps.outer.top))")
+        gapsLines.append("bottom = \(extractConstantValue(config.gaps.outer.bottom))")
+        gapsLines.append("left = \(extractConstantValue(config.gaps.outer.left))")
+        gapsLines.append("right = \(extractConstantValue(config.gaps.outer.right))")
 
         // Insert gaps section after root section
         let insertIndex = sections.firstIndex { !$0.name.isEmpty } ?? sections.count
         sections.insert(ConfigSection(name: "gaps", lines: gapsLines, startIndex: insertIndex),
                        at: insertIndex)
+    }
+
+    /// Extract constant value from DynamicConfigValue
+    private func extractConstantValue<T>(_ dynamicValue: DynamicConfigValue<T>) -> T {
+        switch dynamicValue {
+        case .constant(let value):
+            return value
+        case .perMonitor(_, let defaultValue):
+            return defaultValue
+        }
     }
 
     /// Update workspace-to-monitor force assignment section

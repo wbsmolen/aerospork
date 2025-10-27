@@ -1,5 +1,8 @@
 import AppKit
 import Common
+import os.log
+
+private let workspaceLogger = Logger(subsystem: "com.aerospork", category: "workspace")
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 
@@ -130,6 +133,66 @@ extension Workspace {
 
     @MainActor
     var requiresLayout: Bool { needsLayout }
+
+    // MARK: - Container Access
+
+    @MainActor var rootTilingContainer: TilingContainer {
+        let containers = children.filterIsInstance(of: TilingContainer.self)
+        switch containers.count {
+            case 0:
+                let orientation: Orientation = switch config.defaultRootContainerOrientation {
+                    case .horizontal: .h
+                    case .vertical: .v
+                    case .auto: workspaceMonitor.then { $0.width >= $0.height } ? .h : .v
+                }
+                return TilingContainer(parent: self, adaptiveWeight: 1, orientation, config.defaultRootContainerLayout, index: INDEX_BIND_LAST)
+            case 1:
+                return containers.singleOrNil().orDie()
+            default:
+                die("Workspace must contain zero or one tiling container as its child")
+        }
+    }
+
+    var floatingWindows: [Window] {
+        children.filterIsInstance(of: Window.self)
+    }
+
+    @MainActor var macOsNativeFullscreenWindowsContainer: MacosFullscreenWindowsContainer {
+        let containers = children.filterIsInstance(of: MacosFullscreenWindowsContainer.self)
+        return switch containers.count {
+            case 0: MacosFullscreenWindowsContainer(parent: self)
+            case 1: containers.singleOrNil().orDie()
+            default: dieT("Workspace must contain zero or one MacosFullscreenWindowsContainer")
+        }
+    }
+
+    @MainActor var macOsNativeHiddenAppsWindowsContainer: MacosHiddenAppsWindowsContainer {
+        let containers = children.filterIsInstance(of: MacosHiddenAppsWindowsContainer.self)
+        return switch containers.count {
+            case 0: MacosHiddenAppsWindowsContainer(parent: self)
+            case 1: containers.singleOrNil().orDie()
+            default: dieT("Workspace must contain zero or one MacosHiddenAppsWindowsContainer")
+        }
+    }
+
+    @MainActor var forceAssignedMonitor: Monitor? {
+        guard let monitorDescriptions = config.workspaceToMonitorForceAssignment[name] else {
+            return nil
+        }
+        let sortedMonitors = sortedMonitors
+        let resolved = monitorDescriptions.lazy
+            .compactMap { desc -> Monitor? in
+                let monitor = desc.resolveMonitor(sortedMonitors: sortedMonitors)
+                if monitor == nil {
+                    print("[DEBUG] Workspace '\(self.name)': Failed to resolve monitor for description: \(desc)")
+                } else {
+                    print("[DEBUG] Workspace '\(self.name)': Resolved monitor '\(monitor!.name)' for description: \(desc)")
+                }
+                return monitor
+            }
+            .first
+        return resolved
+    }
 }
 
 extension Monitor {
@@ -212,14 +275,14 @@ private func rearrangeWorkspacesOnMonitors() {
 
 @MainActor
 func autoMoveWorkspacesToAssignedMonitors() {
-    print("[DEBUG] Starting autoMoveWorkspacesToAssignedMonitors")
-    
+    workspaceLogger.debug("Starting workspace-to-monitor auto assignment")
+
     // Get all workspaces with force assignments
     let workspacesWithAssignments = Workspace.all.filter { workspace in
         config.workspaceToMonitorForceAssignment[workspace.name] != nil
     }
-    
-    print("[DEBUG] Found \(workspacesWithAssignments.count) workspaces with force assignments")
+
+    workspaceLogger.debug("Found \(workspacesWithAssignments.count) workspaces with force assignments")
 
     // Try to move each workspace to its assigned monitor
     for workspace in workspacesWithAssignments {
@@ -228,14 +291,14 @@ func autoMoveWorkspacesToAssignedMonitors() {
         if let assignedMonitor = workspace.forceAssignedMonitor,
            currentMonitor.rect.topLeftCorner == assignedMonitor.rect.topLeftCorner
         {
-            print("[DEBUG] Workspace '\(workspace.name)' is already on its assigned monitor '\(assignedMonitor.name)'")
+            workspaceLogger.debug("Workspace '\(workspace.name)' is already on its assigned monitor '\(assignedMonitor.name)'")
             continue
         }
 
         // Find the assigned monitor
-        guard let assignedMonitor = workspace.forceAssignedMonitor else { 
-            print("[DEBUG] Workspace '\(workspace.name)' has no resolved assigned monitor")
-            continue 
+        guard let assignedMonitor = workspace.forceAssignedMonitor else {
+            workspaceLogger.debug("Workspace '\(workspace.name)' has no resolved assigned monitor")
+            continue
         }
         let assignedPoint = assignedMonitor.rect.topLeftCorner
 
@@ -251,19 +314,19 @@ func autoMoveWorkspacesToAssignedMonitors() {
                     // Swap the workspaces
                     _ = assignedPoint.setActiveWorkspace(workspace)
                     _ = currentPoint.setActiveWorkspace(targetWorkspace)
-                    print("[DEBUG] Swapped workspace '\(workspace.name)' with '\(targetWorkspace.name)' - moved to monitor '\(assignedMonitor.name)'")
+                    workspaceLogger.debug("Swapped workspace '\(workspace.name)' with '\(targetWorkspace.name)' - moved to monitor '\(assignedMonitor.name)'")
                 }
             } else {
                 // Workspace is not visible, just assign it to the monitor
                 workspace.assignedMonitorPoint = assignedPoint
-                print("[DEBUG] Assigned invisible workspace '\(workspace.name)' to monitor '\(assignedMonitor.name)'")
+                workspaceLogger.debug("Assigned invisible workspace '\(workspace.name)' to monitor '\(assignedMonitor.name)'")
             }
         } else {
-            print("[DEBUG] Invalid assignment for workspace '\(workspace.name)' to monitor '\(assignedMonitor.name)'")
+            workspaceLogger.debug("Invalid assignment for workspace '\(workspace.name)' to monitor '\(assignedMonitor.name)'")
         }
     }
-    
-    print("[DEBUG] Completed autoMoveWorkspacesToAssignedMonitors")
+
+    workspaceLogger.debug("Completed workspace-to-monitor auto assignment")
 }
 
 @MainActor

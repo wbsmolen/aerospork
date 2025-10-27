@@ -45,7 +45,7 @@ final class RefreshDebouncer {
         pendingTask = Task { @MainActor in
             let taskStartTime = Date()
             debugLog("DEBOUNCE: Task scheduled, will wait \(delay * 1000)ms")
-            
+
             // Wait for the debounce delay
             try? await Task.sleep(for: .seconds(delay))
 
@@ -56,7 +56,7 @@ final class RefreshDebouncer {
             }
 
             debugLog("DEBOUNCE: Executing refresh after \(Date().timeIntervalSince(taskStartTime) * 1000)ms")
-            
+
             // Execute the refresh
             activeRefreshTask?.cancel()
             activeRefreshTask = Task { @MainActor in
