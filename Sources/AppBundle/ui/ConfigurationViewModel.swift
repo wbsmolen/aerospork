@@ -25,7 +25,11 @@ class ConfigurationViewModel: ObservableObject {
     @Published var autoMoveWorkspacesOnMonitorConnect: Bool = true
     @Published var connectedMonitors: [MonitorInfo] = []
     @Published var allWorkspaces: [String] = []
-    
+
+    // Workspace profiles
+    @Published var workspaceProfiles: [Config.WorkspaceProfile] = []
+    @Published var activeProfileName: String? = nil
+
     // Gaps - split inner gaps into separate horizontal and vertical fields
     @Published var innerGapsHorizontal: Int = 5
     @Published var innerGapsVertical: Int = 5
@@ -309,6 +313,71 @@ class ConfigurationViewModel: ObservableObject {
         workspaceAssignments.sort { $0.workspaceName < $1.workspaceName }
         viewModelLogger.info("Loaded \(self.workspaceAssignments.count) total workspace assignments")
 
+        // Load workspace profiles
+        workspaceProfiles = []
+        if let profilesArray = tomlTable["workspace-profile"]?.array {
+            viewModelLogger.info("Found \(profilesArray.count) workspace profiles in TOML")
+            for profileItem in profilesArray {
+                if let profileTable = profileItem.table,
+                   let name = profileTable["name"]?.string {
+
+                    var assignments: [Config.WorkspaceAssignment] = []
+
+                    // Parse assignments for this profile
+                    if let assignmentsTable = profileTable["assignments"]?.table {
+                        for (workspace, value) in assignmentsTable {
+                            if let stringValue = value.string {
+                                let assignment = Config.WorkspaceAssignment(
+                                    workspaceName: workspace,
+                                    monitorDescription: stringValue,
+                                    monitorType: .name(stringValue),
+                                    isForceAssignment: true
+                                )
+                                assignments.append(assignment)
+                            } else if let tableValue = value.table, let fingerprintTable = tableValue["fingerprint"]?.table {
+                                let displayName = fingerprintTable["display_name"]?.string ?? "Unknown"
+                                let fingerprint = Config.WorkspaceAssignment.MonitorFingerprint(
+                                    vendorId: fingerprintTable["vendor_id"]?.string,
+                                    modelId: fingerprintTable["model_id"]?.string,
+                                    serialNumber: fingerprintTable["serial_number"]?.string,
+                                    displayName: displayName,
+                                    width: fingerprintTable["width"]?.int,
+                                    height: fingerprintTable["height"]?.int
+                                )
+                                let assignment = Config.WorkspaceAssignment(
+                                    workspaceName: workspace,
+                                    monitorDescription: displayName,
+                                    monitorType: .fingerprint(fingerprint),
+                                    isForceAssignment: true
+                                )
+                                assignments.append(assignment)
+                            } else if let intValue = value.int {
+                                let assignment = Config.WorkspaceAssignment(
+                                    workspaceName: workspace,
+                                    monitorDescription: "Monitor \(intValue)",
+                                    monitorType: .index(intValue),
+                                    isForceAssignment: true
+                                )
+                                assignments.append(assignment)
+                            }
+                        }
+                    }
+
+                    let profile = Config.WorkspaceProfile(name: name, assignments: assignments)
+                    workspaceProfiles.append(profile)
+                    viewModelLogger.debug("Loaded profile '\(name)' with \(assignments.count) assignments")
+                }
+            }
+        }
+
+        // Load active profile name
+        if let activeProfile = tomlTable["active-profile"]?.string {
+            activeProfileName = activeProfile
+            viewModelLogger.info("Active profile: \(activeProfile)")
+        } else {
+            activeProfileName = nil
+        }
+
         // Load key bindings for display
         loadKeyBindings(from: tomlTable)
 
@@ -363,6 +432,10 @@ class ConfigurationViewModel: ObservableObject {
                 )
             }
         }.sorted { $0.workspaceName < $1.workspaceName }
+
+        // Load workspace profiles
+        workspaceProfiles = config.workspaceProfiles
+        activeProfileName = config.activeProfileName
 
         // No key bindings in default config
         keyBindings = []
@@ -623,6 +696,8 @@ class ConfigurationViewModel: ObservableObject {
             general: general,
             gaps: gaps,
             workspaceAssignments: assignments,
+            workspaceProfiles: workspaceProfiles,
+            activeProfileName: activeProfileName,
             originalContent: originalContent
         )
     }

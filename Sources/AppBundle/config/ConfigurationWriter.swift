@@ -35,6 +35,7 @@ struct ConfigurationWriter {
         updateGeneralSettings(&sections, config: config)
         updateGapsSection(&sections, config: config)
         updateWorkspaceAssignments(&sections, config: config)
+        updateWorkspaceProfiles(&sections, config: config)
 
         // Reassemble with preserved formatting
         let result = reassemble(sections)
@@ -199,6 +200,81 @@ struct ConfigurationWriter {
             lines: assignmentLines,
             startIndex: insertIndex
         ))
+    }
+
+    /// Update workspace profiles section
+    private func updateWorkspaceProfiles(_ sections: inout [ConfigSection], config: Config) {
+        // Remove existing workspace profile sections
+        sections.removeAll { $0.name.starts(with: "workspace-profile") }
+
+        // Remove active-profile if it exists (we'll add it back if needed)
+        sections.removeAll { section in
+            section.lines.contains(where: { $0.trimmingCharacters(in: .whitespaces).starts(with: "active-profile") })
+        }
+
+        guard !config.workspaceProfiles.isEmpty else { return }
+
+        // Build profile sections - each profile is a [[workspace-profile]] array item
+        for profile in config.workspaceProfiles {
+            var profileLines: [String] = []
+            profileLines.append("")
+            profileLines.append("[[workspace-profile]]")
+            profileLines.append("name = '\(profile.name)'")
+            profileLines.append("")
+            profileLines.append("[workspace-profile.assignments]")
+
+            for assignment in profile.assignments.sorted(by: { $0.workspaceName < $1.workspaceName }) {
+                let monitorValue: String
+                switch assignment.monitorType {
+                case .name(let name):
+                    monitorValue = "'\(name)'"
+                case .index(let idx):
+                    monitorValue = "\(idx)"
+                case .fingerprint(let fp):
+                    // Format fingerprint as inline table
+                    var parts: [String] = []
+                    if let vendorId = fp.vendorId {
+                        parts.append("vendor_id = '\(vendorId)'")
+                    }
+                    if let modelId = fp.modelId {
+                        parts.append("model_id = '\(modelId)'")
+                    }
+                    if let serialNumber = fp.serialNumber {
+                        parts.append("serial_number = '\(serialNumber)'")
+                    }
+                    if let displayName = fp.displayName {
+                        parts.append("display_name = '\(displayName)'")
+                    }
+                    if let width = fp.width, let height = fp.height {
+                        parts.append("width = \(width)")
+                        parts.append("height = \(height)")
+                    }
+                    monitorValue = "{ fingerprint = { \(parts.joined(separator: ", ")) } }"
+                }
+                profileLines.append("\(assignment.workspaceName) = \(monitorValue)")
+            }
+
+            let insertIndex = sections.count
+            sections.append(ConfigSection(
+                name: "workspace-profile",
+                lines: profileLines,
+                startIndex: insertIndex
+            ))
+        }
+
+        // Add active-profile setting if set
+        if let activeProfile = config.activeProfileName {
+            var activeProfileLines: [String] = []
+            activeProfileLines.append("")
+            activeProfileLines.append("active-profile = '\(activeProfile)'")
+
+            let insertIndex = sections.count
+            sections.append(ConfigSection(
+                name: "active-profile-setting",
+                lines: activeProfileLines,
+                startIndex: insertIndex
+            ))
+        }
     }
 
     // MARK: - Property Updates

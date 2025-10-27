@@ -189,6 +189,8 @@ class DefaultConfigurationService: ConfigurationService {
             general: general,
             gaps: gaps,
             workspaceAssignments: assignments,
+            workspaceProfiles: [],
+            activeProfileName: nil,
             originalContent: originalContent
         )
     }
@@ -259,6 +261,8 @@ struct ConfigurationData {
     var general: GeneralSettings
     var gaps: GapsSettings
     var workspaceAssignments: [WorkspaceAssignmentData]
+    var workspaceProfiles: [Config.WorkspaceProfile]
+    var activeProfileName: String?
 
     // Keep original content for preservation
     var originalContent: String
@@ -290,6 +294,10 @@ struct ConfigurationData {
             assignments[assignment.workspaceName] = [monitor]
         }
         config.workspaceToMonitorForceAssignment = assignments
+
+        // Apply workspace profiles
+        config.workspaceProfiles = workspaceProfiles
+        config.activeProfileName = activeProfileName
 
         return config
     }

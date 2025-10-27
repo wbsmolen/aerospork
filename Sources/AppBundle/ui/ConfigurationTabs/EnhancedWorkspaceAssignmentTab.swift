@@ -7,19 +7,136 @@ struct EnhancedWorkspaceAssignmentTab: View {
 
     @State private var newWorkspaceName = ""
     @State private var showingAddWorkspace = false
-    @State private var isMonitorPreviewExpanded = true // New state variable
+    @State private var isMonitorPreviewExpanded = true
+    @State private var showingProfileEditor = false
+    @State private var editingProfile: Config.WorkspaceProfile? = nil
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                profileManagementView
+                Divider()
                 workspaceManagementView
                 Divider()
                 monitorView
             }
             .padding()
         }
+        .sheet(isPresented: $showingProfileEditor) {
+            WorkspaceProfileEditor(viewModel: viewModel, editingProfile: editingProfile)
+        }
     }
 
+    var profileManagementView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Workspace Profiles")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Save and switch between different monitor setups (e.g., Home, Office, Docked)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            // Profile selector and management buttons
+            HStack(spacing: 12) {
+                // Active profile picker
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Active Profile")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if viewModel.workspaceProfiles.isEmpty {
+                        Text("No profiles created")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(6)
+                    } else {
+                        Picker("Active Profile", selection: Binding(
+                            get: { viewModel.activeProfileName ?? "" },
+                            set: { newValue in
+                                viewModel.activeProfileName = newValue.isEmpty ? nil : newValue
+                                viewModel.markAsModified()
+                            }
+                        )) {
+                            Text("None").tag("")
+                            ForEach(viewModel.workspaceProfiles, id: \.name) { profile in
+                                Text(profile.name).tag(profile.name)
+                            }
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(width: 200)
+                    }
+                }
+
+                Spacer()
+
+                // Management buttons
+                HStack(spacing: 8) {
+                    Button(action: {
+                        editingProfile = nil
+                        showingProfileEditor = true
+                    }) {
+                        Label("New Profile", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+
+                    if let activeProfile = viewModel.activeProfileName,
+                       let profile = viewModel.workspaceProfiles.first(where: { $0.name == activeProfile }) {
+                        Button(action: {
+                            editingProfile = profile
+                            showingProfileEditor = true
+                        }) {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: {
+                            deleteProfile(profile)
+                        }) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: {
+                            duplicateProfile(profile)
+                        }) {
+                            Label("Duplicate", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: {
+                            loadProfileAssignments(profile)
+                        }) {
+                            Label("Load", systemImage: "arrow.down.doc")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .help("Load this profile's assignments into the current workspace configuration")
+                    }
+                }
+            }
+
+            // Profile info
+            if let activeProfile = viewModel.activeProfileName,
+               let profile = viewModel.workspaceProfiles.first(where: { $0.name == activeProfile }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(profile.assignments.count) workspace assignments in this profile")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if !profile.assignments.isEmpty {
+                        Text("Workspaces: \(profile.assignments.map { $0.workspaceName }.joined(separator: ", "))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
 
     var workspaceManagementView: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -120,6 +237,38 @@ struct EnhancedWorkspaceAssignmentTab: View {
 
             Spacer()
         }
+    }
+
+    // MARK: - Profile Management Methods
+
+    private func deleteProfile(_ profile: Config.WorkspaceProfile) {
+        viewModel.workspaceProfiles.removeAll { $0.id == profile.id }
+        if viewModel.activeProfileName == profile.name {
+            viewModel.activeProfileName = nil
+        }
+        viewModel.markAsModified()
+    }
+
+    private func duplicateProfile(_ profile: Config.WorkspaceProfile) {
+        var newName = "\(profile.name) Copy"
+        var counter = 1
+        while viewModel.workspaceProfiles.contains(where: { $0.name == newName }) {
+            counter += 1
+            newName = "\(profile.name) Copy \(counter)"
+        }
+
+        let duplicate = Config.WorkspaceProfile(
+            name: newName,
+            assignments: profile.assignments
+        )
+        viewModel.workspaceProfiles.append(duplicate)
+        viewModel.markAsModified()
+    }
+
+    private func loadProfileAssignments(_ profile: Config.WorkspaceProfile) {
+        // Replace current workspace assignments with profile's assignments
+        viewModel.workspaceAssignments = profile.assignments
+        viewModel.markAsModified()
     }
 }
 
