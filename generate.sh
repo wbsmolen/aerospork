@@ -3,7 +3,7 @@ cd "$(dirname "$0")"
 source ./script/setup.sh
 
 export XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY="j4-codesign-certificate"
-build_version="0.0.0-SNAPSHOT"
+build_version="1.0.0"
 generate_xcodeproj=1
 all=0
 while test $# -gt 0; do
