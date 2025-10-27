@@ -58,6 +58,26 @@ class ConfigurationViewModel: ObservableObject {
     // Key bindings (read-only display)
     @Published var keyBindings: [(mode: String, bindings: [(key: String, command: String)])] = []
 
+    // Advanced settings (read-only display)
+    @Published var preservedWorkspaceNames: [String] = []
+    @Published var keyMappingPreset: String = "qwerty"
+    @Published var afterLoginCommands: [String] = []
+    @Published var afterStartupCommands: [String] = []
+    @Published var onFocusChangedCommands: [String] = []
+    @Published var onMonitorChangedCommands: [String] = []
+    @Published var windowDetectionRules: [WindowDetectionRule] = []
+
+    struct WindowDetectionRule: Identifiable {
+        let id = UUID()
+        var appId: String?
+        var appNamePattern: String?
+        var windowTitlePattern: String?
+        var workspace: String?
+        var duringStartup: Bool = false
+        var checkFurtherRules: Bool = false
+        var commands: [String] = []
+    }
+
     // State management
     @Published var hasUnsavedChanges: Bool = false
     @Published var errorMessage: String?
@@ -381,6 +401,9 @@ class ConfigurationViewModel: ObservableObject {
         // Load key bindings for display
         loadKeyBindings(from: tomlTable)
 
+        // Load advanced settings
+        loadAdvancedSettings(from: tomlTable)
+
         // Extract all workspace names from keybindings and assignments
         extractAllWorkspaces(from: tomlTable)
     }
@@ -436,6 +459,16 @@ class ConfigurationViewModel: ObservableObject {
         // Load workspace profiles
         workspaceProfiles = config.workspaceProfiles
         activeProfileName = config.activeProfileName
+
+        // Load advanced settings from config
+        preservedWorkspaceNames = config.preservedWorkspaceNames
+        keyMappingPreset = "qwerty" // Default preset (actual preset is read from TOML)
+        // Commands will be empty for default config
+        afterLoginCommands = []
+        afterStartupCommands = []
+        onFocusChangedCommands = []
+        onMonitorChangedCommands = []
+        windowDetectionRules = []
 
         // No key bindings in default config
         keyBindings = []
@@ -578,7 +611,126 @@ class ConfigurationViewModel: ObservableObject {
             }
         }
     }
-    
+
+    private func loadAdvancedSettings(from toml: TOMLTable) {
+        // Load preserved workspaces
+        if let preserved = toml["preserve-workspace-name"]?.array {
+            preservedWorkspaceNames = preserved.compactMap { $0.string }
+        } else {
+            preservedWorkspaceNames = []
+        }
+
+        // Load key mapping preset
+        if let keyMappingTable = toml["key-mapping"]?.table,
+           let preset = keyMappingTable["preset"]?.string {
+            keyMappingPreset = preset
+        } else {
+            keyMappingPreset = "qwerty"
+        }
+
+        // Load after-login-command
+        if let afterLogin = toml["after-login-command"]?.array {
+            afterLoginCommands = afterLogin.compactMap { item in
+                if let str = item.string {
+                    return str
+                } else if let arr = item.array {
+                    return arr.compactMap { $0.string }.joined(separator: " ")
+                }
+                return nil
+            }
+        } else {
+            afterLoginCommands = []
+        }
+
+        // Load after-startup-command
+        if let afterStartup = toml["after-startup-command"]?.array {
+            afterStartupCommands = afterStartup.compactMap { item in
+                if let str = item.string {
+                    return str
+                } else if let arr = item.array {
+                    return arr.compactMap { $0.string }.joined(separator: " ")
+                }
+                return nil
+            }
+        } else {
+            afterStartupCommands = []
+        }
+
+        // Load on-focus-changed
+        if let onFocus = toml["on-focus-changed"]?.array {
+            onFocusChangedCommands = onFocus.compactMap { item in
+                if let str = item.string {
+                    return str
+                } else if let arr = item.array {
+                    return arr.compactMap { $0.string }.joined(separator: " ")
+                }
+                return nil
+            }
+        } else {
+            onFocusChangedCommands = []
+        }
+
+        // Load on-focused-monitor-changed
+        if let onMonitor = toml["on-focused-monitor-changed"]?.array {
+            onMonitorChangedCommands = onMonitor.compactMap { item in
+                if let str = item.string {
+                    return str
+                } else if let arr = item.array {
+                    return arr.compactMap { $0.string }.joined(separator: " ")
+                }
+                return nil
+            }
+        } else {
+            onMonitorChangedCommands = []
+        }
+
+        // Load window detection rules
+        windowDetectionRules = []
+        if let rulesArray = toml["on-window-detected"]?.array {
+            for ruleItem in rulesArray {
+                if let ruleTable = ruleItem.table {
+                    var rule = WindowDetectionRule()
+
+                    // Parse matchers
+                    if let appId = ruleTable["app-id"]?.string {
+                        rule.appId = appId
+                    }
+                    if let appName = ruleTable["app-name-regex-substring"]?.string {
+                        rule.appNamePattern = appName
+                    }
+                    if let windowTitle = ruleTable["window-title-regex-substring"]?.string {
+                        rule.windowTitlePattern = windowTitle
+                    }
+                    if let workspace = ruleTable["workspace"]?.string {
+                        rule.workspace = workspace
+                    }
+                    if let duringStartup = ruleTable["during-aerospace-startup"]?.bool {
+                        rule.duringStartup = duringStartup
+                    }
+
+                    // Parse check-further-callbacks
+                    if let checkFurther = ruleTable["check-further-callbacks"]?.bool {
+                        rule.checkFurtherRules = checkFurther
+                    }
+
+                    // Parse run commands
+                    if let runCommands = ruleTable["run"]?.array {
+                        rule.commands = runCommands.compactMap { item in
+                            if let str = item.string {
+                                return str
+                            } else if let arr = item.array {
+                                return arr.compactMap { $0.string }.joined(separator: " ")
+                            }
+                            return nil
+                        }
+                    }
+
+                    windowDetectionRules.append(rule)
+                }
+            }
+        }
+    }
+
     private func extractAllWorkspaces(from toml: TOMLTable) {
         var workspaceSet = Set<String>()
         

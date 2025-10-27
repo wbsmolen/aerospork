@@ -57,6 +57,12 @@ public struct ConfigurationWindow: View {
                         Label("Key Bindings", systemImage: "keyboard")
                     }
                     .tag("keybindings")
+
+                AdvancedSettingsTab(viewModel: viewModel)
+                    .tabItem {
+                        Label("Advanced", systemImage: "gearshape.2")
+                    }
+                    .tag("advanced")
             }
             .padding()
 
