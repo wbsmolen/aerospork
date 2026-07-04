@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate j4 app icon with grid/window arrangement theme
+Generate aerospork app icon with grid/window arrangement theme
 Follows macOS Sequoia design guidelines with adaptive coloring
 """
 
@@ -20,7 +20,7 @@ GRID_COLOR = (52, 52, 52)  # Dark gray for grid lines
 WINDOW_FILL = (230, 240, 255)  # Light blue tint
 
 def create_icon(size):
-    """Create j4 icon at specified size with grid/window theme"""
+    """Create aerospork icon at specified size with grid/window theme"""
     img = Image.new('RGBA', (size, size), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
@@ -114,7 +114,7 @@ def generate_contents_json():
     contents = {
         "images": images,
         "info": {
-            "author": "j4",
+            "author": "aerospork",
             "version": 1
         }
     }
@@ -125,7 +125,7 @@ def main():
     output_dir = "resources/Assets.xcassets/AppIcon.appiconset"
     os.makedirs(output_dir, exist_ok=True)
 
-    print("Generating j4 app icon...")
+    print("Generating aerospork app icon...")
 
     # Generate 1x icons
     for size in SIZES:
