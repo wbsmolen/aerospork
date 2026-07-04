@@ -91,11 +91,6 @@ struct LayoutCommand: Command {
             parent.layout = targetLayout
             parent.changeOrientation(targetOrientation)
 
-            // Mark workspace as needing layout after changing container layout
-            if let workspace = parent.nodeWorkspace {
-                workspace.markNeedsLayout()
-            }
-
             // Trigger immediate refresh to apply layout changes
             Task { @MainActor in
                 runRefreshSession(.hotkeyBinding, screenIsDefinitelyUnlocked: true, debounce: false)

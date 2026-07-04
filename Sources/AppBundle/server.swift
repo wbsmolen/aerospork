@@ -1,59 +1,45 @@
 import AppKit
 import Common
-@preconcurrency import Socket
 
 func startUnixSocketServer() {
     DispatchQueue.global().async {
-        let socket = Result { try Socket.create(family: .unix, type: .stream, proto: .unix) }
-            .getOrDie("Can't create socket ")
         let socketFile = "/tmp/\(aeroSpaceAppId)-\(unixUserName).sock"
-        Result { try socket.listen(on: socketFile) }.getOrDie("Can't listen to socket \(socketFile) ")
+        guard let listener = UnixSocketListener.bind(to: socketFile) else {
+            die("Can't listen to socket \(socketFile)")
+        }
         while true {
-            guard let connection = try? socket.acceptClientConnection() else { continue }
-            handleConnectionAsync(connection)
+            guard let connection = listener.accept() else { continue }
+            Task { await newConnection(connection) }
         }
     }
 }
 
-// Circumvent error https://github.com/swiftlang/swift/issues/80234:
-//     Value of non-Sendable type '@isolated(any) @async @callee_guaranteed @substituted <τ_0_0> () -> @out τ_0_0 for <()>' accessed after being transferred; later accesses could race
-private func handleConnectionAsync(_ connection: sending Socket) {
-    Task { await newConnection(connection) }
-}
-
 func sendCommandToReleaseServer(args: [String]) {
     check(isDebug)
-    let socket = Result { try Socket.create(family: .unix, type: .stream, proto: .unix) }.getOrDie()
-    defer {
-        socket.close()
-    }
     let socketFile = "/tmp/bobko.aerospace-\(unixUserName).sock"
-    if (try? socket.connect(to: socketFile)) == nil { // Can't connect, AeroSpace.app is not running
-        return
-    }
-
-    _ = try? socket.write(from: Result { try JSONEncoder().encode(ClientRequest(args: args, stdin: "")) }.getOrDie())
-    _ = try? Socket.wait(for: [socket], timeout: 0, waitForever: true)
-    _ = try? socket.readString()
+    guard let socket = UnixSocketConnection.connect(to: socketFile) else { return } // release server not running
+    defer { socket.close() }
+    guard let data = try? JSONEncoder().encode(ClientRequest(args: args, stdin: "")) else { return }
+    socket.sendMessage(data)
+    _ = socket.recvMessage()
 }
 
 private let serverVersionAndHash = "\(aeroSpaceAppVersion) \(gitHash)"
 
-private func newConnection(_ socket: Socket) async { // todo add exit codes
+private func newConnection(_ socket: UnixSocketConnection) async { // todo add exit codes
     func answerToClient(exitCode: Int32, stdout: String = "", stderr: String = "") {
         let ans = ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: serverVersionAndHash)
         answerToClient(ans)
     }
     func answerToClient(_ ans: ServerAnswer) {
-        _ = try? socket.write(from: Result { try JSONEncoder().encode(ans) }.getOrDie())
+        if let data = try? JSONEncoder().encode(ans) { socket.sendMessage(data) }
     }
     defer {
         socket.close()
     }
     while true {
-        _ = try? Socket.wait(for: [socket], timeout: 0, waitForever: true)
-        var rawRequest = Data()
-        if (try? socket.read(into: &rawRequest)) ?? 0 == 0 {
+        guard let rawRequest = socket.recvMessage() else { return } // peer closed the connection
+        if rawRequest.isEmpty {
             answerToClient(exitCode: 1, stderr: "Empty request")
             return
         }

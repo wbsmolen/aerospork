@@ -1,5 +1,4 @@
 import Common
-import HotKey
 import TOMLKit
 
 private let keyMappingParser: [String: any ParserProtocol<KeyMapping>] = [

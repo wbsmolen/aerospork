@@ -43,15 +43,15 @@ struct ListWindowsCommand: Command {
         if args.outputOnlyCount {
             return io.out("\(windows.count)")
         } else {
-            var _list: [(window: Window, title: String)] = [] // todo cleanup
-            for window in windows {
-                _list.append((window, try await window.title))
+            var windowList: [(window: Window, title: String)] = []
+            for window in windows where window.isBound {
+                windowList.append((window, try await window.title))
             }
-            _list = _list.filter { $0.window.isBound }
-            _list = _list.sortedBy([{ $0.window.app.name ?? "" }, \.title])
+            windowList = windowList
+                .sortedBy([{ (w: (window: Window, title: String)) -> String in w.window.app.name ?? "" }, \.title])
 
             return formatListOutput(
-                _list,
+                windowList,
                 countOnly: false, // already handled above
                 json: args.json,
                 format: args.format,

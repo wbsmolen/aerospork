@@ -93,22 +93,12 @@ class TreeNode: Equatable, AeroAny {
         //    last appeared window, is not necessarily the one that has the focus)
         markAsMostRecentChild()
 
-        // Mark workspace as needing layout when tree structure changes
-        if let workspace = nodeWorkspace {
-            workspace.markNeedsLayout()
-        }
-
         return result
     }
 
     @MainActor
     private func unbindIfBound() -> BindingData? {
         guard let _parent else { return nil }
-
-        // Mark workspace as needing layout before unbinding
-        if let workspace = nodeWorkspace {
-            workspace.markNeedsLayout()
-        }
 
         let index = _parent._children.remove(element: self) ?? dieT("Can't find child in its parent")
         check(_parent._mruChildren.remove(self))

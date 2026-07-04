@@ -4,25 +4,22 @@
 import PackageDescription
 
 let package = Package(
-    name: "j4Package",
+    name: "aerosporkPackage",
     // Runtime support for parameterized protocol types is only available in macOS 13.0.0 or newer
     // And it specifies deploymentTarget for CLI
     platforms: [.macOS(.v13)],
     // Products define the executables and libraries a package produces, making them visible to other packages.
     products: [
-        .executable(name: "j4", targets: ["Cli"]),
+        .executable(name: "aerospork", targets: ["Cli"]),
         // Don't use this build for release, use xcode instead
-        .executable(name: "j4App", targets: ["j4App"]),
+        .executable(name: "aerosporkApp", targets: ["aerosporkApp"]),
         // We only need to expose this as a product for xcode
         .library(name: "AppBundle", targets: ["AppBundle"]),
     ],
     dependencies: [
-        .package(path: "./ShellParserGenerated"),
-        .package(url: "https://github.com/InerziaSoft/ISSoundAdditions", exact: "2.0.1"),
-        .package(url: "https://github.com/Kitura/BlueSocket", exact: "2.0.4"),
+        // TOMLKit is the only remaining third-party dependency (config parsing).
+        // Sockets, hotkeys, volume, ordered collections, and shell parsing are now native.
         .package(url: "https://github.com/LebJe/TOMLKit", exact: "0.5.5"),
-        .package(url: "https://github.com/apple/swift-collections", exact: "1.1.4"),
-        .package(url: "https://github.com/soffes/HotKey", exact: "0.2.1"),
     ],
     // Targets are the basic building blocks of a package, defining a module or a test suite.
     // Targets can depend on other targets in this package and products from dependencies.
@@ -35,25 +32,17 @@ let package = Package(
         ),
         .target(
             name: "Common",
-            dependencies: [
-                .product(name: "Collections", package: "swift-collections"),
-            ],
         ),
         .target(
             name: "AppBundle",
             dependencies: [
-                .product(name: "Collections", package: "swift-collections"),
-                .product(name: "HotKey", package: "HotKey"),
-                .product(name: "ISSoundAdditions", package: "ISSoundAdditions"),
-                .product(name: "ShellParserGenerated", package: "ShellParserGenerated"),
-                .product(name: "Socket", package: "BlueSocket"),
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .target(name: "Common"),
                 .target(name: "PrivateApi"),
             ],
         ),
         .executableTarget(
-            name: "j4App",
+            name: "aerosporkApp",
             dependencies: [
                 .target(name: "AppBundle"),
             ],
@@ -62,7 +51,6 @@ let package = Package(
             name: "Cli",
             dependencies: [
                 .target(name: "Common"),
-                .product(name: "Socket", package: "BlueSocket"),
             ],
         ),
         .testTarget(

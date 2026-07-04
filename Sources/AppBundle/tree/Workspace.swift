@@ -2,7 +2,7 @@ import AppKit
 import Common
 import os.log
 
-private let workspaceLogger = Logger(subsystem: "com.wbs.j4", category: "workspace")
+private let workspaceLogger = Logger(subsystem: "com.wbs.aerospork", category: "workspace")
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 
@@ -39,9 +39,6 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     private nonisolated let nameLogicalSegments: StringLogicalSegments
     /// `assignedMonitorPoint` must be interpreted only when the workspace is invisible
     fileprivate var assignedMonitorPoint: CGPoint? = nil
-
-    /// Flag to indicate that this workspace needs re-layout on next refresh
-    @MainActor private var needsLayout: Bool = false
 
     @MainActor
     private init(_ name: String) {
@@ -120,19 +117,6 @@ extension Workspace {
             ?? assignedMonitorPoint?.monitorApproximation
             ?? mainMonitor
     }
-
-    @MainActor
-    func markNeedsLayout() {
-        needsLayout = true
-    }
-
-    @MainActor
-    func clearNeedsLayout() {
-        needsLayout = false
-    }
-
-    @MainActor
-    var requiresLayout: Bool { needsLayout }
 
     // MARK: - Container Access
 

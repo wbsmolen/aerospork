@@ -7,14 +7,14 @@ struct GeneralSettingsTab: View {
     var body: some View {
         Form {
             Section("Startup") {
-                Toggle("Start AeroSpace at Login", isOn: Binding(
+                Toggle("Start aerospork at Login", isOn: Binding(
                     get: { viewModel.startAtLogin },
                     set: {
                         viewModel.startAtLogin = $0
                         viewModel.markAsModified()
                     },
                 ))
-                .help("Launch AeroSpace automatically when you log in to your Mac")
+                .help("Launch aerospork automatically when you log in to your Mac")
             }
 
             Section("Window Management") {
@@ -25,7 +25,7 @@ struct GeneralSettingsTab: View {
                         viewModel.markAsModified()
                     },
                 ))
-                .help("When enabled, AeroSpace will automatically unhide apps that were hidden using Command+H")
+                .help("When enabled, aerospork will automatically unhide apps that were hidden using Command+H")
             }
 
             Section("Monitor Management") {

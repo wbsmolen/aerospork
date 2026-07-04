@@ -15,15 +15,10 @@ import Foundation
         check(reloadConfig(forceConfigUrl: defaultConfigUrl))
     }
 
-    // Initialize debug logging and performance monitoring
-    if isDebug {
-        initDebugLogging()
-        printLogViewingInstructions()
-    }
-
     checkAccessibilityPermissions()
     startUnixSocketServer()
     GlobalObserver.initObserver()
+    ConfigFileWatcher.start() // hot-reload config on external edits
     Task {
         Workspace.garbageCollectUnusedWorkspaces() // init workspaces
         _ = Workspace.all.first?.focusWorkspace()
@@ -57,13 +52,13 @@ struct ServerArgs: Sendable {
 }
 
 private let serverHelp = """
-    USAGE: \(CommandLine.arguments.first ?? "j4.app/Contents/MacOS/j4") [<options>]
+    USAGE: \(CommandLine.arguments.first ?? "aerospork.app/Contents/MacOS/aerospork") [<options>]
 
     OPTIONS:
       -h, --help              Print help
-      -v, --version           Print j4.app version
-      --config-path <path>    Config path. It will take priority over ~/.j4.toml
-                              and ${XDG_CONFIG_HOME}/j4/j4.toml
+      -v, --version           Print aerospork.app version
+      --config-path <path>    Config path. It will take priority over ~/.aerospork.toml
+                              and ${XDG_CONFIG_HOME}/aerospork/aerospork.toml
     """
 
 private nonisolated(unsafe) var _serverArgs = ServerArgs()

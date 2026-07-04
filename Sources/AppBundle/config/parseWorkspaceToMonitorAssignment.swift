@@ -53,6 +53,7 @@ private func parseFingerprintPattern(_ table: TOMLTable, _ backtrace: TomlBacktr
     var displayNamePattern: String?
     var widthPixels: Int?
     var heightPixels: Int?
+    var displayUUID: String?
 
     for (key, value) in table {
         let keyBacktrace = backtrace + .key(key)
@@ -93,6 +94,11 @@ private func parseFingerprintPattern(_ table: TOMLTable, _ backtrace: TomlBacktr
                     return .failure(expectedActualTypeError(expected: .int, actual: value.type, keyBacktrace))
                 }
                 heightPixels = int
+            case "uuid", "display_uuid", "displayUUID":
+                guard let string = value.string else {
+                    return .failure(expectedActualTypeError(expected: .string, actual: value.type, keyBacktrace))
+                }
+                displayUUID = string
             default:
                 return .failure(unknownKeyError(keyBacktrace))
         }
@@ -105,6 +111,7 @@ private func parseFingerprintPattern(_ table: TOMLTable, _ backtrace: TomlBacktr
         displayNamePattern: displayNamePattern,
         widthPixels: widthPixels,
         heightPixels: heightPixels,
+        displayUUID: displayUUID,
     )
 
     return .success(.fingerprint(patternData))

@@ -38,8 +38,6 @@ struct MoveCommand: Command {
                             debugLog("COMMAND: Swapping windows")
                             let prevBinding = currentWindow.unbindFromParent()
                             currentWindow.bind(to: parent, adaptiveWeight: prevBinding.adaptiveWeight, index: indexOfSiblingTarget)
-                            // Mark workspace as needing layout after move
-                            currentWindow.nodeWorkspace?.markNeedsLayout()
                             return true
                     }
                 } else {
@@ -126,8 +124,6 @@ struct MoveCommand: Command {
             check(parent.orientation == direction.orientation)
             guard let ownIndex = innerMostChild.ownIndex else { return false }
             window.bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: ownIndex + direction.insertionOffset)
-            // Mark workspace as needing layout after move
-            window.nodeWorkspace?.markNeedsLayout()
             return true
         case .workspace(let parent):
             return hitWorkspaceBoundaries(window, parent, io, args, direction, env)
@@ -152,8 +148,6 @@ struct MoveCommand: Command {
     check(prevRoot != workspace.rootTilingContainer)
     prevRoot.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: 0)
     window.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: direction.insertionOffset)
-    // Mark workspace as needing layout after move
-    workspace.markNeedsLayout()
 }
 
 @MainActor private func deepMoveIn(window: Window, into container: TilingContainer, moveDirection: CardinalDirection) -> Bool {
@@ -169,8 +163,6 @@ struct MoveCommand: Command {
                 index: deepTarget.ownIndex.orDie() + 1,
             )
     }
-    // Mark workspace as needing layout after move
-    window.nodeWorkspace?.markNeedsLayout()
     return true
 }
 

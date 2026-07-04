@@ -1,5 +1,5 @@
-import SwiftUI
 import Common
+import SwiftUI
 
 public struct ConfigurationWindow: View {
     @StateObject private var viewModel = ConfigurationViewModel()
@@ -9,9 +9,8 @@ public struct ConfigurationWindow: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
-                Text("j4")
+                Text("aerospork")
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
@@ -26,54 +25,30 @@ public struct ConfigurationWindow: View {
 
             Divider()
 
-            // Tab View
             TabView(selection: $selectedTab) {
                 GeneralSettingsTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("General", systemImage: "gear")
-                    }
+                    .tabItem { Label("General", systemImage: "gear") }
                     .tag("general")
 
-                EnhancedWorkspaceAssignmentTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("Workspaces & Monitors", systemImage: "macwindow.on.rectangle")
-                    }
-                    .tag("workspaces_monitors")
-
                 GapsSettingsTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("Gaps", systemImage: "ruler")
-                    }
+                    .tabItem { Label("Gaps", systemImage: "ruler") }
                     .tag("gaps")
 
-                PerformanceSettingsTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("Performance", systemImage: "speedometer")
-                    }
-                    .tag("performance")
-
                 KeyBindingsTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("Key Bindings", systemImage: "keyboard")
-                    }
+                    .tabItem { Label("Key Bindings", systemImage: "keyboard") }
                     .tag("keybindings")
 
-                AdvancedSettingsTab(viewModel: viewModel)
-                    .tabItem {
-                        Label("Advanced", systemImage: "gearshape.2")
-                    }
-                    .tag("advanced")
+                WorkspacesMonitorsTab(viewModel: viewModel)
+                    .tabItem { Label("Workspaces & Monitors", systemImage: "macwindow.on.rectangle") }
+                    .tag("workspaces_monitors")
             }
             .padding()
 
             Divider()
 
-            // Footer with buttons
             HStack {
-                Button("Revert") {
-                    viewModel.revertChanges()
-                }
-                .disabled(!viewModel.hasUnsavedChanges)
+                Button("Revert") { viewModel.revertChanges() }
+                    .disabled(!viewModel.hasUnsavedChanges)
 
                 Spacer()
 
@@ -89,7 +64,6 @@ public struct ConfigurationWindow: View {
 
                 Button("Cancel") {
                     if viewModel.hasUnsavedChanges {
-                        // Show confirmation dialog
                         showUnsavedChangesAlert()
                     } else {
                         closeWindow()
@@ -113,9 +87,7 @@ public struct ConfigurationWindow: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .background(Color(NSColor.windowBackgroundColor))
-        .task {
-            await viewModel.loadConfiguration()
-        }
+        .task { await viewModel.loadConfiguration() }
     }
 
     private func closeWindow() {
@@ -131,8 +103,7 @@ public struct ConfigurationWindow: View {
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
-        let response = alert.runModal()
-        switch response {
+        switch alert.runModal() {
             case .alertFirstButtonReturn:
                 Task { @MainActor in
                     await viewModel.saveConfiguration()

@@ -1,6 +1,5 @@
 import AppKit
 import Common
-import HotKey
 import TOMLKit
 
 @MainActor
@@ -23,17 +22,20 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
     }
     let configUrl: URL = forceConfigUrl ?? customConfigUrl
     let finalIsUserConfig = forceConfigUrl != nil ? true : isUserConfig
-    let (parsedConfig, errors) = (try? String(contentsOf: configUrl)).map { parseConfig($0, isUserConfig: finalIsUserConfig) } ?? (defaultConfig, [])
+    
+    let configContent = try? String(contentsOf: configUrl)
+    let parseResult = configContent.map { parseConfig($0, isUserConfig: finalIsUserConfig) } ?? .success(defaultConfig)
 
-    if errors.isEmpty {
-        return .success((parsedConfig, configUrl))
-    } else {
-        let msg = """
-            Failed to parse \(configUrl.absoluteURL.path)
+    switch parseResult {
+        case .success(let parsedConfig):
+            return .success((parsedConfig, configUrl))
+        case .failure(let errors):
+            let msg = """
+                Failed to parse \(configUrl.absoluteURL.path)
 
-            \(errors.map(\.description).joined(separator: "\n\n"))
-            """
-        return .failure(msg)
+                \(errors.map(\.description).joined(separator: "\n\n"))
+                """
+            return .failure(msg)
     }
 }
 
@@ -111,49 +113,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     // Deprecated
     "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._nonEmptyWorkspacesRootContainersLayoutOnStartup, parseStartupRootContainerLayout),
     "indent-for-nested-containers-with-the-same-orientation": Parser(\._indentForNestedContainersWithTheSameOrientation, parseIndentForNestedContainersWithTheSameOrientation),
-
-    // New: Workspace Profiles
-    "profiles": Parser(\.workspaceProfiles, parseWorkspaceProfiles),
-    "active-profile": Parser(\.activeProfileName) { parseString($0, $1).map { $0 as String? } },
 ]
-
-// New parsing function for profiles
-private func parseWorkspaceProfiles(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<[Config.WorkspaceProfile]> {
-    guard let profilesTable = raw.table else {
-        return .failure(expectedActualTypeError(expected: .table, actual: raw.type, backtrace))
-    }
-
-    var parsedProfiles: [Config.WorkspaceProfile] = []
-    var errors: [TomlParseError] = []
-
-    for (profileName, profileValue) in profilesTable {
-        let profileBacktrace = backtrace + .key(profileName)
-        guard let profileTable = profileValue.table else {
-            errors.append(expectedActualTypeError(expected: .table, actual: profileValue.type, profileBacktrace))
-            continue
-        }
-
-        var assignments: [Config.WorkspaceAssignment] = []
-        if let assignmentsTable = profileTable["workspace-to-monitor-force-assignment"]?.table {
-            let assignmentsBacktrace = profileBacktrace + .key("workspace-to-monitor-force-assignment")
-            for (workspace, value) in assignmentsTable {
-                if var assignment = parseWorkspaceAssignment(workspace: workspace, value: value) {
-                    assignment.isForceAssignment = true
-                    assignments.append(assignment)
-                } else {
-                    errors.append(.semantic(assignmentsBacktrace + .key(workspace), "Failed to parse workspace assignment"))
-                }
-            }
-        }
-        parsedProfiles.append(Config.WorkspaceProfile(name: profileName, assignments: assignments))
-    }
-
-    if errors.isEmpty {
-        return .success(parsedProfiles)
-    } else {
-        return .failure(errors.first!) // Return the first error, or combine them
-    }
-}
 
 extension ParsedCmd where T == any Command {
     internal func toEither() -> Parsed<T> { // Changed to internal
@@ -179,7 +139,7 @@ func parseAfterLoginCommand(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktr
         return .success([])
     }
     let msg = "after-login-command is deprecated since AeroSpork 0.19.0. https://github.com/wbsmolen/AeroSpork/issues/1482"
-    return .failure(.semantic(backtrace, msg))
+    return .failure(deprecatedWarning(msg))
 }
 
 func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]> {
@@ -198,14 +158,14 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 }
 
-@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true) -> (config: Config, errors: [TomlParseError]) { // todo change return value to Result
+@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true) -> Result<Config, [TomlParseError]> {
     let rawTable: TOMLTable
     do {
         rawTable = try TOMLTable(string: rawToml)
     } catch let e as TOMLParseError {
-        return (defaultConfig, [.syntax(e.debugDescription)])
+        return .failure([.syntax(e.debugDescription)])
     } catch let e {
-        return (defaultConfig, [.syntax(e.localizedDescription)])
+        return .failure([.syntax(e.localizedDescription)])
     }
 
     var errors: [TomlParseError] = []
@@ -252,14 +212,23 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
             )]
         }
     }
-    return (config, errors)
+    
+    if errors.isEmpty {
+        return .success(config)
+    } else {
+        return .failure(errors)
+    }
+}
+
+private func deprecatedWarning(_ msg: String) -> TomlParseError {
+    .semantic(.emptyRoot, "Deprecated: " + msg)
 }
 
 func parseIndentForNestedContainersWithTheSameOrientation(
     _ raw: TOMLValueConvertible,
-    _ backtrace: TomlBacktrace,
+    _ backtrace: TomlBacktrace
 ) -> ParsedToml<Void> {
-    let msg = "Deprecated. Please drop it from the config. See https://github.com/wbsmolen/AeroSpork/issues/96"
+    let msg = "Please drop 'indent-for-nested-containers-with-the-same-orientation' from the config. See https://github.com/wbsmolen/AeroSpork/issues/96"
     return .failure(.semantic(backtrace, msg))
 }
 
@@ -335,6 +304,13 @@ private func parseExecOnWorkspaceChange(_ raw: TOMLValueConvertible, _ backtrace
         .flatMap { arr in
             arr.mapAllOrFailure { elem in parseString(elem, backtrace) }
         }
+        .flatMap { arr in
+            if arr.isEmpty {
+                return .success([])
+            } else {
+                return .failure(deprecatedWarning("exec-on-workspace-change is deprecated. Please use on-focused-monitor-changed with exec-and-forget instead."))
+            }
+        }
 }
 
 private func parseDefaultContainerOrientation(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<DefaultContainerOrientation> {
@@ -344,60 +320,6 @@ private func parseDefaultContainerOrientation(_ raw: TOMLValueConvertible, _ bac
     }
 }
 
-private func parseWorkspaceAssignment(workspace: String, value: TOMLValueConvertible) -> Config.WorkspaceAssignment? {
-    if let stringValue = value.string {
-        return Config.WorkspaceAssignment(
-            workspaceName: workspace,
-            monitorDescription: stringValue,
-            monitorType: parseMonitorType(from: stringValue),
-        )
-    } else if let intValue = value.int {
-        return Config.WorkspaceAssignment(
-            workspaceName: workspace,
-            monitorDescription: String(intValue),
-            monitorType: .index(intValue),
-        )
-    } else if let table = value.table {
-        let fingerprintTable: TOMLTable?
-
-        if let fp = table["fingerprint"]?.table {
-            fingerprintTable = fp
-        } else if table.keys.contains(where: { ["vendor_id", "model_id", "serial_number", "display_name", "width", "height"].contains($0) }) {
-            fingerprintTable = table
-        } else if table.count == 1, let firstKey = table.keys.first, firstKey == "fingerprint",
-                  let nestedTable = table[firstKey]?.table
-        {
-            fingerprintTable = nestedTable
-        } else {
-            return nil
-        }
-
-        if let fingerprint = fingerprintTable {
-            var fp = Config.WorkspaceAssignment.MonitorFingerprint()
-            fp.vendorId = fingerprint["vendor_id"]?.string
-            fp.modelId = fingerprint["model_id"]?.string
-            fp.serialNumber = fingerprint["serial_number"]?.string
-            fp.displayName = fingerprint["display_name"]?.string
-            fp.width = fingerprint["width"]?.int
-            fp.height = fingerprint["height"]?.int
-
-            return Config.WorkspaceAssignment(
-                workspaceName: workspace,
-                monitorDescription: "Fingerprint",
-                monitorType: .fingerprint(fp),
-            )
-        }
-    }
-    return nil
-}
-
-private func parseMonitorType(from string: String) -> Config.WorkspaceAssignment.MonitorType {
-    if let index = Int(string) {
-        return .index(index)
-    } else {
-        return .name(string)
-    }
-}
 
 
 

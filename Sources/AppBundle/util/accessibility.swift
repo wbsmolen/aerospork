@@ -234,8 +234,10 @@ enum Ax {
     static let sizeAttr = WritableAttrImpl<CGSize>(
         key: kAXSizeAttribute,
         getter: {
+            guard CFGetTypeID($0) == AXValueGetTypeID() else { return nil }
+            let val = $0 as! AXValue
             var raw: CGSize = .zero
-            check(AXValueGetValue($0 as! AXValue, .cgSize, &raw))
+            guard AXValueGetValue(val, .cgSize, &raw) else { return nil }
             return raw
         },
         setter: {
@@ -246,8 +248,10 @@ enum Ax {
     static let topLeftCornerAttr = WritableAttrImpl<CGPoint>(
         key: kAXPositionAttribute,
         getter: {
+            guard CFGetTypeID($0) == AXValueGetTypeID() else { return nil }
+            let val = $0 as! AXValue
             var raw: CGPoint = .zero
-            AXValueGetValue($0 as! AXValue, .cgPoint, &raw)
+            guard AXValueGetValue(val, .cgPoint, &raw) else { return nil }
             return raw
         },
         setter: {
@@ -259,7 +263,10 @@ enum Ax {
     /// If some windows are located on not active macOS Spaces then they won't be returned
     static let windowsAttr = ReadableAttrImpl<[WindowIdAndAxUiElement]>(
         key: kAXWindowsAttribute,
-        getter: { ($0 as? NSArray)?.compactMap(windowOrNil).map { ($0.windowId, $0.ax.cast) } ?? [] }
+        getter: { ($0 as? NSArray)?.compactMap(windowOrNil).compactMap {
+            guard let casted = $0.ax.cast else { return nil }
+            return ($0.windowId, casted)
+        } ?? [] }
     )
     static let focusedWindowAttr = ReadableAttrImpl<WindowIdAndAxUiElementMock>(
         key: kAXFocusedWindowAttribute,
@@ -295,7 +302,7 @@ enum Ax {
 
 let kAXAeroSynthetic = "Aero.synthetic"
 
-private func castToAxUiElementMock(_ a: AnyObject) -> AxUiElementMock {
+private func castToAxUiElementMock(_ a: AnyObject) -> AxUiElementMock? {
     if isUnitTest {
         if let str = a as? String, let commaIndex = str.firstIndex(of: ",") {
             let windowId = UInt32.init(String(str.prefix(upTo: commaIndex)).removePrefix("AXUIElement(AxWindowId="))
@@ -309,9 +316,12 @@ private func castToAxUiElementMock(_ a: AnyObject) -> AxUiElementMock {
         if let dict = a as? [String: Json] { // Convert from _SwiftDeferredNSDictionary<String, Json>
             return dict as? AxUiElementMock ?? dieT("Cannot cast \(type(of: a)) to AxUiElementMock")
         }
-        die("Can't convert \(a) to AxUiElementMock")
+        return nil
     }
-    return a as! AXUIElement
+    if CFGetTypeID(a) == AXUIElementGetTypeID() {
+        return (a as! AXUIElement)
+    }
+    return nil
 }
 
 typealias WindowIdAndAxUiElement = (windowId: UInt32, ax: AXUIElement)
@@ -319,7 +329,7 @@ typealias WindowIdAndAxUiElementMock = (windowId: UInt32, ax: AxUiElementMock)
 
 private func windowOrNil(_ any: Any?) -> WindowIdAndAxUiElementMock? {
     guard let any else { return nil }
-    let potentialWindow = castToAxUiElementMock(any as AnyObject)
+    guard let potentialWindow = castToAxUiElementMock(any as AnyObject) else { return nil }
     // Filter out non-window objects (e.g. Finder's desktop)
     let windowId = potentialWindow.containingWindowId()
     if let windowId {

@@ -4,27 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-j4 is an i3-like tiling window manager for macOS written in Swift. It uses macOS Accessibility APIs to manage windows in a tree-based layout paradigm. The project includes:
-- A main application (j4App) that runs as a background service
-- A CLI tool (`j4`) that communicates with the app via Unix sockets
-- TOML-based configuration system
-- Performance monitoring and optimization features
+aerospork is an i3-like tiling window manager for macOS written in Swift. It uses macOS Accessibility APIs to manage windows in a tree-based layout paradigm. The project includes:
+- A main application (aerosporkApp) that runs as a background service
+- A CLI tool (`aerospork`) that communicates with the app via native Unix sockets
+- TOML-based configuration system with hot-reload and a settings GUI
+- DisplayLink-aware multi-monitor support
 
 ## Build Commands
 
 ### Debug Build
 ```bash
 ./build-debug.sh              # Build debug version to .debug/
-./run-debug.sh                # Run j4.app debug build
-./run-cli.sh [args]           # Run j4 CLI (forwards args to binary)
+./run-debug.sh                # Run aerospork.app debug build
+./run-cli.sh [args]           # Run aerospork CLI (forwards args to binary)
 ```
 
-Debug builds use `~/.j4-debug.toml` instead of `~/.j4.toml` for configuration.
+Debug builds use `~/.aerospork-debug.toml` instead of `~/.aerospork.toml` for configuration.
 
 ### Release Build
 ```bash
 ./build-release.sh            # Build release to .release/ using Xcode
-./install-from-sources.sh     # Build and install as j4-dev brew cask (WIP)
+./install-from-sources.sh     # Build and install as aerospork-dev brew cask (WIP)
 ```
 
 ### Testing & Code Quality
@@ -57,49 +57,48 @@ Debug builds use `~/.j4-debug.toml` instead of `~/.j4.toml` for configuration.
 1. `GlobalObserver.swift` monitors NSWorkspace notifications (app launch/activate/hide/terminate)
 2. Notifications trigger `runRefreshSession()` which synchronizes tree state with actual windows
 3. Layout engine (`layout/layoutRecursive.swift`) calculates window positions/sizes
-4. Performance optimizations include background layout calculation for complex workspaces (>10 windows)
+4. Refresh events are debounced (fixed 50ms) so bursts of accessibility notifications coalesce into a single layout pass
 
 **Client-Server Architecture**
 - `Sources/AppBundle/server.swift`: Unix socket server running in main app
 - `Sources/Cli/_main.swift`: CLI client that connects to `/tmp/aerospork-<user>.sock`
+- IPC uses native POSIX `AF_UNIX` sockets with length-prefixed framing (`Sources/Common/util/UnixSocket.swift`) — no third-party socket library
 - Commands are parsed in `Sources/AppBundle/command/parseCommand.swift` and executed on server
 - All commands implement the `Command` protocol
 
 **Configuration System** (`Sources/AppBundle/config/`)
 - `Config.swift`: Main config structure
-- `parseConfig.swift`: TOML parser using TOMLKit
-- Supports modes, hotkey bindings, workspace-to-monitor assignments, callbacks
-- Performance tuning via `PerformanceConfig`
-- New feature: Workspace profiles for different monitor setups
+- `parseConfig.swift`: the single canonical TOML parser (TOMLKit), mapping keys to `Config` via `WritableKeyPath`
+- `ConfigurationWriter.swift`: comment-preserving writer used by the GUI (line-based, only rewrites UI-managed keys)
+- `ConfigFileWatcher.swift`: hot-reload — watches the active config file and reloads on change
+- Supports modes, hotkey bindings, workspace-to-monitor assignments, gaps, callbacks
 
 **Layout System** (`Sources/AppBundle/layout/`)
-- Recursive layout algorithm in `layoutRecursive.swift`
-- `LayoutCache.swift` and `LayoutMemoizer.swift` for performance optimization
-- `BackgroundLayoutCalculator.swift` for async layout calculation (complex workspaces)
+- Recursive, synchronous layout algorithm in `layoutRecursive.swift`
+- `MacApp.setFrame` skips redundant AX position/size writes when a window is already at the target frame (avoids framebuffer churn, important over DisplayLink/USB)
 - Supports gaps (inner/outer), accordion padding, container orientation
 
-**Performance Monitoring** (`Sources/AppBundle/monitoring/`)
-- `PerformanceMonitor.swift`: Comprehensive metrics collection system
-- `PerformanceMetrics.swift`: Metrics for refresh cycles, layout calculations, cache hits/misses
-- Adaptive debouncing based on system load
-- Background task tracking
+**Hotkeys** (`Sources/AppBundle/config/`)
+- Global hotkeys are registered with native Carbon `RegisterEventHotKey` (`HotkeyBinding.swift`)
+- `Key.swift`: local keycode enum (Carbon `kVK_*` virtual keycodes); `keysMap.swift` maps key notation to `Key`
+- Only the active mode's bindings are registered at a time
 
 ### Module Structure
 
 ```
 Sources/
-├── j4App/                 # Main app entry point
+├── aerosporkApp/                 # Main app entry point
 ├── AppBundle/             # Core window management logic (library)
 │   ├── tree/              # Tree data structure (Workspace, Window, TilingContainer)
 │   ├── command/           # Command implementations (focus, move, resize, etc.)
-│   ├── config/            # Configuration parsing and structures
+│   ├── config/            # Configuration parsing, writing, hot-reload, hotkeys
 │   ├── layout/            # Layout calculation engine
-│   ├── monitoring/        # Performance monitoring
-│   ├── cache/             # Window property and layout caching
-│   ├── ui/                # UI components (status bar, settings window)
-│   └── util/              # Utilities, extensions, macOS API wrappers
+│   ├── model/             # Monitors + fingerprinting (incl. DisplayLink UUID)
+│   ├── mouse/             # Mouse move/resize handling
+│   ├── ui/                # UI components (menu bar, settings window)
+│   └── util/              # Utilities, extensions, macOS API wrappers (incl. volume via CoreAudio)
 ├── Cli/                   # Command-line client
-├── Common/                # Shared utilities between CLI and AppBundle
+├── Common/                # Shared utilities between CLI and AppBundle (incl. Unix socket IPC)
 └── PrivateApi/            # C wrapper for _AXUIElementGetWindow private API
 ```
 
@@ -109,50 +108,48 @@ Sources/
 
 **Virtual Workspaces**: AeroSpork doesn't use native macOS Spaces. It implements its own workspace emulation by hiding/showing windows, allowing instant switching without animations.
 
-**Monitor Fingerprinting**: Monitors are identified by vendor ID, model, and serial number, enabling persistent workspace assignments in docking setups.
+**Monitor Fingerprinting**: Monitors are identified by vendor ID, model, and serial number, enabling persistent workspace assignments in docking setups. DisplayLink (USB virtual) displays report nil vendor/model/serial, so they are identified by the stable per-display UUID from `CGDisplayCreateUUIDFromDisplayID` (see `MonitorFingerprint.displayUUID`). Workspace-to-monitor assignments support a `uuid` fingerprint match key to pin a workspace to a specific DisplayLink panel, e.g. `[workspace-to-monitor-force-assignment.1.fingerprint]` with `uuid = "..."`.
 
-**Thread-Per-Application**: Performance optimization where accessibility API calls for each app run on separate threads to avoid blocking.
+**Thread-Per-Application**: Accessibility API calls for each app run on separate threads to avoid blocking.
+
+**Config Hot-Reload**: `ConfigFileWatcher` watches the active config file (via `DispatchSource`) and reloads on change, so external editor edits and GUI saves apply without a manual `reload-config`.
 
 **MRU Tracking**: Tree nodes track most-recently-used order for focus navigation.
 
 ## Development Notes
 
 ### Running from Xcode
-1. Open `Package.swift` (not `j4.xcodeproj`) in Xcode
+1. Open `Package.swift` (not `aerospork.xcodeproj`) in Xcode
 2. Edit Scheme → Options → Console → Choose `Terminal`
    - This prevents Accessibility permission requests on every rebuild (debug binaries are unsigned)
 
 ### Code Generation
 - Some source files have `Generated` suffix - these are auto-generated by `./generate.sh`
-- `j4.xcodeproj` is also generated
+- `aerospork.xcodeproj` is also generated
 - Run `./generate.sh --all` to regenerate everything
 
 ### Configuration Files
-- Debug: `~/.j4-debug.toml`
-- Release: `~/.j4.toml`
-- Default config: `docs/config-examples/default-config.toml`
+- Debug: `~/.aerospork-debug.toml`
+- Release: `~/.aerospork.toml`
+- Default config: `docs/config-examples/default-config.toml` (bundled into the release app; used when no user config exists)
 - Config documentation: `docs/guide.adoc`, `docs/commands.adoc`
 
 ### Testing Utilities
 - "Accessibility Inspector.app" (built into macOS) for inspecting window properties
-- DeskPad or BetterDisplay 2 for emulating multiple monitors
+- DeskPad or BetterDisplay 2 for emulating multiple monitors; a real DisplayLink dock for DisplayLink-specific testing
 - `script/clean-project.sh` to clean when things go wrong
 
-### Performance Considerations
-- Layout calculations can be expensive for workspaces with many windows
-- Background layout calculation enabled for >10 windows when `config.performanceConfig.useBackgroundLayoutCalculation` is true
-- Cache systems (WindowPropertyCache, LayoutMemoizer) reduce redundant work
-- PerformanceMonitor tracks metrics and can adapt debouncing delays
+### Performance & Smoothness
+- Layout is synchronous and simple; a fixed 50ms debounce (`RefreshDebouncer`) coalesces bursts of accessibility events into a single refresh
+- `MacApp.setFrame` skips redundant AX writes when a window is already at its target frame — this avoids unnecessary framebuffer churn, which matters over DisplayLink/USB
+- Screen-configuration changes (`GlobalObserver`) are debounced and rebalanced on monitor-set change, handling DisplayLink's multi-stage connect/flap
 
 ## Dependencies
 
-Managed via Swift Package Manager (Package.swift):
-- TOMLKit: TOML parsing
-- HotKey: Global hotkey handling
-- BlueSocket: Unix socket communication
-- swift-collections: Advanced collection types
-- ISSoundAdditions: Sound/volume control
-- ShellParserGenerated: Local package for shell command parsing
+Managed via Swift Package Manager (Package.swift). The only third-party dependency is:
+- **TOMLKit**: TOML parsing
+
+Everything else is native: Unix-socket IPC (POSIX), global hotkeys (Carbon), volume control (CoreAudio), ordered collections (plain Swift).
 
 External tools (installed via scripts in `./script/install-dep.sh`):
 - swiftformat: Code formatting

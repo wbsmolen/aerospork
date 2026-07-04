@@ -85,24 +85,47 @@ class GlobalObserver {
         }
     }
 
+    // DisplayLink docks fire didChangeScreenParametersNotification in bursts during a single
+    // connect (multi-stage settle) and on flap. Coalesce bursts into one refresh+rebalance.
+    @MainActor private static var pendingMonitorReconfigTask: Task<Void, Never>?
+    // Set-based signal: rebalance when the monitor arrangement actually changes, not just the count.
+    @MainActor private static var lastMonitorSignature: String?
+
     @MainActor
     private static func onMonitorConfigurationChanged() {
+        pendingMonitorReconfigTask?.cancel()
+        pendingMonitorReconfigTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            applyMonitorConfigurationChange()
+        }
+    }
+
+    @MainActor
+    private static func applyMonitorConfigurationChange() {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
 
-        // Get current monitor configuration
-        let previousMonitorCount = monitors.count
-        let currentMonitorCount = NSScreen.screens.count
+        let signature = monitorSetSignature()
 
         // Run a refresh session to update monitor state
         runRefreshSession(.globalObserver("didChangeScreenParameters"), screenIsDefinitelyUnlocked: true)
 
-        // If auto-move is enabled and monitors changed, rearrange workspaces
-        if config.autoMoveWorkspacesOnMonitorConnect && previousMonitorCount != currentMonitorCount {
+        // Rebalance only when the monitor set changed (count or arrangement) — e.g. reconnecting
+        // identical DisplayLink panels in a different layout. Never rebalance when nothing changed.
+        if config.autoMoveWorkspacesOnMonitorConnect && signature != lastMonitorSignature {
             Task { @MainActor in
                 try await runSession(.globalObserver("autoMoveWorkspaces"), token) {
                     autoMoveWorkspacesToAssignedMonitors()
                 }
             }
         }
+        lastMonitorSignature = signature
+    }
+
+    @MainActor
+    private static func monitorSetSignature() -> String {
+        sortedMonitors
+            .map { "\($0.name)|\($0.rect.topLeftX),\($0.rect.topLeftY),\($0.rect.width),\($0.rect.height)" }
+            .joined(separator: ";")
     }
 }
