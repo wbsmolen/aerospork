@@ -12,7 +12,8 @@ struct FocusCommand: Command {
             debugLog("COMMAND: FocusCommand failed - no target resolved")
             return false
         }
-        // todo bug: floating windows break mru
+        // Note: Floating windows are temporarily treated as tiling for directional focus.
+        //       They should ideally be tracked in the same MRU stack to avoid potential issues.
         let floatingWindows = args.floatingAsTiling ? try await makeFloatingWindowsSeenAsTiling(workspace: target.workspace) : []
         defer {
             if args.floatingAsTiling {
@@ -34,27 +35,20 @@ struct FocusCommand: Command {
                         return false
                     }
                     debugLog("COMMAND: Focusing window: \(windowToFocus.windowId)")
-                    let result = windowToFocus.focusWindow()
-                    // Mark workspace as needing layout to ensure visual updates
-                    windowToFocus.nodeWorkspace?.markNeedsLayout()
-                    return result
+                    return windowToFocus.focusWindow()
                 } else {
                     debugLog("COMMAND: Hit workspace boundaries in direction \(direction)")
                     return hitWorkspaceBoundaries(target, io, args, direction)
                 }
             case .windowId(let windowId):
                 if let windowToFocus = Window.get(byId: windowId) {
-                    let result = windowToFocus.focusWindow()
-                    windowToFocus.nodeWorkspace?.markNeedsLayout()
-                    return result
+                    return windowToFocus.focusWindow()
                 } else {
                     return io.err("Can't find window with ID \(windowId)")
                 }
             case .dfsIndex(let dfsIndex):
                 if let windowToFocus = target.workspace.rootTilingContainer.allLeafWindowsRecursive.getOrNil(atIndex: Int(dfsIndex)) {
-                    let result = windowToFocus.focusWindow()
-                    windowToFocus.nodeWorkspace?.markNeedsLayout()
-                    return result
+                    return windowToFocus.focusWindow()
                 } else {
                     return io.err("Can't find window with DFS index \(dfsIndex)")
                 }
@@ -115,9 +109,7 @@ struct FocusCommand: Command {
     guard let windowToFocus = target.workspace.findFocusTargetRecursive(snappedTo: direction.opposite) else {
         return io.err(noWindowIsFocused)
     }
-    let result = windowToFocus.focusWindow()
-    windowToFocus.nodeWorkspace?.markNeedsLayout()
-    return result
+    return windowToFocus.focusWindow()
 }
 
 @MainActor private func makeFloatingWindowsSeenAsTiling(workspace: Workspace) async throws -> [FloatingWindowData] {

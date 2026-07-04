@@ -1,6 +1,5 @@
 import AppKit
 import Common
-import ISSoundAdditions
 
 struct VolumeCommand: Command {
     let args: VolumeCmdArgs
@@ -8,17 +7,17 @@ struct VolumeCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
         switch args.action.val {
             case .up:
-                Sound.output.increaseVolume(by: 0.0625, autoMuteUnmute: true)
+                SystemVolume.increase(by: 0.0625)
             case .down:
-                Sound.output.decreaseVolume(by: 0.0625, autoMuteUnmute: true)
+                SystemVolume.decrease(by: 0.0625)
             case .muteToggle:
-                Sound.output.isMuted.toggle()
+                SystemVolume.toggleMuted()
             case .muteOn:
-                Sound.output.isMuted = true
+                SystemVolume.setMuted(true)
             case .muteOff:
-                Sound.output.isMuted = false
+                SystemVolume.setMuted(false)
             case .set(let int):
-                Sound.output.setVolume(Float(int) / 100, autoMuteUnmute: true)
+                SystemVolume.setScalar(Float(int) / 100)
         }
         return true
     }

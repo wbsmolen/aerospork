@@ -1,10 +1,10 @@
 # Xcode project configuration. Managed by https://github.com/yonaskolb/XcodeGen
 # Xcode is only used to build the release App Bundle. Debug builds only use Swift Package Manager
 
-name: j4
+name: aerospork
 
 packages:
-  j4Package:
+  aerosporkPackage:
     path: .
 
 configs:
@@ -12,15 +12,15 @@ configs:
   Release: release
 
 targets:
-  j4:
+  aerospork:
     type: application
     platform: macOS
     deploymentTarget: "13.0"
     sources:
-      - "Sources/j4App"
+      - "Sources/aerosporkApp"
       - "resources"
     dependencies:
-      - package: j4Package
+      - package: aerosporkPackage
         product: AppBundle
     # https://developer.apple.com/documentation/xcode/build-settings-reference
     settings:
@@ -38,19 +38,19 @@ targets:
         # Notarization requirements
         ENABLE_HARDENED_RUNTIME: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 j4. All rights reserved."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 aerospork. All rights reserved."
         # App icon
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Debug:
-          PRODUCT_NAME: j4-Debug
-          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.j4.debug
+          PRODUCT_NAME: aerospork-Debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.aerospork.debug
         Release:
-          PRODUCT_NAME: j4
-          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.j4
+          PRODUCT_NAME: aerospork
+          PRODUCT_BUNDLE_IDENTIFIER: com.wbs.aerospork
     entitlements:
-      path: resources/j4.entitlements
+      path: resources/aerospork.entitlements
       properties:
         # Accessibility API required for window management doesn't work in sandboxed apps
-        # Therefore, j4 is distributed outside Mac App Store (notarized for security)
+        # Therefore, aerospork is distributed outside Mac App Store (notarized for security)
         com.apple.security.app-sandbox: false

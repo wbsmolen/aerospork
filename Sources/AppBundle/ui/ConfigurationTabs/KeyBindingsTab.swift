@@ -1,115 +1,93 @@
-import SwiftUI
 import Common
+import SwiftUI
 
 struct KeyBindingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
     @State private var selectedMode: String = "main"
-    @State private var searchText: String = ""
+    @State private var newKey: String = ""
+    @State private var newCommand: String = ""
+
+    private var currentMode: ConfigurationViewModel.ModeBindings? {
+        viewModel.modes.first { $0.mode == selectedMode } ?? viewModel.modes.first
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Key Bindings")
                     .font(.headline)
-
                 Spacer()
-
-                // Mode selector
-                if !viewModel.keyBindings.isEmpty {
+                if viewModel.modes.count > 1 {
                     Picker("Mode:", selection: $selectedMode) {
-                        ForEach(viewModel.keyBindings, id: \.mode) { modeBinding in
-                            Text(modeBinding.mode).tag(modeBinding.mode)
-                        }
+                        ForEach(viewModel.modes) { Text($0.mode).tag($0.mode) }
                     }
                     .pickerStyle(MenuPickerStyle())
-                    .frame(width: 150)
+                    .frame(width: 180)
                 }
-
-                // Search field
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search bindings...", text: $searchText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                }
-                .frame(width: 200)
             }
             .padding()
 
             Divider()
 
-            // Bindings list
-            if let modeBindings = viewModel.keyBindings.first(where: { $0.mode == selectedMode }) {
-                let filteredBindings = modeBindings.bindings.filter { binding in
-                    searchText.isEmpty ||
-                        binding.key.localizedCaseInsensitiveContains(searchText) ||
-                        binding.command.localizedCaseInsensitiveContains(searchText)
-                }
-
+            if let mode = currentMode {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredBindings.indices, id: \.self) { index in
-                            KeyBindingRow(
-                                key: filteredBindings[index].key,
-                                command: filteredBindings[index].command,
-                                isEven: index % 2 == 0,
-                            )
+                        ForEach(Array(mode.bindings.enumerated()), id: \.element.id) { index, binding in
+                            HStack {
+                                Text(formatKey(binding.key))
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(width: 200, alignment: .leading)
+                                Text("→").foregroundColor(.secondary)
+                                Text(binding.command)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button {
+                                    viewModel.removeBinding(mode: mode.mode, id: binding.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Remove binding")
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 6)
+                            .background(index.isMultiple(of: 2) ? Color(NSColor.controlBackgroundColor) : Color.clear)
                         }
                     }
                 }
-            } else {
-                VStack {
-                    Spacer()
-                    Text("No key bindings found")
-                        .foregroundColor(.secondary)
-                    Spacer()
+
+                Divider()
+
+                HStack {
+                    TextField("key (e.g. alt-h)", text: $newKey)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .frame(width: 200)
+                    TextField("command (e.g. focus left)", text: $newCommand)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    Button("Add") {
+                        viewModel.addBinding(mode: mode.mode, key: newKey, command: newCommand)
+                        newKey = ""
+                        newCommand = ""
+                    }
+                    .disabled(newKey.trimmingCharacters(in: .whitespaces).isEmpty
+                        || newCommand.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-            }
-
-            Divider()
-
-            // Footer
-            HStack {
-                Image(systemName: "info.circle")
+                .padding()
+            } else {
+                Spacer()
+                Text("No key bindings defined")
                     .foregroundColor(.secondary)
-                Text("Key bindings are read-only. Edit the config file to modify bindings.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
                 Spacer()
             }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
+        }
+        .onAppear {
+            if currentMode?.mode != selectedMode, let first = viewModel.modes.first {
+                selectedMode = first.mode
+            }
         }
     }
-}
 
-struct KeyBindingRow: View {
-    let key: String
-    let command: String
-    let isEven: Bool
-
-    var body: some View {
-        HStack {
-            Text(formatKeyBinding(key))
-                .font(.system(.body, design: .monospaced))
-                .frame(width: 200, alignment: .leading)
-                .padding(.horizontal)
-
-            Text("→")
-                .foregroundColor(.secondary)
-
-            Text(command)
-                .font(.system(.body))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-        }
-        .padding(.vertical, 6)
-        .background(isEven ? Color(NSColor.controlBackgroundColor) : Color.clear)
-    }
-
-    private func formatKeyBinding(_ key: String) -> String {
-        // Format the key binding for better display
+    private func formatKey(_ key: String) -> String {
         key.replacingOccurrences(of: "cmd", with: "⌘")
             .replacingOccurrences(of: "alt", with: "⌥")
             .replacingOccurrences(of: "shift", with: "⇧")

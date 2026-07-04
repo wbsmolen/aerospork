@@ -8,5 +8,10 @@ protocol AxUiElementMock {
 }
 
 extension AxUiElementMock {
-    var cast: AXUIElement { self as! AXUIElement }
+    var cast: AXUIElement? {
+        if CFGetTypeID(self as CFTypeRef) == AXUIElementGetTypeID() {
+            return (self as! AXUIElement)
+        }
+        return nil
+    }
 }

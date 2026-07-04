@@ -1,0 +1,117 @@
+# aerospork default configuration
+#
+# This file ships inside the app and is used when you have no personal config.
+# To customize, copy the parts you want into your own config:
+#   Release build: ~/.aerospork.toml
+#   Debug build:   ~/.aerospork-debug.toml
+# Then reload with `alt-shift-c` (or the CLI: `aerospork reload-config`).
+#
+# Bindings below follow the i3 / AeroSpace convention: the `alt` key is the
+# window-manager modifier.
+
+# Start aerospork at login (managed via a macOS Login Item).
+start-at-login = false
+
+# Unhide apps that macOS hid (Cmd-H) when aerospork focuses one of their windows.
+automatically-unhide-macos-hidden-apps = false
+
+# When a monitor is (dis)connected, move workspaces back to their assigned monitor.
+auto-move-workspaces-on-monitor-connect = true
+
+# Tree normalizations (keep both on unless you know you want manual containers).
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# Layout of a freshly created workspace root container.
+default-root-container-layout = 'tiles'
+# 'auto' picks horizontal on wide monitors and vertical on tall ones.
+default-root-container-orientation = 'auto'
+
+# Padding (px) between stacked windows in accordion layout.
+accordion-padding = 30
+
+# Gaps around and between windows (px).
+[gaps]
+inner.horizontal = 8
+inner.vertical = 8
+outer.left = 8
+outer.bottom = 8
+outer.top = 8
+outer.right = 8
+
+[mode.main.binding]
+# Focus the window in a direction.
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-l = 'focus right'
+
+# Move the focused window in a direction.
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+
+# Toggle the container layout.
+alt-slash = 'layout tiles horizontal vertical'
+alt-comma = 'layout accordion horizontal vertical'
+
+# Fullscreen the focused window.
+alt-f = 'fullscreen'
+
+# Resize the focused window ('smart' = width or height depending on orientation).
+alt-minus = 'resize smart -50'
+alt-equal = 'resize smart +50'
+
+# Switch to a workspace.
+alt-1 = 'workspace 1'
+alt-2 = 'workspace 2'
+alt-3 = 'workspace 3'
+alt-4 = 'workspace 4'
+alt-5 = 'workspace 5'
+alt-6 = 'workspace 6'
+alt-7 = 'workspace 7'
+alt-8 = 'workspace 8'
+alt-9 = 'workspace 9'
+
+# Move the focused window to a workspace.
+alt-shift-1 = 'move-node-to-workspace 1'
+alt-shift-2 = 'move-node-to-workspace 2'
+alt-shift-3 = 'move-node-to-workspace 3'
+alt-shift-4 = 'move-node-to-workspace 4'
+alt-shift-5 = 'move-node-to-workspace 5'
+alt-shift-6 = 'move-node-to-workspace 6'
+alt-shift-7 = 'move-node-to-workspace 7'
+alt-shift-8 = 'move-node-to-workspace 8'
+alt-shift-9 = 'move-node-to-workspace 9'
+
+# Reload this config.
+alt-shift-c = 'reload-config'
+
+# Enter the service mode (see below).
+alt-shift-semicolon = 'mode service'
+
+# Service mode: a scratch mode for occasional actions. Each action returns to
+# main mode. Enter with alt-shift-semicolon, leave with esc.
+[mode.service.binding]
+esc = ['reload-config', 'mode main']
+r = ['flatten-workspace-tree', 'mode main']
+f = ['layout floating tiling', 'mode main']
+backspace = ['close-all-windows-but-current', 'mode main']
+
+# --- Pin workspaces to monitors (optional) ------------------------------------
+# Uncomment and edit. The key is a workspace name; the value picks a monitor:
+#   'main' / 'secondary'   -> primary / non-primary monitor
+#   1, 2, 3 ...            -> monitor by 1-based sequence number
+#   'LG|DELL'             -> case-insensitive regex on the monitor name
+#   { fingerprint = { ... } } -> match by hardware id (vendor/model/serial)
+#
+# [workspace-to-monitor-force-assignment]
+# 1 = 'main'
+# 2 = 'secondary'
+# 3 = 2
+# 4 = 'LG'
+#
+# DisplayLink displays do NOT expose a vendor/model/serial fingerprint, so match
+# them by their name pattern instead (a plain string, as a regex):
+# 9 = 'DisplayLink'

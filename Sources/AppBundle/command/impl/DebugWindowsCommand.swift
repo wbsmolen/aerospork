@@ -1,6 +1,5 @@
 import AppKit
 import Common
-import OrderedCollections
 
 private let disclaimer =
     """
@@ -10,7 +9,8 @@ private let disclaimer =
     """
 
 @MainActor private var debugWindowsState: DebugWindowsState = .notRecording
-@MainActor private var debugWindowsLog: OrderedDictionary<UInt32, String> = [:]
+// ponytail: insertion-ordered, capped at debugWindowsLimit entries; plain pair array beats an OrderedDictionary dep here
+@MainActor private var debugWindowsLog: [(id: UInt32, dump: String)] = []
 private let debugWindowsLimit = 10
 
 enum DebugWindowsState {
@@ -34,14 +34,14 @@ struct DebugWindowsCommand: Command {
         switch debugWindowsState {
             case .recording:
                 debugWindowsState = .notRecording
-                io.out(debugWindowsLog.values.joined(separator: "\n\n"))
+                io.out(debugWindowsLog.map { $0.dump }.joined(separator: "\n\n"))
                 io.out("\n" + disclaimer + "\n")
                 io.out("Debug session finished" + "\n")
-                debugWindowsLog = [:]
+                debugWindowsLog = []
                 return true
             case .notRecording:
                 debugWindowsState = .recording
-                debugWindowsLog = [:]
+                debugWindowsLog = []
                 io.out(
                     """
                     Debug windows session has started
@@ -63,7 +63,7 @@ struct DebugWindowsCommand: Command {
                     """,
                 )
                 debugWindowsState = .notRecording
-                debugWindowsLog = [:]
+                debugWindowsLog = []
                 return false
         }
     }
@@ -110,10 +110,10 @@ func debugWindowsIfRecording(_ window: Window) async throws {
     }
     if debugWindowsLog.count > debugWindowsLimit {
         debugWindowsState = .recordingAborted
-        debugWindowsLog = [:]
+        debugWindowsLog = []
     }
-    if debugWindowsLog.keys.contains(window.windowId) {
+    if debugWindowsLog.contains(where: { $0.id == window.windowId }) {
         return
     }
-    debugWindowsLog[window.windowId] = try await dumpWindowDebugInfo(window)
+    debugWindowsLog.append((id: window.windowId, dump: try await dumpWindowDebugInfo(window)))
 }

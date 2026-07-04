@@ -17,18 +17,27 @@ final class ParseEnvVariablesTest: XCTestCase {
         testFailInterpolation("echo ${foo}")
     }
 
+    func parseConfigForTest(_ rawToml: String) -> (Config, [TomlParseError]) {
+        switch parseConfig(rawToml) {
+            case .success(let config):
+                return (config, [])
+            case .failure(let errors):
+                return (Config(), errors)
+        }
+    }
+
     func testInherit() {
-        let (config1, errors1) = parseConfig("exec.inherit-env-vars = false")
+        let (config1, errors1) = parseConfigForTest("exec.inherit-env-vars = false")
         assertEquals(errors1, [])
         assertEquals(config1.execConfig.envVariables, [:])
 
-        let (config2, errors2) = parseConfig("exec.inherit-env-vars = true")
+        let (config2, errors2) = parseConfigForTest("exec.inherit-env-vars = true")
         assertEquals(errors2, [])
         assertEquals(config2.execConfig.envVariables, testEnv)
     }
 
     func testAddVars() {
-        let (config, errors) = parseConfig(
+        let (config, errors) = parseConfigForTest(
             """
             [exec.env-vars]
             FOO = 'BAR'
@@ -39,7 +48,7 @@ final class ParseEnvVariablesTest: XCTestCase {
     }
 
     func testCyclicDep() {
-        let (_, errors) = parseConfig(
+        let (_, errors) = parseConfigForTest(
             """
             [exec.env-vars]
             FOO = '${BAR}'
@@ -53,13 +62,15 @@ final class ParseEnvVariablesTest: XCTestCase {
     }
 
     func testForbidPwd() {
-        let (_, errors) = parseConfig(
+        let (_, errors) = parseConfigForTest(
             """
             [exec.env-vars]
-            PWD = ''
+            PWD = '/foo'
             """,
         )
-        assertEquals(errors.descriptions, ["exec.env-vars.PWD: Changing 'PWD' is not allowed"])
+        assertEquals(errors.descriptions, [
+            "exec.env-vars.PWD: Changing 'PWD' is not allowed",
+        ])
     }
 }
 

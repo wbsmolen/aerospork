@@ -1,7 +1,6 @@
 @testable import AppBundle
 import Common
 import Foundation
-import HotKey
 import XCTest
 
 let projectRoot: URL = {

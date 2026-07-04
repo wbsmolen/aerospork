@@ -24,5 +24,12 @@
 # XCode User settings
 xcuserdata/
 xcshareddata/
-# Shell parser build artifacts
-ShellParserGenerated/build/
+# Generated Xcode project (regenerated from project.yml)
+/aerospork.xcodeproj
+# Runtime/build junk
+/dist
+*.log
+/nohup.out
+/test_output.txt
+# Tool dirs
+/.serena

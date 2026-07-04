@@ -81,7 +81,8 @@ final class MacApp: AbstractApp {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         _ = withWindowAsync(windowId) { [windows] window, job in
             guard let closeButton = window.get(Ax.closeButtonAttr) else { return }
-            if AXUIElementPerformAction(closeButton.cast, kAXPressAction as CFString) == .success {
+            guard let castedCloseButton = closeButton.cast else { return }
+            if AXUIElementPerformAction(castedCloseButton, kAXPressAction as CFString) == .success {
                 windows.threadGuarded.removeValue(forKey: windowId)
             }
         }
@@ -98,9 +99,12 @@ final class MacApp: AbstractApp {
     @MainActor // todo swift is stupid
     func getFocusedWindow() async throws -> Window? {
         let windowId = try await thread?.runInLoop { [nsApp, axApp, windows] job in
-            try axApp.threadGuarded.get(Ax.focusedWindowAttr)
-                .flatMap { try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax.cast, nsApp, job) }?
-                .windowId
+            let axWindow = try axApp.threadGuarded.get(Ax.focusedWindowAttr)
+                .flatMap {
+                    guard let casted = $0.ax.cast else { return nil as AxWindow? }
+                    return try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, casted, nsApp, job)
+                }
+            return axWindow?.windowId
         }
         guard let windowId else { return nil }
         return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
@@ -390,6 +394,20 @@ extension [UInt32: AxWindow] {
 }
 
 private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?) {
+    // No-op guard: skip AX writes when the window is already at the target frame. AX position/size
+    // WRITES are what cost us over DisplayLink/USB (each forces a framebuffer repaint), and layout
+    // re-issues them on every refresh even when nothing moved. The reads below hit the app's AX tree
+    // (not the display), so they're cheap over USB — and comparing against the window's ACTUAL frame,
+    // rather than a cached intended rect, still corrects windows the app or OS moved on their own.
+    let tolerance = 1.0
+    let sizeSatisfied = size.map { target in
+        window.get(Ax.sizeAttr).map { abs($0.width - target.width) < tolerance && abs($0.height - target.height) < tolerance } ?? false
+    } ?? true
+    let posSatisfied = topLeft.map { target in
+        window.get(Ax.topLeftCornerAttr).map { abs($0.x - target.x) < tolerance && abs($0.y - target.y) < tolerance } ?? false
+    } ?? true
+    if sizeSatisfied && posSatisfied { return }
+
     // Set size and then the position. The order is important https://github.com/wbsmolen/AeroSpork/issues/143
     //                                                        https://github.com/wbsmolen/AeroSpork/issues/335
     if let size { window.set(Ax.sizeAttr, size) }

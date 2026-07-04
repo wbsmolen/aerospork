@@ -1,6 +1,5 @@
 import AppKit
 import Common
-import HotKey
 
 private let minus = "minus"
 private let equal = "equal"
@@ -50,8 +49,6 @@ func getKeysPreset(_ layout: KeyMapping.Preset) -> [String: Key] {
         case .colemak: colemakMap
     }
 }
-
-extension Key: @unchecked @retroactive Sendable {}
 
 let keyNotationToKeyCode: [String: Key] = [
     sectionSign: .section,

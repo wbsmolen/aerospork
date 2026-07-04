@@ -77,12 +77,7 @@ struct FrozenFocus: AeroAny, Equatable, Sendable {
 extension Window {
     @MainActor func focusWindow() -> Bool {
         if let focus = toLiveFocusOrNil() {
-            let result = setFocus(to: focus)
-            // Mark workspace as needing layout when focus changes
-            if result {
-                nodeWorkspace?.markNeedsLayout()
-            }
-            return result
+            return setFocus(to: focus)
         } else {
             // todo We should also exit-native-hidden/unminimize[/exit-native-fullscreen?] window if we want to fix ID-B6E178F2
             //      and retry to focus the window. Otherwise, it's not possible to focus minimized/hidden windows
@@ -94,17 +89,13 @@ extension Window {
 }
 extension Workspace {
     @MainActor func focusWorkspace() -> Bool {
-        let result = setFocus(to: toLiveFocus())
-        // Mark workspace as needing layout when focus changes
-        if result {
-            markNeedsLayout()
-        }
-        return result
+        setFocus(to: toLiveFocus())
     }
 
     func toLiveFocus() -> LiveFocus {
         // todo unfortunately mostRecentWindowRecursive may recursively reach empty rootTilingContainer
-        //      while floating or macos unconventional windows might be presented
+        //      while floating or macos unconventional windows might be presented.
+        //      This should be addressed when robust handling for floating/special windows is implemented.
         if let wd = mostRecentWindowRecursive ?? anyLeafWindowRecursive {
             LiveFocus(windowOrNil: wd, workspace: self)
         } else {

@@ -1,11 +1,10 @@
 import Common
 import Darwin
 import Foundation
-import Socket
 
 let usage =
     """
-    USAGE: \(CommandLine.arguments.first ?? "j4") [-h|--help] [-v|--version] <subcommand> [<args>...]
+    USAGE: \(CommandLine.arguments.first ?? "aerospork") [-h|--help] [-v|--version] <subcommand> [<args>...]
 
     SUBCOMMANDS:
     \(subcommandDescriptions.sortedBy { $0[0] }.toPaddingTable(columnSeparator: "   ").joined(separator: "\n"))
@@ -39,19 +38,16 @@ struct Main {
             }
         }
 
-        let socket = Result { try Socket.create(family: .unix, type: .stream, proto: .unix) }.getOrDie()
-        defer {
-            socket.close()
-        }
-
         let socketFile = "/tmp/\(aeroSpaceAppId)-\(unixUserName).sock"
 
-        if let e: Error = Result(catching: { try socket.connect(to: socketFile) }).failureOrNil {
+        guard let socket = UnixSocketConnection.connect(to: socketFile) else {
             if isVersion {
                 printVersionAndExit(serverVersion: nil)
-            } else {
-                cliError("Can't connect to j4 server. Is j4.app running?\n\(e.localizedDescription)")
             }
+            cliError("Can't connect to aerospork server. Is aerospork.app running?")
+        }
+        defer {
+            socket.close()
         }
 
         var stdin = ""
@@ -76,12 +72,12 @@ struct Main {
         if ans.exitCode != 0 && ans.serverVersionAndHash != cliClientVersionAndHash {
             printStderr(
                 """
-                Warning: j4 client/server versions don't match
-                    - j4 CLI client version: \(cliClientVersionAndHash)
-                    - j4.app server version: \(ans.serverVersionAndHash)
+                Warning: aerospork client/server versions don't match
+                    - aerospork CLI client version: \(cliClientVersionAndHash)
+                    - aerospork.app server version: \(ans.serverVersionAndHash)
                     Possible fixes:
-                    - Restart j4.app (server restart is required after each update)
-                    - Reinstall and restart j4 (corrupted installation)
+                    - Restart aerospork.app (server restart is required after each update)
+                    - Reinstall and restart aerospork (corrupted installation)
                 """,
             )
         }
@@ -92,19 +88,16 @@ struct Main {
 func printVersionAndExit(serverVersion: String?) -> Never {
     print(
         """
-        j4 CLI client version: \(cliClientVersionAndHash)
-        j4.app server version: \(serverVersion ?? "Unknown. The server is not running")
+        aerospork CLI client version: \(cliClientVersionAndHash)
+        aerospork.app server version: \(serverVersion ?? "Unknown. The server is not running")
         """,
     )
     exit(0)
 }
 
-func run(_ socket: Socket, _ args: [String], stdin: String) -> ServerAnswer {
+func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> ServerAnswer {
     let request = Result { try JSONEncoder().encode(ClientRequest(args: args, stdin: stdin)) }.getOrDie()
-    Result { try socket.write(from: request) }.getOrDie()
-    Result { try Socket.wait(for: [socket], timeout: 0, waitForever: true) }.getOrDie()
-
-    var answer = Data()
-    Result { try socket.read(into: &answer) }.getOrDie()
+    guard socket.sendMessage(request) else { cliError("Can't send request to aerospork server") }
+    guard let answer = socket.recvMessage() else { cliError("No response from aerospork server") }
     return Result { try JSONDecoder().decode(ServerAnswer.self, from: answer) }.getOrDie()
 }

@@ -6,6 +6,8 @@ import os
 public let unixUserName = NSUserName()
 public let mainModeId = "main"
 
+public let potentialBugsUrl = "https://github.com/wbsmolen/AeroSpork/discussions/categories/potential-bugs"
+
 @TaskLocal
 public var refreshSessionEvent: RefreshSessionEvent? = nil
 
@@ -24,7 +26,7 @@ public func dieT<T>(
     let message =
         """
         Please report to:
-            https://github.com/wbsmolen/AeroSpork/discussions/categories/potential-bugs
+            \(potentialBugsUrl)
             Please describe what you did to trigger this error
 
         Message: \(_message)

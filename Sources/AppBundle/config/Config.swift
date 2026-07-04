@@ -1,6 +1,5 @@
 import AppKit
 import Common
-import HotKey
 
 func getDefaultConfigUrlFromProject() -> URL {
     var url = URL(filePath: #filePath)
@@ -24,14 +23,16 @@ var defaultConfigUrl: URL {
 @MainActor let defaultConfig: Config = {
     // Try to load default config from file, but use hardcoded defaults if not available
     if let configString = try? String(contentsOf: defaultConfigUrl) {
-        let parsedConfig = parseConfig(configString, isUserConfig: false)
-        if !parsedConfig.errors.isEmpty {
-            die("Can't parse default config: \(parsedConfig.errors)")
+        let result = parseConfig(configString, isUserConfig: false)
+        switch result {
+            case .success(let config):
+                return config
+            case .failure(let errors):
+                die("Can't parse default config: \(errors)")
         }
-        return parsedConfig.config
     } else {
         // Use hardcoded fallback config - all Config fields have sensible defaults
-        // Users can override these by creating ~/.j4.toml or ~/.j4-debug.toml
+        // Users can override these by creating ~/.aerospork.toml or ~/.aerospork-debug.toml
         return Config()
     }
 }()
@@ -64,44 +65,7 @@ struct Config: ConvenienceCopyable {
     var onWindowDetected: [WindowDetectedCallback] = []
 
     var preservedWorkspaceNames: [String] = []
-    var performanceConfig: PerformanceConfig = PerformanceConfig()
     var autoMoveWorkspacesOnMonitorConnect: Bool = true
-
-    var workspaceProfiles: [WorkspaceProfile] = [] // New
-    var activeProfileName: String? = nil // New
-
-    struct WorkspaceAssignment: Identifiable, Codable, Equatable {
-        let id = UUID()
-        var workspaceName: String
-        var monitorDescription: String
-        var monitorType: MonitorType
-        var isForceAssignment: Bool = false
-
-        enum MonitorType: Codable, Equatable {
-            case name(String)
-            case index(Int)
-            case fingerprint(MonitorFingerprint)
-        }
-
-        struct MonitorFingerprint: Codable, Equatable {
-            var vendorId: String?
-            var modelId: String?
-            var serialNumber: String?
-            var displayName: String?
-            var width: Int?
-            var height: Int?
-        }
-    }
-
-    struct WorkspaceProfile: Identifiable, Codable, Equatable {
-        let id = UUID()
-        var name: String
-        var assignments: [WorkspaceAssignment]
-
-        static func == (lhs: WorkspaceProfile, rhs: WorkspaceProfile) -> Bool {
-            lhs.id == rhs.id
-        }
-    }
 }
 
 enum DefaultContainerOrientation: String {

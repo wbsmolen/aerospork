@@ -11,6 +11,9 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
     let displayName: String?
     let widthPixels: Int?
     let heightPixels: Int?
+    /// Stable per-display UUID from CGDisplayCreateUUIDFromDisplayID. Populated even for
+    /// DisplayLink panels, which leave vendor/model/serial nil and are otherwise indistinguishable.
+    let displayUUID: String?
 
     init(
         vendorID: UInt32? = nil,
@@ -18,7 +21,8 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
         serialNumber: String? = nil,
         displayName: String? = nil,
         widthPixels: Int? = nil,
-        heightPixels: Int? = nil
+        heightPixels: Int? = nil,
+        displayUUID: String? = nil
     ) {
         self.vendorID = vendorID
         self.modelID = modelID
@@ -26,6 +30,7 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
         self.displayName = displayName
         self.widthPixels = widthPixels
         self.heightPixels = heightPixels
+        self.displayUUID = displayUUID
     }
 
     static func fromScreen(_ screen: NSScreen) -> MonitorFingerprint? {
@@ -60,6 +65,11 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
         let widthPixels = Int(screen.frame.width * (screen.backingScaleFactor))
         let heightPixels = Int(screen.frame.height * (screen.backingScaleFactor))
 
+        var displayUUID: String? = nil
+        if let cfUUID = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() {
+            displayUUID = CFUUIDCreateString(nil, cfUUID) as String?
+        }
+
         return MonitorFingerprint(
             vendorID: vendorID,
             modelID: modelID,
@@ -67,6 +77,7 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
             displayName: displayName,
             widthPixels: widthPixels,
             heightPixels: heightPixels,
+            displayUUID: displayUUID,
         )
     }
 
@@ -94,6 +105,12 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
     }
 
     func matches(patternData: MonitorFingerprintPatternData) -> Bool {
+        // UUID is the strongest discriminator: DisplayLink panels share vendor/model/serial
+        // (all nil) yet each has a stable CGDisplayCreateUUIDFromDisplayID UUID. Check it first.
+        if let patternUUID = patternData.displayUUID {
+            guard let displayUUID else { return false }
+            return displayUUID.caseInsensitiveCompare(patternUUID) == .orderedSame
+        }
         if let patternVendorID = patternData.vendorID, vendorID != patternVendorID {
             return false
         }
@@ -139,6 +156,9 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
         }
         if let widthPixels, let heightPixels {
             parts.append("resolution:\(widthPixels)x\(heightPixels)")
+        }
+        if let displayUUID {
+            parts.append("uuid:\(displayUUID)")
         }
         return parts.joined(separator: " ")
     }
