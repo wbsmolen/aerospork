@@ -176,7 +176,19 @@ Run tests with `./run-tests.sh` which:
 4. Runs formatting and linting checks
 5. Checks for uncommitted generated files
 
-Individual test suites in `Sources/AppBundleTests/` covering tree operations, config parsing, shell parsing, and command execution.
+> **Toolchain:** tests build against the macOS SDK, so on a beta macOS use the matching
+> Xcode beta or `swift test` may hang silently. Run:
+> `DEVELOPER_DIR=/Applications/Xcode-27.0.0-Beta.2.app/Contents/Developer xcrun swift test`
+
+The suite (~98 XCTest functions in `Sources/AppBundleTests/`) is fully headless — it
+uses a fake window tree (`TestApp`/`TestWindow`) and a mock Accessibility layer
+(`AxUiElementMock` + captured `axDumps/` fixtures), so it needs no real windows or
+Accessibility permission. It covers tree operations, command logic, config parse/round-trip,
+window-kind heuristics, socket codec, and DisplayLink monitor-fingerprint (UUID) matching.
+
+See **`dev-docs/testing-strategy.md`** for the full long-term plan: coverage gaps, the
+seams to add for headless layout/multi-monitor testing, the live-app e2e harness,
+CI strategy, and the DisplayLink testing story.
 
 ## Common Gotchas
 

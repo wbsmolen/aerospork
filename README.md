@@ -109,6 +109,12 @@ aerospork --help                      # Show all commands
 ./format.sh                   # Format code with swiftformat
 ```
 
+The test suite is headless (fake window tree + mock Accessibility layer), so it needs
+no real windows or permissions. On a beta macOS, use the matching Xcode beta toolchain
+or the build can hang:
+`DEVELOPER_DIR=/Applications/Xcode-27.0.0-Beta.2.app/Contents/Developer xcrun swift test`.
+See `dev-docs/testing-strategy.md` for the long-term testing plan.
+
 ### Project Structure
 
 ```
