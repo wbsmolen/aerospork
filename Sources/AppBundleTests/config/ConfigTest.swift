@@ -256,6 +256,36 @@ final class ConfigTest: XCTestCase {
         assertEquals([:], defaultConfig.workspaceToMonitorForceAssignment)
     }
 
+    /// DisplayLink: pin a workspace to a specific panel by its stable UUID.
+    func testParseWorkspaceToMonitorFingerprintUuid() {
+        let (parsed, errors) = parseConfigForTest(
+            """
+            [workspace-to-monitor-force-assignment]
+                dock = { fingerprint = { uuid = "37D8832A-2D66-02CA-B9F7-8F30A301B230" } }
+                ext = { fingerprint = { vendor = "0x1234", model = "0x5678" } }
+            """,
+        )
+        assertEquals([], errors.descriptions)
+        assertEquals(
+            [MonitorDescription.fingerprint(MonitorFingerprintPatternData(displayUUID: "37D8832A-2D66-02CA-B9F7-8F30A301B230"))],
+            parsed.workspaceToMonitorForceAssignment["dock"],
+        )
+        assertEquals(
+            [MonitorDescription.fingerprint(MonitorFingerprintPatternData(vendorID: 0x1234, modelID: 0x5678))],
+            parsed.workspaceToMonitorForceAssignment["ext"],
+        )
+    }
+
+    func testParseWorkspaceToMonitorFingerprintRejectsUnknownKey() {
+        let (_, errors) = parseConfigForTest(
+            """
+            [workspace-to-monitor-force-assignment]
+                x = { fingerprint = { bogus = "y" } }
+            """,
+        )
+        assertTrue(errors.descriptions.contains { $0.contains("bogus") })
+    }
+
     func testParseOnWindowDetected() {
         let (_, errors) = parseConfigForTest(
             """
