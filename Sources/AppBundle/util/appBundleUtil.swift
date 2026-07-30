@@ -38,6 +38,24 @@ private struct AppServerTerminationHandler: TerminationHandler {
     }
 }
 
+/// Top-left corner for a window centred on `monitorVisibleRect`, in the GLOBAL coordinate space.
+///
+/// The monitor's own origin is the whole point. `visibleRect` is global -- `Rect.monitorFrameNormalized`
+/// keeps `minX` as `topLeftX` -- and `kAXPositionAttribute` is global too. Centring with only the
+/// monitor's width and height, as this did, lands every window near the origin of that space, which
+/// is the main monitor, whatever monitor the window was actually on.
+///
+/// On one display the two are identical, which is why it survived: the bug is invisible until there
+/// is a second monitor with a non-zero origin. On a multi-monitor setup it collapsed every display
+/// onto one at quit, and since the next launch binds a window by where it physically sits, everything
+/// came back on the main monitor's startup workspace.
+func centredOnMonitor(_ monitorVisibleRect: Rect, _ windowSize: CGSize) -> CGPoint {
+    monitorVisibleRect.topLeftCorner + CGPoint(
+        x: (monitorVisibleRect.width - windowSize.width) / 2,
+        y: (monitorVisibleRect.height - windowSize.height) / 2,
+    )
+}
+
 @MainActor
 private func makeAllWindowsVisibleAndRestoreSize() async throws {
     // Make all windows fullscreen before Quit
@@ -47,11 +65,7 @@ private func makeAllWindowsVisibleAndRestoreSize() async throws {
         let monitor = try await window.getCenter()?.monitorApproximation ?? mainMonitor
         let monitorVisibleRect = monitor.visibleRect
         let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
-        let point = CGPoint(
-            x: (monitorVisibleRect.width - windowSize.width) / 2,
-            y: (monitorVisibleRect.height - windowSize.height) / 2,
-        )
-        try await window.setAxFrameBlocking(point, windowSize)
+        try await window.setAxFrameBlocking(centredOnMonitor(monitorVisibleRect, windowSize), windowSize)
     }
 }
 
