@@ -144,6 +144,12 @@ func settingsBridged(_ content: some View) -> some View {
         settingsOpener()
         return true
     }
+    // On 14+ a nil opener means the menu bar label has not rendered yet -- `aerospork
+    // open-settings` in the first seconds after launch lands here. Report that, rather than
+    // falling through to the selector below: `sendAction` returns true for it while opening
+    // nothing, which is the exact silent success this function was rewritten to stop. The command
+    // then exits 0 having done nothing visible.
+    if #available(macOS 14, *) { return false }
     // macOS 13 has no `\.openSettings`. The pre-Ventura selector is still the only route there.
     return NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
 }
