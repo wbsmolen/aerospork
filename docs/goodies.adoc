@@ -142,6 +142,7 @@ To open *a new window* of a program that supports multiple windows (Safari, Term
 +
 [source,toml]
 ----
+[mode.main.binding]
 ctrl-g = '''exec-and-forget osascript -e '
 tell application "Safari"
     make new document at end of documents
@@ -153,6 +154,7 @@ end tell'
 +
 [source,toml]
 ----
+[mode.main.binding]
 ctrl-g = '''exec-and-forget osascript -e '
 tell application "Terminal"
     do script
@@ -183,6 +185,7 @@ Bind a shortcut to `screencapture`, a built-in macOS command.
 .~/.aerospork.toml
 [source,toml]
 ----
+[mode.main.binding]
 alt-shift-s = 'exec-and-forget screencapture -i -c'
 ----
 

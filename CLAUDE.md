@@ -235,8 +235,10 @@ instructions live in `docs/guide.adoc` → *Troubleshooting and bug reports*.
 
 ## Dependencies
 
-Managed via Swift Package Manager (Package.swift). The only third-party dependency is:
+Managed via Swift Package Manager (Package.swift). Two third-party dependencies, both pinned exactly:
 - **TOMLKit**: TOML parsing
+- **Sparkle**: in-app updates (see *In-app updates* above -- it is the reason `Contents/Frameworks`
+  exists and why the release script signs nested code deepest-first)
 
 Everything else is native: Unix-socket IPC (POSIX), global hotkeys (Carbon), volume control (CoreAudio), ordered collections (plain Swift).
 

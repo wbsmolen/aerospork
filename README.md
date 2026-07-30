@@ -5,7 +5,7 @@
 <p>
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-000?logo=apple&logoColor=white">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
-  <a href="legal/LICENSE.txt"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <a href="LICENSE.txt"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
 </div>
@@ -91,6 +91,16 @@ The price is that the Mac App Store is permanently out: private symbols fail rev
 Accessibility APIs this app is built on do not work in a sandbox anyway. Hence Developer ID signing,
 notarization, and Sparkle rather than TestFlight.
 
+**Workspace placement survives a restart of AeroSpork.** Workspaces are emulated, so nothing
+outside the process knows a window belongs to one; at a cold start a window is bound by where it
+physically sits, and the workspace chosen for each monitor is the first key-bound name in sort order
+— which a named workspace like `A` can never be. Placement is now remembered, keyed on the window id
+the macOS window server issues. That id is stable for exactly as long as that server runs, so an
+update, a crash or a Quit keeps it and a logout, a reboot or an application relaunching does not.
+Where the id is gone there is no honest way to recognise a window — every terminal window reports the
+same accessibility identifier — so it falls back to placing by location rather than guessing, and
+`on-window-detected` remains the way to state intent.
+
 **The Xcode project is generated, not committed.** `project.yml` plus XcodeGen produces it, because
 SwiftPM cannot build an app bundle but a checked-in `.pbxproj` is a merge conflict waiting to happen.
 Debug builds skip Xcode entirely.
@@ -121,6 +131,7 @@ behave the same way. Only the deltas are listed.
 | Notarized builds | ❌ | ✅ &nbsp;signed, notarized, stapled |
 | Third-party dependencies | 4 | **2** |
 | Config schema | one syntax | v2 shorthand, older syntax still parses |
+| Windows keep their workspace across a restart | ❌ | ✅ &nbsp;also their monitor |
 | Command surface | **larger** | smaller |
 | Maturity | **public beta, larger community** | younger fork |
 
@@ -163,8 +174,7 @@ Download the notarized universal (arm64 + x86_64) build from the
 brew install --cask wbsmolen/tap/aerospork
 ```
 
-The tap is still private, so the cask currently needs an account with access. The releases on this
-repository are public, so the download above works for anyone.
+Both the tap and this repository are public, so either route works without a GitHub account.
 
 Installed copies check for updates themselves through [Sparkle](https://sparkle-project.org),
 against a signed appcast served from
@@ -264,5 +274,5 @@ strategy and performance measurement.
 ## License
 
 MIT. The original AeroSpace copyright is retained alongside the fork's in
-[`legal/LICENSE.txt`](legal/LICENSE.txt). Active development; features and configuration may still
+[`LICENSE.txt`](LICENSE.txt). Active development; features and configuration may still
 change.

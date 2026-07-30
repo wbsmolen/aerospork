@@ -256,6 +256,32 @@ for required_path in "${required_paths[@]}"; do
     fi
 done
 
+# The package around the bundle needs the same treatment. A dead symlink is the failure mode that
+# already shipped: `test -e` follows links, so this catches both "absent" and "points at nothing".
+check-package-contents() {
+    local root="$1"
+    local required=(
+        legal/LICENSE.txt
+        legal/third-party-license
+        bin/aerospork
+        manpage/aerospork.1
+        shell-completion/zsh/_aerospork
+    )
+    for path in "${required[@]}"; do
+        if ! test -e "$root/$path"; then
+            echo "!!! Missing or dangling in the release package: $path !!!"
+            exit 1
+        fi
+    done
+    local dangling
+    dangling=$(find "$root" -type l ! -exec test -e {} \; -print)
+    if test -n "$dangling"; then
+        echo "!!! Dangling symlinks in the release package !!!"
+        echo "$dangling"
+        exit 1
+    fi
+}
+
 # Nested Mach-O code outside Contents/MacOS needs its own signature and is the classic
 # notarization rejection. Extra *data* resources are harmless, so they are not an error.
 #
@@ -320,7 +346,11 @@ notarize .release/AeroSpork.app
 ############
 
 mkdir -p ".release/aerospork-v$build_version/manpage" && cp .man/*.1 ".release/aerospork-v$build_version/manpage"
-cp -R ./legal ".release/aerospork-v$build_version/legal"
+# -RL, not -R: `legal/LICENSE.txt` is a symlink to the repo-root LICENSE.txt, which is NOT
+    # copied into the package -- so preserving the link shipped a dead one and the app's own MIT
+    # notice, carrying both copyright lines, was absent from every release. Dereferencing
+    # materialises it.
+    cp -RL ./legal ".release/aerospork-v$build_version/legal"
 cp -R ./shell-completion ".release/aerospork-v$build_version/shell-completion"
 cd .release
     cp -R AeroSpork.app "aerospork-v$build_version"
@@ -330,6 +360,7 @@ cd .release
     # gets a working ./bin/aerospork.
     mkdir -p "aerospork-v$build_version/bin"
     ln -sf "../AeroSpork.app/Contents/MacOS/aerospork-cli" "aerospork-v$build_version/bin/aerospork"
+    check-package-contents "aerospork-v$build_version"
     zip -ry "aerospork-v$build_version.zip" "aerospork-v$build_version"
 
     # A SECOND archive, for Sparkle only. The zip above is a distribution bundle: the .app sits

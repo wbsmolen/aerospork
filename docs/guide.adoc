@@ -31,28 +31,23 @@ The cask installs the app, links the bundled CLI onto your `PATH`, and installs 
 the bash, fish and zsh completions. Your shell may need configuring to pick up Homebrew's
 completions: https://docs.brew.sh/Shell-Completion
 
-NOTE: The tap and the release repository are both private while AeroSpork is in early release, so
-`brew install` only works for accounts with access. Everyone else should use the manual
-installation above. The release zip carries the same completions under
+NOTE: The release zip carries the same completions under
 `aerospork-v$VERSION/shell-completion/`.
 
-If you see this message
+Releases are signed with a Developer ID, notarized by Apple and stapled, so Gatekeeper accepts
+them on first launch and you should not see a warning.
+
+If you do see
 
 ----
 "AeroSpork.app" can't be opened because Apple cannot check it for malicious software.
 ----
 
-**Option 1** to resolve the problem
-
-```
-xattr -d com.apple.quarantine /Applications/AeroSpork.app
-```
-
-**Option 2** to resolve the problem
-
-. Navigate in Finder to `/Applications/AeroSpork.app`
-. Right click
-. Open
+then the copy you have is not one of those -- a build from source, or a download that was altered in
+transit. Prefer replacing it with a release from the
+https://github.com/wbsmolen/aerospork/releases[releases page] over dismissing the warning: right
+click the app in Finder and choose Open to run it anyway, which is a decision to trust that
+particular copy.
 
 [#configuring-aerospork]
 == Configuring AeroSpork
@@ -396,8 +391,9 @@ While a workspace is not active, all of its windows sit outside the visible area
 the bottom right or left corner.
 Switching back to the workspace (with the xref:commands.adoc#workspace[workspace] command, or `cmd + tab`) returns its windows to the visible area.
 
-On quit, and when AeroSpork detects that it is about to crash, all windows are returned to the
-visible area of the screen, each centred on the monitor it was on.
+On quit, all windows are returned to the visible area of the screen, each centred on the monitor it
+was on. A crash does not run that cleanup -- nothing intercepts a fatal signal -- so windows can be
+left off screen; relaunching AeroSpork brings them back.
 
 [#workspace-memory]
 === Workspaces across a restart
