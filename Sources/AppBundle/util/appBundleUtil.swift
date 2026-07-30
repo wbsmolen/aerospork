@@ -31,10 +31,6 @@ func initTerminationHandler() {
 
 private struct AppServerTerminationHandler: TerminationHandler {
     func beforeTermination() async throws {
-        // BEFORE the cleanup: it moves every window, which is exactly the information we are
-        // trying to keep. Saving afterwards would record where things were dumped, not where they
-        // belonged.
-        WorkspaceMemory.save()
         try await makeAllWindowsVisibleAndRestoreSize()
         if isDebug {
             sendCommandToReleaseServer(args: ["enable", "on"])

@@ -23,13 +23,7 @@ final class MacWindow: Window {
             windowId,
             macApp,
             isStartup
-                // Where this window was before the restart, when it is provably the same window.
-                // Location is the fallback, not the first answer: at a cold start no workspace is
-                // active yet, so the location branch resolves to a stub workspace invented from the
-                // first keybound name in sort order -- which a named workspace like `A` can never be.
-                ? WorkspaceMemory.workspace(forWindowId: windowId, bundleId: macApp.bundleId)
-                    .map { Workspace.get(byName: $0) }
-                    ?? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
+                ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
                 : focus.workspace,
             window: nil,
         )
