@@ -77,7 +77,7 @@ public struct ConfigurationWindow: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                 }
-                .background(Color.red.opacity(0.1))
+                .background(Banner.Kind.error.tint.opacity(0.13))
             }
         }
         .task { await viewModel.loadConfiguration() }

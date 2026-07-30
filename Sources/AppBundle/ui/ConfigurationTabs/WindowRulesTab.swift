@@ -46,7 +46,7 @@ struct WindowRulesTab: View {
                 icon: "macwindow",
                 title: "No window rules",
                 message: "Rules run once, when a window first appears — the usual use is sending an app straight to its workspace.",
-                actionTitle: "Add Rule",
+                actionTitle: "Add rule",
                 action: { addRule() },
             )
         } else {
@@ -80,13 +80,13 @@ struct WindowRulesTab: View {
                         SettingsField("App ID", prompt: "com.apple.finder", text: field(i, \.appId))
                     }
                     LabeledContent("App name") {
-                        SettingsField("App name", prompt: "regex, optional", text: field(i, \.appNameRegex))
+                        SettingsField("App name", prompt: "^Finder$", text: field(i, \.appNameRegex))
                     }
                     LabeledContent("Window title") {
-                        SettingsField("Window title", prompt: "regex, optional", text: field(i, \.windowTitleRegex))
+                        SettingsField("Window title", prompt: "^Preferences$", text: field(i, \.windowTitleRegex))
                     }
                     LabeledContent("Workspace") {
-                        SettingsField("Workspace", prompt: "optional", text: field(i, \.workspace))
+                        SettingsField("Workspace", prompt: "3", text: field(i, \.workspace))
                     }
                 } header: {
                     SectionLabel("Match when…", "line.3.horizontal.decrease.circle")
@@ -95,7 +95,9 @@ struct WindowRulesTab: View {
                 }
 
                 Section {
-                    SettingsField("Command to run", prompt: "move-node-to-workspace 3", text: field(i, \.run))
+                    LabeledContent("Command") {
+                        SettingsField("Command", prompt: "move-node-to-workspace 3", text: field(i, \.run))
+                    }
                     Toggle("Keep checking later rules", isOn: Binding(
                         get: { viewModel.windowRules[i].checkFurtherCallbacks },
                         set: {

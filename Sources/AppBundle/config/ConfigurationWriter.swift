@@ -352,12 +352,47 @@ enum ConfigurationWriter {
         lines.append(contentsOf: block)
     }
 
+    /// A rule the `[on-window]` shorthand can express: an app id and a command, nothing else.
+    /// `parseOnWindow` builds exactly `if.app-id` + `run` from each entry, so any other matcher or
+    /// flag has to be written long form.
+    private static func isShorthandExpressible(_ rule: ConfigurationViewModel.WindowRuleRow) -> Bool {
+        !rule.appId.isEmpty
+            && rule.appNameRegex.isEmpty
+            && rule.windowTitleRegex.isEmpty
+            && rule.workspace.isEmpty
+            && !rule.checkFurtherCallbacks
+            && rule.duringStartup == nil
+    }
+
     private static func replaceWindowRules(_ lines: inout [String], _ vm: ConfigurationViewModel) {
         removeArrayOfTables(&lines, named: "on-window-detected")
+        // The shorthand table too. Removing only the long form left a v2 user's `[on-window]` rules
+        // in the file alongside the long-form copy this writes, so every one of them applied twice.
+        removeSections(&lines) { $0 == "on-window" }
         // A rule with no `run` yet is one the user is still filling in (the natural order is
         // matcher first, command second). It is skipped here because `run` is required by the
         // parser -- but the row is NOT dropped from the view model, so it stays on screen.
-        for rule in vm.windowRules where !rule.run.trimmingCharacters(in: .whitespaces).isEmpty {
+        let rules = vm.windowRules.filter { !$0.run.trimmingCharacters(in: .whitespaces).isEmpty }
+
+        // Keep a config that was written in the v2 shorthand in the v2 shorthand, but only when
+        // EVERY rule fits it and no app id repeats. Anything else is written long form.
+        //
+        // All-or-nothing on purpose. `parseConfigV2` appends `[on-window]` *after*
+        // `on-window-detected`, so in a mixed file the long-form rules always get first refusal
+        // regardless of where they sit in the text -- a list the user had ordered in the GUI would
+        // not run in that order. With no long-form rules there is nothing to take precedence, and
+        // app ids are unique, so order genuinely cannot matter.
+        let appIds = rules.map(\.appId)
+        if !rules.isEmpty, rules.allSatisfy(isShorthandExpressible), Set(appIds).count == appIds.count {
+            var block = ["", "[on-window]"]
+            for rule in rules.sorted(by: { $0.appId < $1.appId }) {
+                block.append("\(quoted(rule.appId)) = \(tomlArray(splitCommands(rule.run)))")
+            }
+            lines.append(contentsOf: block)
+            return
+        }
+
+        for rule in rules {
             var block = ["", "[[on-window-detected]]"]
             if !rule.appId.isEmpty { block.append("if.app-id = \(quoted(rule.appId))") }
             if !rule.appNameRegex.isEmpty { block.append("if.app-name-regex-substring = \(quoted(rule.appNameRegex))") }

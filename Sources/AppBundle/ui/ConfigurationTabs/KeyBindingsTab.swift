@@ -53,7 +53,7 @@ struct KeyBindingsTab: View {
             // One menu instead of two naked +/- buttons whose meaning ("add a *mode*, not a
             // binding") was only discoverable through a tooltip.
             Menu {
-                Button("New Mode…") { addingMode = true }
+                Button("New mode…") { addingMode = true }
                 Button("Delete “\(selectedMode)”", role: .destructive) { removeMode() }
                     .disabled(!viewModel.canRemoveMode(selectedMode))
             } label: {
@@ -133,7 +133,7 @@ struct KeyBindingsTab: View {
             if let rowId = b.rowId {
                 KeyRecorderField(notation: key(rowId, b.key), isRecording: recorder(b.key), showsClear: false)
                     .frame(width: 150, height: 22)
-                SettingsField("Command", prompt: "command", text: command(rowId, b.command))
+                SettingsField("Command", prompt: "focus left", text: command(rowId, b.command))
                     .accessibilityLabel("Command for \(b.key)")
                 Button { remove(rowId) } label: { Image(systemName: "minus.circle") }
                     .buttonStyle(.borderless)
@@ -147,6 +147,10 @@ struct KeyBindingsTab: View {
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.middle)
+                    // Read-only rows have no field to scroll, so a chained command truncated with
+                    // no way to see the rest short of clicking Override, which edits the config.
+                    .help(b.command)
                 Spacer(minLength: 8)
                 // Generated bindings appear nowhere in the config file, so without this the tab
                 // shows dozens of rows the user cannot find when they go looking.

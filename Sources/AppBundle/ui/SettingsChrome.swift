@@ -78,6 +78,10 @@ struct SettingsField: View {
             .textFieldStyle(.roundedBorder)
             .labelsHidden()
             .font(code ? .system(.body, design: .monospaced) : .body)
+            // As the trailing half of a `LabeledContent`, a field inherits that row's trailing
+            // alignment and puts the caret against the right edge -- so an app id typed left to
+            // right appears to grow backwards out of the corner.
+            .multilineTextAlignment(.leading)
     }
 }
 
@@ -443,6 +447,6 @@ struct CopyButton: View {
         }
         .buttonStyle(.borderless)
         .help(help)
-        .accessibilityLabel(copied ? "Copied" : "Copy to clipboard")
+        .accessibilityLabel(copied ? "Copied" : help)
     }
 }

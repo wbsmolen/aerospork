@@ -49,6 +49,22 @@ final class UIChromeConsistencyTest: XCTestCase {
         }
     }
 
+    /// The symbol test below greps SF Symbol *names*, so a literal `⚠` in a string walked straight
+    /// past it -- and did, in the menu bar's config-failure row, the one surface that is always on
+    /// screen. CoreText renders those glyphs emoji-style in a menu, next to SF Symbols everywhere
+    /// else.
+    func testTabsDoNotUseGlyphsAsStatusIcons() throws {
+        let glyphs = ["⚠", "✅", "❌", "⛔", "🔴", "🟢", "‼️"]
+        try forEachCodeLine { path, line, code in
+            for glyph in glyphs {
+                XCTAssertFalse(
+                    code.contains(glyph),
+                    "\(path):\(line) uses \(glyph) as a status icon -- use StatusLabel/Banner: \(code)",
+                )
+            }
+        }
+    }
+
     /// `TextField("com.apple.finder", text:)` reads like it takes a placeholder. It does not -- that
     /// argument is the field's label. Outside a Form macOS happens to draw it like a placeholder,
     /// which is what made the mistake survive; inside a Form, and especially inside

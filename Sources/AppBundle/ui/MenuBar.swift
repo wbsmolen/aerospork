@@ -26,9 +26,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         // they never wrote, and every one of their bindings is gone -- they have to be told here,
         // not only in a startup dialog they already dismissed.
         if isRunningFallbackDefaults {
-            Text("⚠ Config not loaded — running defaults")
+            Label("Config not loaded — running defaults", systemImage: Banner.Kind.error.icon)
             Button("Show config error…") {
-                showMessageInGui(filenameIfConsoleApp: nil, title: "AeroSpork Config Error", message: configLoadFailure ?? "")
+                showMessageInGui(filenameIfConsoleApp: nil, title: "AeroSpork config error", message: configLoadFailure ?? "")
             }
             Divider()
         }
@@ -61,14 +61,17 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
             Divider()
         }
-        Button(viewModel.isEnabled ? "Pause Tiling" : "Resume Tiling") {
+        Button(viewModel.isEnabled ? "Pause tiling" : "Resume tiling") {
             runDetached("menuBarToggleTiling") {
                 try await runSession(.menuBarButton, .forceRun) { () throws in
                     _ = try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .toggle))
                         .run(.defaultEnv, .emptyStdin)
                 }
             }
-        }.keyboardShortcut("E", modifiers: .command)
+        }
+        // Lowercase. An uppercase KeyEquivalent implies Shift to AppKit, so "E"/"Q" rendered as
+        // Shift-Cmd-E / Shift-Cmd-Q and plain Cmd-Q did nothing while the menu was open.
+        .keyboardShortcut("e", modifiers: .command)
         Divider()
         // `SettingsLink` rather than a Button that sends an action: it is the supported way to open
         // a `Settings` scene, and unlike the private selector it does not quietly do nothing.
@@ -82,13 +85,13 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         // Only in a build that has a feed to check. Rendering a disabled row in a debug build
         // would be a permanent dead control, which is what the deleted settings submenu was.
         if Updater.shared.isEnabled {
-            Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+            Button("Check for updates…") { Updater.shared.checkForUpdates() }
         }
         // Just terminate: `AeroSporkAppDelegate.applicationShouldTerminate` runs the cleanup for
         // every quit route, so doing it here too would mean two paths, one of which only this
         // button exercised -- which is how the other routes went unnoticed for so long.
         Button("Quit \(aeroSporkAppName)") { terminateApp() }
-            .keyboardShortcut("Q", modifiers: .command)
+            .keyboardShortcut("q", modifiers: .command)
     } label: {
         settingsBridged(
             Group {

@@ -13,11 +13,11 @@ struct GeneralSettingsTab: View {
             Section {
                 Toggle("Start AeroSpork at login", isOn: viewModel.binding(\.startAtLogin))
                 Toggle("Automatically unhide macOS hidden apps", isOn: viewModel.binding(\.automaticallyUnhideMacosHiddenApps))
-                    .help("Undo Command-H automatically, so hidden windows keep tiling")
+                    .help("Undo ⌘H automatically, so hidden windows keep tiling")
                 Toggle("Move workspaces to assigned monitors on connect", isOn: viewModel.binding(\.autoMoveWorkspacesOnMonitorConnect))
-                    .help("Re-applies workspace-to-monitor assignments when the monitor set changes")
+                    .help("Plug in a dock and your pinned workspaces go back to the monitors you assigned them. Off, they stay wherever they landed when the monitor went away.")
             } header: {
-                SectionLabel("Startup & Behaviour", "power")
+                SectionLabel("Startup & behaviour", "power")
             }
 
             Section {

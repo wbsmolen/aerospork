@@ -20,7 +20,7 @@ struct WorkspacesMonitorsTab: View {
                     viewModel.scheduleAutoSave()
                     selection = nil
                 },
-                hint: "Hardware fingerprints already in your config are preserved — they just show up here under the monitor's name. A DisplayLink panel reports no vendor or serial, so its UUID is the only thing that pins a workspace to that exact screen.",
+                hint: "Hardware fingerprints already in your config are preserved — they just show up here under the monitor's name. A DisplayLink monitor reports no vendor or serial, so its UUID is the only thing that pins a workspace to that exact monitor.",
             )
         }
     }
@@ -37,7 +37,7 @@ struct WorkspacesMonitorsTab: View {
             // Same empty-state treatment as every other list in this window, rather than a section
             // header floating above nothing.
             if viewModel.liveMonitors.isEmpty {
-                SettingsHint("No displays reported yet.")
+                SettingsHint("No monitors reported yet.")
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
             }
@@ -62,7 +62,7 @@ struct WorkspacesMonitorsTab: View {
                                 Text(uuid.prefix(8) + "…")
                                     .font(.system(.caption, design: .monospaced))
                                     .foregroundStyle(.tertiary)
-                                CopyButton(value: uuid, help: "Copy display UUID\n\(uuid)")
+                                CopyButton(value: uuid, help: "Copy monitor UUID\n\(uuid)")
                             }
                         }
                         .padding(.horizontal, 12)
@@ -90,24 +90,24 @@ struct WorkspacesMonitorsTab: View {
                     icon: "arrow.triangle.branch",
                     title: "No assignments",
                     message: "Workspaces land wherever they were last used. Add an assignment to pin one to a specific monitor.",
-                    actionTitle: "Add Assignment",
+                    actionTitle: "Add assignment",
                     action: { viewModel.addAssignment() },
                 )
             } else {
                 Table(viewModel.assignments, selection: $selection) {
                     TableColumn("Workspace") { row in
-                        SettingsField("Workspace name", prompt: "name", text: binding(row.id, \.workspace))
+                        SettingsField("Workspace name", prompt: "web", text: binding(row.id, \.workspace))
                     }
                     .width(min: 110, ideal: 140)
 
                     TableColumn("Monitor") { row in
                         Picker("", selection: binding(row.id, \.monitor)) {
-                            Text("Primary").tag("main")
-                            Text("Non-primary").tag("secondary")
+                            Text("Main").tag("main")
+                            Text("Non-main").tag("secondary")
                             Divider()
                             ForEach(viewModel.liveMonitors) { m in
                                 Text(m.name).tag(m.name)
-                                if let uuid = m.uuid { Text("\(m.name) — exact display").tag(uuid) }
+                                if let uuid = m.uuid { Text("\(m.name) — this exact monitor").tag(uuid) }
                             }
                             // Keep whatever is already in the config selectable, even if it's a
                             // regex, a sequence number, or a monitor that isn't connected now.
@@ -121,6 +121,13 @@ struct WorkspacesMonitorsTab: View {
                     }
                 }
                 .tableStyle(.inset)
+                // Both columns are filled edge to edge by focusable controls, which swallow the
+                // click that would select the row -- so `selection` stayed nil and ListActionBar's
+                // Remove was permanently disabled. Window Rules has had this since it has Text-only
+                // cells; this table needs it to have any delete affordance at all.
+                .onDeleteCommand {
+                    if let id = selection { viewModel.removeAssignment(id: id); selection = nil }
+                }
             }
         }
         .frame(maxHeight: .infinity)

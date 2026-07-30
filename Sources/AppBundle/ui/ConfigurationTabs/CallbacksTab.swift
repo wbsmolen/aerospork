@@ -36,12 +36,12 @@ struct CallbacksTab: View {
             )
 
             Section {
-                Toggle("Inherit this app's environment", isOn: viewModel.binding(\.execInheritEnvVars))
+                Toggle("Inherit AeroSpork's environment", isOn: viewModel.binding(\.execInheritEnvVars))
                 ForEach(viewModel.execEnvVars) { row in
                     HStack(spacing: 8) {
-                        SettingsField("Variable name", prompt: "NAME", text: envBinding(row.id, \.name))
+                        SettingsField("Variable name", prompt: "PATH", text: envBinding(row.id, \.name))
                             .frame(width: 150)
-                        SettingsField("Variable value", prompt: "value", text: envBinding(row.id, \.value))
+                        SettingsField("Variable value", prompt: "/opt/homebrew/bin:/usr/bin", text: envBinding(row.id, \.value))
                         removeButton {
                             viewModel.execEnvVars.removeAll { $0.id == row.id }
                             viewModel.markAsModified()
@@ -76,7 +76,7 @@ struct CallbacksTab: View {
             }
             ForEach(viewModel[keyPath: keyPath]) { row in
                 HStack(spacing: 8) {
-                    SettingsField("Command", prompt: "command", text: commandBinding(keyPath, row.id))
+                    SettingsField("Command", prompt: "exec-and-forget open -a Terminal", text: commandBinding(keyPath, row.id))
                     removeButton {
                         viewModel[keyPath: keyPath].removeAll { $0.id == row.id }
                         viewModel.markAsModified()

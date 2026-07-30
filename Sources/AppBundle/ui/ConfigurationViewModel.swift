@@ -517,9 +517,38 @@ final class ConfigurationViewModel: ObservableObject {
         return []
     }
 
+    /// Reads BOTH spellings.
+    ///
+    /// `[on-window]` is the v2 shorthand, and the one the shipped default config documents. It
+    /// desugars to the same `onWindowDetected` list in `parseConfigV2`, so those rules are live --
+    /// but this used to read only the long form, so a v2 config showed "No window rules" while its
+    /// rules were running. Adding a rule in that state wrote a long-form copy and left the shorthand
+    /// table behind, so every original rule then applied twice.
+    ///
+    /// Long form first, then shorthand: `parseConfigV2` appends `[on-window]` after
+    /// `on-window-detected`, so this is the order the rules are actually tried in, and the list is
+    /// read top to bottom.
     private func loadWindowRules(_ table: TOMLTable?) -> [WindowRuleRow] {
-        guard let array = table?["on-window-detected"]?.array else { return [] }
-        return array.compactMap { entry -> WindowRuleRow? in
+        var rows = (table?["on-window-detected"]?.array).map(loadLongFormWindowRules) ?? []
+        if let shorthand = table?["on-window"]?.table {
+            // Sorted to match `parseOnWindow`, which walks `table.keys.sorted()`.
+            rows += shorthand.keys.sorted().map { appId in
+                WindowRuleRow(
+                    appId: appId,
+                    appNameRegex: "",
+                    windowTitleRegex: "",
+                    workspace: "",
+                    run: commandString(shorthand[appId] ?? ""),
+                    checkFurtherCallbacks: false,
+                    duringStartup: nil,
+                )
+            }
+        }
+        return rows
+    }
+
+    private func loadLongFormWindowRules(_ array: TOMLArray) -> [WindowRuleRow] {
+        array.compactMap { entry -> WindowRuleRow? in
             guard let t = entry.table else { return nil }
             let cond = t["if"]?.table
             return WindowRuleRow(

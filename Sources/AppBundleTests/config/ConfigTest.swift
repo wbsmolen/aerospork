@@ -574,6 +574,84 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(out.contains("FOO = 'bar'"), out)
     }
 
+    /// `[on-window]` is the v2 shorthand and the form the shipped default config documents. The GUI
+    /// used to read only `on-window-detected`, so a v2 config showed an empty Window Rules tab while
+    /// its rules were live.
+    func testGuiSeesShorthandWindowRules() {
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: """
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+            "com.apple.mail" = "layout floating"
+            """)
+        assertEquals(vm.windowRules.count, 2)
+        assertEquals(vm.windowRules.first?.appId, "com.apple.finder")
+        assertEquals(vm.windowRules.first?.run, "move-node-to-workspace 3")
+    }
+
+    /// Long form is tried before the shorthand (`parseConfigV2` appends `[on-window]` after it), so
+    /// the list has to be read in that order or the GUI shows rules in an order they do not run in.
+    func testGuiListsLongFormWindowRulesBeforeShorthand() {
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: """
+            [[on-window-detected]]
+            if.app-id = 'com.apple.mail'
+            run = ['layout floating']
+
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+            """)
+        assertEquals(vm.windowRules.map(\.appId), ["com.apple.mail", "com.apple.finder"])
+    }
+
+    /// Editing a rule used to write a long-form copy while leaving the shorthand table in place, so
+    /// every original rule then matched twice.
+    func testEditingAShorthandRuleDoesNotLeaveADuplicate() {
+        let base = """
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        // Two rules, not three: the original must not survive in both spellings.
+        assertEquals(config.onWindowDetected.count, 2)
+    }
+
+    /// A config written in the shorthand stays in the shorthand when every rule still fits it.
+    func testShorthandSurvivesAnEditThatStillFitsIt() {
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: "[on-window]\n\"com.apple.finder\" = \"move-node-to-workspace 3\"")
+        vm.markLoaded()
+        vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+
+        let out = ConfigurationWriter.render(baseText: "", from: vm)
+        XCTAssertTrue(out.contains("[on-window]"), "shorthand was converted to long form:\n\(out)")
+        XCTAssertFalse(out.contains("[[on-window-detected]]"), out)
+    }
+
+    /// A matcher the shorthand cannot express forces the whole set to long form, because in a mixed
+    /// file the long-form rules take precedence regardless of text order.
+    func testARegexMatcherForcesLongFormForEveryRule() {
+        let vm = ConfigurationViewModel()
+        vm.markLoaded()
+        vm.windowRules = [
+            .init(appId: "com.apple.finder", run: "move-node-to-workspace 3"),
+            .init(appId: "", appNameRegex: "Term", run: "layout floating"),
+        ]
+
+        let out = ConfigurationWriter.render(baseText: "", from: vm)
+        XCTAssertFalse(out.contains("[on-window]"), "mixed rules must not be split across spellings:\n\(out)")
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        assertEquals(config.onWindowDetected.count, 2)
+    }
+
     /// An *applied* Raw TOML tab is authoritative -- it is exactly what lands on disk.
     /// See `ConfigurationWriterSafetyTest` for the counterpart: an unapplied buffer must NOT win.
     func testWriterRawTomlWins() {

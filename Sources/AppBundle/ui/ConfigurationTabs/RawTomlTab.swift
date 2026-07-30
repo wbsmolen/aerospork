@@ -54,7 +54,7 @@ struct RawTomlTab: View {
                     }
                 }
                 .buttonStyle(.borderless)
-                .help("Re-read the config file. Normally automatic.")
+                .help("Only needed for a config file created outside the app — every other edit is picked up on save.")
             }
         }
         .padding(.horizontal, 14)
