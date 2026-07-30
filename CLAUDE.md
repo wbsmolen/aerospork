@@ -145,7 +145,10 @@ deepest-first before sealing the bundle, copies with `cp -R` to keep the framewo
 checks that every nested Mach-O is independently signed rather than rejecting nested code outright.
 
 **Workspace memory across a restart**: `WorkspaceMemory.swift` persists window -> workspace, plus
-the monitor each workspace was on, to `/tmp/<bundle-id>-<user>.state.json`.
+the monitor each workspace was on, to `~/Library/Caches/<bundle-id>/workspace-memory.json`, mode
+`0600`. Deliberately not `/tmp` like the CLI socket: the socket is a rendezvous point whose security
+is filesystem permissions on a socket, while this file is *read at startup and acted on*, so one
+planted in a world-writable directory decides where another user's windows go.
 
 > **Both halves, or neither.** A first version restored only the workspace *name* and was reverted:
 > `Workspace.get(byName:)` mints a workspace whose `assignedMonitorPoint` is nil, and the only

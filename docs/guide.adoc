@@ -411,8 +411,8 @@ is what it did before.
 For windows that must land somewhere specific after their app restarts, say so explicitly with
 xref:guide.adoc#on-window-detected-callback[on-window-detected] and `if.during-aerospork-startup`.
 
-The state lives in `/tmp` and is disposable: deleting it costs you one restart's worth of placement
-and nothing else.
+The state lives in `~/Library/Caches/com.wbs.aerospork/workspace-memory.json` and is readable only
+by you. It is disposable: deleting it costs one restart's worth of placement and nothing else.
 
 The name of the active workspace is shown in the menu bar icon.
 

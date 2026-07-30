@@ -435,6 +435,31 @@ final class WorkspaceMemoryTest: XCTestCase {
         )
     }
 
+    /// The file names every running app's bundle id and every monitor's UUID, and it is read at
+    /// startup and acted on. Owner-only, and out of the world-writable directory the socket uses.
+    func testTheStateFileIsNotReadableByOtherUsers() throws {
+        WorkspaceMemory.load()
+        WorkspaceMemory.save()
+        WorkspaceMemory.waitForWrites()
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: WorkspaceMemory.fileUrl.path)
+        let mode = try XCTUnwrap(attributes[.posixPermissions] as? NSNumber).intValue
+        assertEquals(
+            mode & 0o077, 0,
+            additionalMsg: "state file is group/other-accessible (mode \(String(mode, radix: 8)))",
+        )
+    }
+
+    /// Not in `/tmp`: a file another local user can plant decides where this user's windows go.
+    func testTheDefaultLocationIsNotWorldWritable() {
+        WorkspaceMemory.resetForTests() // clear the test override
+        let path = WorkspaceMemory.fileUrl.path
+        XCTAssertFalse(
+            path.hasPrefix("/tmp/") || path.hasPrefix("/private/tmp/"),
+            "state lives in a world-writable directory: \(path)",
+        )
+    }
+
     // MARK: - The hook
 
     /// The restore is only reachable through `MacWindow.getOrRegister`, which needs a real

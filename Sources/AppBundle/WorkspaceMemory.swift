@@ -72,7 +72,19 @@ enum WorkspaceMemory {
     /// `ConfigurationWriter`'s do-no-harm invariant must not be dragged into it.
     static var fileUrlOverride: URL?
     static var fileUrl: URL {
-        fileUrlOverride ?? URL(filePath: "/tmp/\(aeroSporkAppId)-\(unixUserName).state.json")
+        if let fileUrlOverride { return fileUrlOverride }
+        // `~/Library/Caches`, not `/tmp`.
+        //
+        // The CLI socket lives in /tmp because it is a rendezvous point two processes have to agree
+        // on, and its security comes from filesystem permissions on a socket. This file is
+        // different in kind: it is read at startup and acted on, so a planted one in a
+        // world-writable directory decides where another user's windows go. Caches is per-user,
+        // still disposable, and still not the config.
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(filePath: NSTemporaryDirectory())
+        let directory = caches.appending(path: aeroSporkAppId, directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appending(path: "workspace-memory.json")
     }
 
     /// WindowServer's pid and start time. Changes on every event that resets the id counter, and on
@@ -265,6 +277,9 @@ enum WorkspaceMemory {
         let work = {
             guard let data = try? JSONEncoder().encode(state) else { return }
             try? data.write(to: url, options: .atomic)
+            // 0600: this names every running app's bundle id and every monitor's UUID. Set after the
+            // write because `.atomic` replaces the file, so any mode set beforehand is discarded.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         }
         if waitForCompletion { writeQueue.sync(execute: work) } else { writeQueue.async(execute: work) }
     }

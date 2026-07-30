@@ -26,6 +26,12 @@ serious, and the config file is the most likely route:
   running as the same user. There is no authentication beyond filesystem permissions, and commands
   arriving on it are executed. This is the same trust model as the config file: same-user processes
   are already trusted.
+- Window placement is remembered across a restart in
+  `~/Library/Caches/<bundle-id>/workspace-memory.json`, mode `0600`, and it is read at startup and
+  acted on. A same-user process can edit it and move windows to a workspace you did not choose --
+  the same trust boundary as the socket and the config. It records bundle ids and monitor UUIDs, and
+  nothing else; a file from another window-server session, or one naming a different app for an id,
+  is discarded rather than applied.
 
 Reports about any of the above are in scope. So are signing, notarization and update-channel
 problems: updates are verified against an EdDSA public key compiled into the app, and a way to make
