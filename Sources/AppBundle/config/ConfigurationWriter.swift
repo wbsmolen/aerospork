@@ -189,6 +189,41 @@ enum ConfigurationWriter {
         (try? TOMLTable(string: base)).map(isConfigV2) ?? false
     }
 
+    /// Net unclosed `[` on a line, ignoring anything inside a string or after a `#`.
+    ///
+    /// Counting the raw text conflated three different brackets: an array's, one inside a regex
+    /// (`'\\[Debug'` is an ordinary window-title matcher), and one in a comment. A bracket in a
+    /// string left the depth stuck above zero, and since the scan `continue`s while the depth is
+    /// positive, every later line was skipped and `unsupportedShapeReason` returned nil for the
+    /// rest of the file -- disabling the fingerprint refusal, whose own comment records that its
+    /// absence damaged a real config. A bracket in a comment did the mirror opposite and refused a
+    /// file that was fine.
+    ///
+    /// Deliberately not a TOML parser: it tracks the quoting well enough that a value cannot lie
+    /// about structure, which is all the caller needs.
+    static func bracketBalance(_ line: String) -> Int {
+        var depth = 0
+        var quote: Character? = nil
+        var escaped = false
+        for character in line {
+            if let open = quote {
+                // Escapes only apply inside basic strings; TOML literal strings ('...') take none.
+                if escaped { escaped = false; continue }
+                if open == "\"" && character == "\\" { escaped = true; continue }
+                if character == open { quote = nil }
+                continue
+            }
+            switch character {
+                case "\"", "'": quote = character
+                case "#": return depth // rest of the line is a comment
+                case "[": depth += 1
+                case "]": depth -= 1
+                default: break
+            }
+        }
+        return depth
+    }
+
     static func unsupportedShapeReason(_ text: String) -> String? {
         let managedSections = ["gaps", "exec", "key-mapping", "workspace-to-monitor-force-assignment", "monitors", "on-window"]
         let managedScalars = [
@@ -233,7 +268,7 @@ enum ConfigurationWriter {
 
             // Inside a multi-line value: consume until the brackets balance.
             if openBracketDepth > 0 {
-                openBracketDepth += line.count(where: { $0 == "[" }) - line.count(where: { $0 == "]" })
+                openBracketDepth += bracketBalance(line)
                 continue
             }
             if line.isEmpty || line.hasPrefix("#") { continue }
@@ -255,7 +290,7 @@ enum ConfigurationWriter {
             let value = String(line[line.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
 
             // Multi-line array: `setScalar`/`removeBindingLine` rewrite line 1 and orphan the rest.
-            let opens = value.count(where: { $0 == "[" }) - value.count(where: { $0 == "]" })
+            let opens = bracketBalance(value)
             if opens > 0 {
                 if section.isEmpty, managedScalars.contains(key) {
                     return "'\(key)' is written as a multi-line array, which this editor cannot rewrite safely. Use the Raw TOML tab."
@@ -319,6 +354,16 @@ enum ConfigurationWriter {
                 if let extra = fields.first(where: { value.contains($0) }) {
                     return "Monitor assignment '\(key)' pins a display by '\(extra)', which this editor cannot represent and would replace with just a name. Use the Raw TOML tab."
                 }
+            }
+
+            // A list of candidates is tried in order until one resolves. The view model keeps only
+            // `.first`, and editing ANY assignment re-serialises the whole section -- so one edit
+            // silently drops every other row's fallbacks too. Same class as the fingerprint case
+            // above, and the same answer: refuse rather than degrade.
+            if section == "monitors" || section == "workspace-to-monitor-force-assignment",
+               value.hasPrefix("[")
+            {
+                return "Monitor assignment '\(key)' lists fallback monitors, and this editor keeps only the first. Use the Raw TOML tab."
             }
 
             // A key inside a rewritten section that we do not re-emit would simply vanish.
@@ -427,9 +472,14 @@ enum ConfigurationWriter {
     /// appended a fresh one -- two copies of the rule, and since the shorthand is parsed last, the
     /// *stale* one won. The user's edit did nothing and their config grew on every save.
     private static func arrayOfTablesHeaderName(_ line: String) -> String? {
-        let t = line.trimmingCharacters(in: .whitespaces)
+        let t = stripTrailingComment(line)
         guard t.hasPrefix("[["), t.hasSuffix("]]") else { return nil }
-        return String(t.dropFirst(2).dropLast(2)).trimmingCharacters(in: .whitespaces)
+        let inner = String(t.dropFirst(2).dropLast(2)).trimmingCharacters(in: .whitespaces)
+        // `[["on-window-detected"]]` is the same table as the bare spelling.
+        if inner.count >= 2, inner.hasPrefix("\""), inner.hasSuffix("\"") {
+            return String(inner.dropFirst().dropLast())
+        }
+        return inner
     }
 
     /// Removes every `[[name]]` block. `removeSections` deliberately ignores array-of-table headers,
@@ -691,8 +741,28 @@ enum ConfigurationWriter {
 
     /// Name of a single-bracket table header (`[gaps]` -> "gaps"). Returns nil for array-of-table
     /// headers (`[[...]]`) and non-header lines, so those are never matched or split.
+    /// A header may carry a trailing comment -- `[gaps] # tuned for the 32"` is legal TOML and
+    /// TOMLKit reads it. Matching on `hasSuffix("]")` missed those, so the section was never removed
+    /// and the writer appended a second copy beside it. For `[on-window]` that means every rule in
+    /// the table applies twice, which is the exact bug an earlier commit set out to fix.
+    private static func stripTrailingComment(_ line: String) -> String {
+        var result = ""
+        var quote: Character? = nil
+        for character in line {
+            if let open = quote {
+                result.append(character)
+                if character == open { quote = nil }
+                continue
+            }
+            if character == "#" { break }
+            if character == "\"" || character == "'" { quote = character }
+            result.append(character)
+        }
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+
     private static func sectionHeaderName(_ line: String) -> String? {
-        let t = line.trimmingCharacters(in: .whitespaces)
+        let t = stripTrailingComment(line)
         guard t.hasPrefix("["), t.hasSuffix("]"), !t.hasPrefix("[[") else { return nil }
         return String(t.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
     }

@@ -780,6 +780,104 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(out.contains("42"), "a line the GUI could not read was deleted:\n\(out)")
     }
 
+    /// A `[` inside a string value used to blind every refusal after it.
+    ///
+    /// `unsupportedShapeReason` counts brackets over the raw text to detect a multi-line array, so
+    /// an escaped bracket in a regex -- `'\\[Debug'`, an ordinary thing to write in a window-title
+    /// matcher -- left the depth stuck above zero and every later line was skipped. The guard then
+    /// returned nil for the rest of the file, including the fingerprint check whose own comment
+    /// records that its absence "shipped, and it damaged a real config".
+    func testABracketInsideAStringDoesNotBlindTheShapeGuard() {
+        let config = """
+            [[on-window-detected]]
+            if.window-title-regex-substring = '\\[Debug'
+            run = ['layout floating']
+
+            [monitors]
+            2 = { fingerprint = { display_name = 'ACME Display 32 (1)', width = 3840, height = 2160 } }
+            """
+        let reason = ConfigurationWriter.unsupportedShapeReason(config)
+        XCTAssertNotNil(
+            reason,
+            "the fingerprint refusal was skipped: a bracket in a string disabled every guard after it",
+        )
+        XCTAssertTrue(reason?.contains("width") == true || reason?.contains("display_name") == true, reason ?? "nil")
+    }
+
+    /// And the mirror image: a bracket in a comment must not refuse a perfectly good config.
+    func testABracketInACommentDoesNotRefuseTheConfig() {
+        let config = """
+            accordion-padding = 30 # TODO [
+            [gaps]
+            inner.horizontal = 10
+            """
+        assertEquals(ConfigurationWriter.unsupportedShapeReason(config), nil)
+    }
+
+    /// A real multi-line array must still be refused -- that is what the counting is for.
+    func testAGenuineMultiLineArrayIsStillRefused() {
+        let config = """
+            after-startup-command = [
+                'exec-and-forget echo hi',
+            ]
+            """
+        XCTAssertNotNil(ConfigurationWriter.unsupportedShapeReason(config))
+    }
+
+    /// A trailing comment on a header made the section unremovable, so the writer appended a second
+    /// copy beside it -- and for `[on-window]` that means every rule in the table applies twice.
+    func testAHeaderWithATrailingCommentIsStillReplaced() {
+        let base = """
+            mod = 'alt'
+
+            [on-window] # my rules
+            "com.apple.finder" = "move-node-to-workspace 3"
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        assertEquals(vm.windowRules.count, 1)
+        vm.windowRules[0].run = "move-node-to-workspace 4"
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        assertEquals(config.onWindowDetected.count, 1)
+        XCTAssertFalse(out.contains("move-node-to-workspace 3"), "the superseded rule survived:\n\(out)")
+    }
+
+    /// TOML lets a table name be quoted; it is the same table.
+    func testAQuotedArrayOfTablesHeaderIsStillReplaced() {
+        let base = """
+            [["on-window-detected"]]
+            if.app-id = 'com.apple.mail'
+            run = ['layout floating']
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules[0].run = "layout tiling"
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        assertEquals(config.onWindowDetected.count, 1)
+    }
+
+    /// A fallback list is tried in order until one monitor resolves, and the view model keeps only
+    /// the first. Since editing any assignment re-serialises the whole section, degrading instead of
+    /// refusing would silently truncate every other row too.
+    func testAMonitorFallbackListIsRefusedRatherThanTruncated() {
+        let config = """
+            [workspace-to-monitor-force-assignment]
+            1 = 'main'
+            2 = ['secondary', 'built-in']
+            """
+        let reason = ConfigurationWriter.unsupportedShapeReason(config)
+        XCTAssertNotNil(reason, "a fallback list would be silently reduced to its first entry")
+        XCTAssertTrue(reason?.contains("fallback") == true, reason ?? "nil")
+    }
+
     /// An *applied* Raw TOML tab is authoritative -- it is exactly what lands on disk.
     /// See `ConfigurationWriterSafetyTest` for the counterpart: an unapplied buffer must NOT win.
     func testWriterRawTomlWins() {
