@@ -11,6 +11,12 @@ export XCODEGEN_AEROSPORK_DEVELOPMENT_TEAM="${XCODEGEN_AEROSPORK_DEVELOPMENT_TEA
     default_development_team "$XCODEGEN_AEROSPORK_CODE_SIGN_IDENTITY"
 )}"
 
+# A PLACEHOLDER, not the current release, and deliberately not bumped per release. It is the
+# value baked into Sources/Common/versionGenerated.swift, which is checked in, and `run-tests.sh`
+# runs `generate.sh --all` and then fails on a dirty tree -- so the committed file has to equal
+# whatever this produces with no arguments. Committing a real release version here (say after
+# cutting 1.1.1) looks like it corrects a stale file and instead breaks the gate on the next run.
+# Release builds pass --build-version, so what ships is always the real version regardless.
 build_version="1.0.0"
 generate_xcodeproj=1
 all=0
