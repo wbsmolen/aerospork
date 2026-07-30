@@ -5,15 +5,11 @@ struct OpenSettingsCommand: Command {
     let args: OpenSettingsCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
-        // The settings window is a `Settings` scene, so AppKit owns opening it. The selector was
-        // renamed in Sonoma; this app supports Ventura, hence the branch.
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        let selector = if #available(macOS 14, *) {
-            Selector(("showSettingsWindow:"))
-        } else {
-            Selector(("showPreferencesWindow:"))
-        }
-        guard NSApp.sendAction(selector, to: nil, from: nil) else {
+        // Goes through `\.openSettings`, captured by the menu bar label. This used to send the
+        // private `showSettingsWindow:` selector, which on macOS 27 is still accepted by the
+        // responder chain but no longer opens the window -- `sendAction` returned true, so this
+        // guard passed and the command exited 0 having done nothing visible.
+        guard openSettingsWindow() else {
             return io.err("Couldn't open the settings window")
         }
         return true

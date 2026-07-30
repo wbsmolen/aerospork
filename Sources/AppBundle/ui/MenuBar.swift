@@ -70,8 +70,15 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
         }.keyboardShortcut("E", modifiers: .command)
         Divider()
-        Button("Settings…") { openSettingsWindow() }
-            .keyboardShortcut(",", modifiers: .command)
+        // `SettingsLink` rather than a Button that sends an action: it is the supported way to open
+        // a `Settings` scene, and unlike the private selector it does not quietly do nothing.
+        if #available(macOS 14, *) {
+            SettingsLink { Text("Settings…") }
+                .keyboardShortcut(",", modifiers: .command)
+        } else {
+            Button("Settings…") { openSettingsWindow() }
+                .keyboardShortcut(",", modifiers: .command)
+        }
         // Only in a build that has a feed to check. Rendering a disabled row in a debug build
         // would be a permanent dead control, which is what the deleted settings submenu was.
         if Updater.shared.isEnabled {
@@ -84,22 +91,57 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
         }.keyboardShortcut("Q", modifiers: .command)
     } label: {
-        if viewModel.isEnabled {
-            MenuBarLabel(text: viewModel.trayText, items: viewModel.trayItems)
-        } else {
-            Image(systemName: "pause.circle.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-        }
+        settingsBridged(
+            Group {
+                if viewModel.isEnabled {
+                    MenuBarLabel(text: viewModel.trayText, items: viewModel.trayItems)
+                } else {
+                    Image(systemName: "pause.circle.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                }
+            },
+        )
     }
 }
 
-@MainActor func openSettingsWindow() {
-    NSApplication.shared.activate(ignoringOtherApps: true)
-    // The standard action for a `Settings` scene. Selector name changed in Ventura.
-    if #available(macOS 14, *) {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-    } else {
-        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+/// `\.openSettings`, lifted out of the SwiftUI environment so code that is not a view can call it.
+/// The CLI's `open-settings` runs on the server with no environment to read from, which is why it
+/// used to send `showSettingsWindow:` instead.
+///
+/// That selector is private, and on macOS 27 it stopped opening anything while *still being claimed
+/// by the responder chain*: `sendAction` returns true, so `OpenSettingsCommand`'s error path never
+/// fired and the command reported success having done nothing. A public API that fails loudly is
+/// worth the indirection; `settingsOpener == nil` is a real state the caller has to handle.
+@MainActor var settingsOpener: (() -> Void)?
+
+/// Wraps the menu bar label, which is the one view in this scene that is always rendered, so the
+/// bridge is live before anyone opens the menu. Attaching it to the menu *content* would only
+/// capture the action after the user had already opened the menu once.
+@available(macOS 14, *)
+private struct SettingsBridge<Content: View>: View {
+    @Environment(\.openSettings) private var openSettings
+    let content: Content
+
+    var body: some View {
+        content.onAppear { settingsOpener = { openSettings() } }
     }
+}
+
+@MainActor @ViewBuilder
+func settingsBridged(_ content: some View) -> some View {
+    if #available(macOS 14, *) { SettingsBridge(content: content) } else { content }
+}
+
+/// Returns whether the window was actually asked to open, so callers can report failure instead of
+/// silently succeeding.
+@discardableResult
+@MainActor func openSettingsWindow() -> Bool {
+    NSApplication.shared.activate(ignoringOtherApps: true)
+    if let settingsOpener {
+        settingsOpener()
+        return true
+    }
+    // macOS 13 has no `\.openSettings`. The pre-Ventura selector is still the only route there.
+    return NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
 }
