@@ -42,8 +42,15 @@ repo="wbsmolen/aerospork"
 dist_zip=".release/aerospork-v$build_version.zip"
 sparkle_zip=".release/AeroSpork-$build_version.zip"
 
+# `setup.sh` replaces PATH with `.deps/bin:/bin:/usr/bin` so a build cannot pick up whatever happens
+# to be installed. These three are linked in there alongside the build tools; the check stays because
+# failing here costs nothing and failing after the twenty-minute universal build costs the build.
 for tool in gh swa az; do
-    command -v "$tool" > /dev/null || { echo "Required tool not found: $tool" > /dev/stderr; exit 1; }
+    command -v "$tool" > /dev/null || {
+        echo "Required tool not found: $tool" > /dev/stderr
+        echo "Install it, then re-run: script/setup.sh links it into .deps/bin." > /dev/stderr
+        exit 1
+    }
 done
 
 # The build embeds `git rev-parse HEAD` and then asserts the binary contains it, so a commit landing
