@@ -9,7 +9,7 @@
 - `../Sources`.
   The majority of AeroSpork source code. Managed by SPM `../Package.swift`
 - `../Sources/AppBundle/`.
-  The aerospork.app server. An SPM library, exposed to the `aerosporkApp` executable target.
+  The AeroSpork.app server. An SPM library, exposed to the `aerosporkApp` executable target.
 - `../Sources/aerosporkApp/`.
   Thin app entry point (`@main`). SPM can't build a macOS App Bundle, so the release build is produced via the
   generated Xcode project. The Xcode project model lives in `../aerospork.xcodeproj/` and is generated from the
@@ -25,7 +25,7 @@
 
 ## client/server interaction
 
-`aerospork` CLI binary is client. `aerospork.app` is server. Client and server talk to each other via predefined UNIX file.
+`aerospork` CLI binary is client. `AeroSpork.app` is server. Client and server talk to each other via predefined UNIX file.
 
 Each time you run a CLI command:
 1. Args are parsed by the client, args parsing errors are reported if any. Help is shown if `-h`/`--help` is passed.

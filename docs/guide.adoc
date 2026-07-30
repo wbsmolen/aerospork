@@ -15,7 +15,7 @@ Skip what you already know.
 
 . Download the latest available zip from https://github.com/wbsmolen/aerospork/releases[releases page]
 . Unpack zip
-. Put unpacked `aerospork-v$VERSION/aerospork.app` to `/Applications`
+. Put unpacked `aerospork-v$VERSION/AeroSpork.app` to `/Applications`
 . Put unpacked `aerospork-v$VERSION/bin/aerospork` anywhere on `$PATH`
 (optional; needed only to drive AeroSpork from the CLI)
 
@@ -39,18 +39,18 @@ installation above. The release zip carries the same completions under
 If you see this message
 
 ----
-"aerospork.app" can't be opened because Apple cannot check it for malicious software.
+"AeroSpork.app" can't be opened because Apple cannot check it for malicious software.
 ----
 
 **Option 1** to resolve the problem
 
 ```
-xattr -d com.apple.quarantine /Applications/aerospork.app
+xattr -d com.apple.quarantine /Applications/AeroSpork.app
 ```
 
 **Option 2** to resolve the problem
 
-. Navigate in Finder to `/Applications/aerospork.app`
+. Navigate in Finder to `/Applications/AeroSpork.app`
 . Right click
 . Open
 
@@ -117,7 +117,7 @@ short file and assume the rest is inherited:
 
 [source,shell]
 ----
-cp /Applications/aerospork.app/Contents/Resources/default-config.toml ~/.aerospork.toml
+cp /Applications/AeroSpork.app/Contents/Resources/default-config.toml ~/.aerospork.toml
 ----
 
 link:config-examples/default-config.toml[Download default-config.toml]
@@ -206,7 +206,7 @@ If you use a different layout or alphabet, or want an alias for an existing key,
 
 The `exec` section configures the environment of `exec-*` commands and callbacks (such as xref:commands.adoc#exec-and-forget[exec-and-forget], <<exec-on-workspace-change-callback>>)
 
-* `exec.inherit-env-vars` controls whether `aerospork.app`'s own environment is inherited. The default is `true`
+* `exec.inherit-env-vars` controls whether `AeroSpork.app`'s own environment is inherited. The default is `true`
 * Override individual variables like this:
 +
 [source,toml]
@@ -845,7 +845,7 @@ aerospork config --config-path      # which file is actually loaded right now
 ----
 
 `--config-path` is the one to check first. If it prints a path *inside* the app bundle
-(`…/aerospork.app/Contents/Resources/default-config.toml`) then your config failed to load and
+(`…/AeroSpork.app/Contents/Resources/default-config.toml`) then your config failed to load and
 AeroSpork fell back to the built-in defaults. `reload-config --dry-run` will then tell you why.
 
 === Capturing logs
