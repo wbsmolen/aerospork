@@ -18,6 +18,24 @@ while test $# -gt 0; do
 done
 if test -z "$codesign_identity"; then codesign_identity="$(default_signing_identity)"; fi
 warn_if_only_app_store_distribution
+
+# Put Sources/Common/versionGenerated.swift back the way it was before this script stamped the
+# release version into it.
+#
+# It is a CHECKED-IN generated file whose committed value has to equal what `generate.sh` produces
+# with no arguments, because run-tests.sh runs `generate.sh --all` and then fails on a dirty tree.
+# Without this restore, every release leaves the tree modified, and the next `git commit -a` -- the
+# appcast update, right after -- silently sweeps the stamped version into the repo and breaks CI on
+# main. That happened for 1.1.1 and again for 1.1.2, which is why it is handled here rather than by
+# asking people to remember.
+version_file="Sources/Common/versionGenerated.swift"
+version_file_backup="$(mktemp)"
+cp "$version_file" "$version_file_backup"
+restore_version_file() {
+    cp "$version_file_backup" "$version_file"
+    rm -f "$version_file_backup"
+}
+trap restore_version_file EXIT
 # Fail here rather than after the build: signing is the last step, and discovering there is no
 # identity then wastes the entire universal build.
 if test -z "$codesign_identity"; then
