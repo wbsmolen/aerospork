@@ -96,9 +96,7 @@ struct WorkspacesMonitorsTab: View {
             } else {
                 Table(viewModel.assignments, selection: $selection) {
                     TableColumn("Workspace") { row in
-                        TextField("name", text: binding(row.id, \.workspace))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("Workspace name", prompt: "name", text: binding(row.id, \.workspace))
                     }
                     .width(min: 110, ideal: 140)
 

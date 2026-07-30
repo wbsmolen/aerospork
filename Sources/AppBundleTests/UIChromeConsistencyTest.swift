@@ -49,6 +49,29 @@ final class UIChromeConsistencyTest: XCTestCase {
         }
     }
 
+    /// `TextField("com.apple.finder", text:)` reads like it takes a placeholder. It does not -- that
+    /// argument is the field's label. Outside a Form macOS happens to draw it like a placeholder,
+    /// which is what made the mistake survive; inside a Form, and especially inside
+    /// `LabeledContent`, SwiftUI draws it as a second label, squeezes the field to nothing and
+    /// spills the text beside it hyphenated across three lines.
+    ///
+    /// Every text field in the window was written this way. `SettingsField` takes a real `prompt:`,
+    /// so the fix is not per-tab vigilance.
+    func testTabsDoNotUseATextFieldTitleAsAPlaceholder() throws {
+        // The filter box is `.plain` with its own magnifying glass, and the add-mode popover sizes
+        // itself; neither wants SettingsField's rounded border. Both are titles that macOS renders
+        // as placeholders in a non-Form context, which is legitimate.
+        let allowed = ["TextField(\"Filter\"", "TextField(\"mode name, e.g. resize\""]
+        try forEachCodeLine { path, line, code in
+            guard code.contains("TextField(\""), !code.contains("TextField(\"\",") else { return }
+            guard !allowed.contains(where: code.contains) else { return }
+            XCTFail(
+                "\(path):\(line) passes a placeholder as a TextField title -- that is the label. "
+                    + "Use SettingsField(_:prompt:text:) from SettingsChrome: \(code)",
+            )
+        }
+    }
+
     /// The status symbols are a set, not a palette: red/green is the most confusable pair there is,
     /// so which symbol goes with which meaning is decided once, in `StatusLabel.Kind`.
     func testStatusSymbolsAreNotHardcodedInTabs() throws {

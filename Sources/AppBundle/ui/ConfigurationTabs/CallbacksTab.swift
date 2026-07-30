@@ -39,13 +39,9 @@ struct CallbacksTab: View {
                 Toggle("Inherit this app's environment", isOn: viewModel.binding(\.execInheritEnvVars))
                 ForEach(viewModel.execEnvVars) { row in
                     HStack(spacing: 8) {
-                        TextField("NAME", text: envBinding(row.id, \.name))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("Variable name", prompt: "NAME", text: envBinding(row.id, \.name))
                             .frame(width: 150)
-                        TextField("value", text: envBinding(row.id, \.value))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("Variable value", prompt: "value", text: envBinding(row.id, \.value))
                         removeButton {
                             viewModel.execEnvVars.removeAll { $0.id == row.id }
                             viewModel.markAsModified()
@@ -80,9 +76,7 @@ struct CallbacksTab: View {
             }
             ForEach(viewModel[keyPath: keyPath]) { row in
                 HStack(spacing: 8) {
-                    TextField("command", text: commandBinding(keyPath, row.id))
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
+                    SettingsField("Command", prompt: "command", text: commandBinding(keyPath, row.id))
                     removeButton {
                         viewModel[keyPath: keyPath].removeAll { $0.id == row.id }
                         viewModel.markAsModified()

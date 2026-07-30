@@ -77,24 +77,16 @@ struct WindowRulesTab: View {
             Form {
                 Section {
                     LabeledContent("App ID") {
-                        TextField("com.apple.finder", text: field(i, \.appId))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("App ID", prompt: "com.apple.finder", text: field(i, \.appId))
                     }
                     LabeledContent("App name") {
-                        TextField("regex, optional", text: field(i, \.appNameRegex))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("App name", prompt: "regex, optional", text: field(i, \.appNameRegex))
                     }
                     LabeledContent("Window title") {
-                        TextField("regex, optional", text: field(i, \.windowTitleRegex))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("Window title", prompt: "regex, optional", text: field(i, \.windowTitleRegex))
                     }
                     LabeledContent("Workspace") {
-                        TextField("optional", text: field(i, \.workspace))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                        SettingsField("Workspace", prompt: "optional", text: field(i, \.workspace))
                     }
                 } header: {
                     SectionLabel("Match when…", "line.3.horizontal.decrease.circle")
@@ -103,9 +95,7 @@ struct WindowRulesTab: View {
                 }
 
                 Section {
-                    TextField("move-node-to-workspace 3", text: field(i, \.run))
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
+                    SettingsField("Command to run", prompt: "move-node-to-workspace 3", text: field(i, \.run))
                     Toggle("Keep checking later rules", isOn: Binding(
                         get: { viewModel.windowRules[i].checkFurtherCallbacks },
                         set: {

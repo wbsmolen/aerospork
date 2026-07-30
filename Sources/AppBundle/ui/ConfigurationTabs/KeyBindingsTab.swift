@@ -133,9 +133,7 @@ struct KeyBindingsTab: View {
             if let rowId = b.rowId {
                 KeyRecorderField(notation: key(rowId, b.key), isRecording: recorder(b.key), showsClear: false)
                     .frame(width: 150, height: 22)
-                TextField("command", text: command(rowId, b.command))
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
+                SettingsField("Command", prompt: "command", text: command(rowId, b.command))
                     .accessibilityLabel("Command for \(b.key)")
                 Button { remove(rowId) } label: { Image(systemName: "minus.circle") }
                     .buttonStyle(.borderless)
@@ -207,9 +205,7 @@ struct KeyBindingsTab: View {
             HStack(spacing: 8) {
                 KeyRecorderField(notation: $newKey, isRecording: $recording)
                     .frame(width: 170, height: 22)
-                TextField("command, e.g. focus left", text: $newCommand)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
+                SettingsField("New command", prompt: "command, e.g. focus left", text: $newCommand)
                     .onSubmit(add)
                 // "Add" on a taken shortcut is a lie: it replaces. Saying which of the two it is
                 // *before* the click is the whole point of the conflict check.

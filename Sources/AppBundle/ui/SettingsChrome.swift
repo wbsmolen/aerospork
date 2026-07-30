@@ -46,6 +46,41 @@ struct NumberField: View {
     }
 }
 
+/// Text entry in a settings row. Use this rather than a bare `TextField`.
+///
+/// `TextField("com.apple.finder", text:)` reads like it takes a placeholder and does not: that
+/// argument is the field's *label*, and SwiftUI renders it. Inside a `Form` -- and worse, inside
+/// `LabeledContent`, which supplies a label of its own -- the row then drew its label, squeezed the
+/// field to near-zero width to make room for the second one, and spilled the intended placeholder
+/// out beside it, hyphenated across three lines: `com.ap-ple.find-er`. Every text field in the
+/// window had it, because the mistake reads as correct.
+///
+/// `prompt:` is the placeholder. `labelsHidden()` keeps the label for VoiceOver while stopping it
+/// competing with the row's own.
+struct SettingsField: View {
+    let label: String
+    let prompt: String
+    /// Monospaced by default: these fields hold app ids, commands, key notation and workspace
+    /// names, all of which are things the user could type into the config file. Pass `code: false`
+    /// for a field that holds prose, like a filter box.
+    var code = true
+    @Binding var text: String
+
+    init(_ label: String, prompt: String, code: Bool = true, text: Binding<String>) {
+        self.label = label
+        self.prompt = prompt
+        self.code = code
+        _text = text
+    }
+
+    var body: some View {
+        TextField(label, text: $text, prompt: Text(prompt))
+            .textFieldStyle(.roundedBorder)
+            .labelsHidden()
+            .font(code ? .system(.body, design: .monospaced) : .body)
+    }
+}
+
 /// The one hint style in this window. Markdown-aware, so `code` spans render as code without every
 /// call site building an AttributedString.
 struct SettingsHint: View {
