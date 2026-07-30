@@ -624,13 +624,25 @@ final class ConfigTest: XCTestCase {
     }
 
     /// A config written in the shorthand stays in the shorthand when every rule still fits it.
+    ///
+    /// Rendered against the real base, not `""`. The shorthand is only chosen for a file that is
+    /// already v2 -- `on-window` is a v2 root key, so emitting it into a v1 file would silently
+    /// change that file's schema. An empty base is not v2 and never occurs anyway: with no user
+    /// config, `configBaseText` falls back to the shipped default, which is v2.
     func testShorthandSurvivesAnEditThatStillFitsIt() {
+        let base = """
+            mod = 'alt'
+            workspaces = ['1-9']
+
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+            """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: "[on-window]\n\"com.apple.finder\" = \"move-node-to-workspace 3\"")
+        vm.loadWindowRules(fromText: base)
         vm.markLoaded()
         vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
 
-        let out = ConfigurationWriter.render(baseText: "", from: vm)
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("[on-window]"), "shorthand was converted to long form:\n\(out)")
         XCTAssertFalse(out.contains("[[on-window-detected]]"), out)
     }
@@ -650,6 +662,122 @@ final class ConfigTest: XCTestCase {
         let (config, errors) = parseConfigForTest(out)
         assertEquals(errors, [])
         assertEquals(config.onWindowDetected.count, 2)
+    }
+
+    /// Interior whitespace is legal TOML and TOMLKit reads it, so the GUI listed this rule -- but
+    /// the writer compared the line to the exact string `[[on-window-detected]]` and left it. The
+    /// file then held the old block AND a new one, and since the shorthand parses last, the STALE
+    /// rule won: the edit did nothing and the config grew on every save.
+    func testARuleHeaderWithInteriorSpacesIsStillReplaced() {
+        let base = """
+            [[ on-window-detected ]]
+            if.app-id = 'com.apple.mail'
+            run = ['move-node-to-workspace 3']
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        assertEquals(vm.windowRules.count, 1)
+        vm.windowRules[0].run = "move-node-to-workspace 4"
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        assertEquals(config.onWindowDetected.count, 1)
+        XCTAssertFalse(out.contains("move-node-to-workspace 3"), "the superseded rule survived:\n\(out)")
+    }
+
+    /// Editing a window rule must not delete the documentation of the section that happens to follow
+    /// it. `removeSections` has always walked back over trailing comments for exactly this reason;
+    /// the array-of-tables walker did not, so a rules edit ate the next section's banner.
+    func testEditingARuleKeepsTheFollowingSectionsComments() {
+        let base = """
+            [[on-window-detected]]
+            if.app-id = 'com.apple.mail'
+            run = ['move-node-to-workspace 3']
+
+            # ---------------------------------------------
+            # Gaps -- tuned for a 32" panel
+            # ---------------------------------------------
+            [gaps]
+            inner.horizontal = 10
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules[0].run = "move-node-to-workspace 4"
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertTrue(out.contains("# Gaps -- tuned for a 32\" panel"), "an untouched section lost its comment:\n\(out)")
+        XCTAssertTrue(out.contains("inner.horizontal = 10"), out)
+    }
+
+    /// Choosing the shorthand from the rules alone rewrote a v1 config into v2, because `on-window`
+    /// is a v2 root key -- so retyping a workspace number changed the file's schema, and later saves
+    /// then wrote bindings to a different place than the ones already in the file.
+    func testEditingARuleDoesNotConvertAV1ConfigToV2() {
+        let base = """
+            [mode.main.binding]
+            alt-h = 'focus left'
+
+            [[on-window-detected]]
+            if.app-id = 'com.apple.mail'
+            run = ['move-node-to-workspace 3']
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules[0].run = "move-node-to-workspace 4"
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertFalse(out.contains("[on-window]"), "a v1 config was silently converted to v2:\n\(out)")
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        assertEquals(config.onWindowDetected.count, 1)
+    }
+
+    /// Clearing a rule's command to retype it used to delete that rule from the file on the next
+    /// autosave, while the row stayed on screen. Every keystroke of the replacement then failed
+    /// validation and wrote nothing, so an interrupted edit lost the rule silently.
+    func testAHalfTypedCommandDoesNotDeleteTheRulesAlreadyOnDisk() {
+        let base = """
+            mod = 'alt'
+
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+            "com.apple.mail" = "layout floating"
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        assertEquals(vm.windowRules.count, 2)
+        // The user selects the mail rule and clears its Command field, intending to retype it. The
+        // row stays on screen; the question is whether it survives on disk until they finish.
+        vm.windowRules[1].run = ""
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        let (config, errors) = parseConfigForTest(out)
+        assertEquals(errors, [])
+        assertEquals(config.onWindowDetected.count, 2)
+        XCTAssertTrue(out.contains("layout floating"), "the rule being retyped was deleted from disk:\n\(out)")
+    }
+
+    /// Same guard, reached from a value the GUI cannot represent: `= 42` reads as an empty command,
+    /// and dropping it would silently delete a line the user wrote.
+    func testAnUnreadableRuleValueIsNotSilentlyDropped() {
+        let base = """
+            mod = 'alt'
+
+            [on-window]
+            "com.apple.finder" = 42
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertTrue(out.contains("42"), "a line the GUI could not read was deleted:\n\(out)")
     }
 
     /// An *applied* Raw TOML tab is authoritative -- it is exactly what lands on disk.

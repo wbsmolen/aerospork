@@ -155,7 +155,7 @@ enum ConfigurationWriter {
         if vm.assignmentsEdited { replaceAssignments(&lines, vm, isV2: isV2(base)) }
         if vm.keyMappingEdited { replaceKeyMapping(&lines, vm) }
         if vm.execEdited { replaceExec(&lines, vm) }
-        if vm.windowRulesEdited { replaceWindowRules(&lines, vm) }
+        if vm.windowRulesEdited { replaceWindowRules(&lines, vm, isV2: isV2(base)) }
         applyBindingDiff(&lines, vm, base: base)
 
         // Give the file back the line ending it arrived with. Silently converting a CRLF config to
@@ -190,7 +190,7 @@ enum ConfigurationWriter {
     }
 
     static func unsupportedShapeReason(_ text: String) -> String? {
-        let managedSections = ["gaps", "exec", "key-mapping", "workspace-to-monitor-force-assignment", "monitors"]
+        let managedSections = ["gaps", "exec", "key-mapping", "workspace-to-monitor-force-assignment", "monitors", "on-window"]
         let managedScalars = [
             "start-at-login", "automatically-unhide-macos-hidden-apps",
             "auto-move-workspaces-on-monitor-connect", "enable-normalization-flatten-containers",
@@ -364,7 +364,19 @@ enum ConfigurationWriter {
             && rule.duringStartup == nil
     }
 
-    private static func replaceWindowRules(_ lines: inout [String], _ vm: ConfigurationViewModel) {
+    private static func replaceWindowRules(_ lines: inout [String], _ vm: ConfigurationViewModel, isV2: Bool) {
+        // A rule with no command yet cannot be written -- `run` is required by the parser. Leave the
+        // whole section alone rather than writing the rest, because the alternative is silent
+        // deletion: clearing the Command field to retype it made that rule disappear from disk on
+        // the next 600ms autosave while the row stayed on screen, and every keystroke of the
+        // replacement failed validation and wrote nothing. An interrupted edit lost the rule with no
+        // indication. The same guard covers a value the GUI cannot read at all (`app = 42` loads as
+        // an empty command), which would otherwise be quietly dropped from the user's file.
+        //
+        // Nothing is lost by waiting: the rules on disk keep working, and the edit lands as soon as
+        // the command is complete.
+        guard vm.windowRules.allSatisfy({ !$0.run.trimmingCharacters(in: .whitespaces).isEmpty }) else { return }
+
         removeArrayOfTables(&lines, named: "on-window-detected")
         // The shorthand table too. Removing only the long form left a v2 user's `[on-window]` rules
         // in the file alongside the long-form copy this writes, so every one of them applied twice.
@@ -383,7 +395,7 @@ enum ConfigurationWriter {
         // not run in that order. With no long-form rules there is nothing to take precedence, and
         // app ids are unique, so order genuinely cannot matter.
         let appIds = rules.map(\.appId)
-        if !rules.isEmpty, rules.allSatisfy(isShorthandExpressible), Set(appIds).count == appIds.count {
+        if isV2, !rules.isEmpty, rules.allSatisfy(isShorthandExpressible), Set(appIds).count == appIds.count {
             var block = ["", "[on-window]"]
             for rule in rules.sorted(by: { $0.appId < $1.appId }) {
                 block.append("\(quoted(rule.appId)) = \(tomlArray(splitCommands(rule.run)))")
@@ -407,15 +419,41 @@ enum ConfigurationWriter {
         }
     }
 
+    /// Name of an array-of-table header (`[[on-window-detected]]` -> "on-window-detected"), nil for
+    /// anything else.
+    ///
+    /// Parsed rather than string-compared. `[[ on-window-detected ]]` is legal TOML and TOMLKit
+    /// reads it, so an exact match against `"[[name]]"` left the block in the file while the writer
+    /// appended a fresh one -- two copies of the rule, and since the shorthand is parsed last, the
+    /// *stale* one won. The user's edit did nothing and their config grew on every save.
+    private static func arrayOfTablesHeaderName(_ line: String) -> String? {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        guard t.hasPrefix("[["), t.hasSuffix("]]") else { return nil }
+        return String(t.dropFirst(2).dropLast(2)).trimmingCharacters(in: .whitespaces)
+    }
+
     /// Removes every `[[name]]` block. `removeSections` deliberately ignores array-of-table headers,
     /// so this is a separate walker.
     private static func removeArrayOfTables(_ lines: inout [String], named name: String) {
         var result: [String] = []
         var i = 0
         while i < lines.count {
-            if lines[i].trimmingCharacters(in: .whitespaces) == "[[\(name)]]" {
+            if arrayOfTablesHeaderName(lines[i]) == name {
                 i += 1
-                while i < lines.count, !isHeaderLine(lines[i]) { i += 1 }
+                var end = i
+                while end < lines.count, !isHeaderLine(lines[end]) { end += 1 }
+                // The same rule `removeSections` follows: blank and comment lines immediately before
+                // the next header document THAT header, not the block being removed. Without this,
+                // editing a window rule deleted the banner comment above whatever section came next
+                // -- a section the user never opened, which is exactly what the writer exists to
+                // leave alone.
+                var keepFrom = end
+                while keepFrom > i {
+                    let prev = lines[keepFrom - 1].trimmingCharacters(in: .whitespaces)
+                    if prev.isEmpty || prev.hasPrefix("#") { keepFrom -= 1 } else { break }
+                }
+                result.append(contentsOf: lines[keepFrom ..< end])
+                i = end
             } else {
                 result.append(lines[i])
                 i += 1
