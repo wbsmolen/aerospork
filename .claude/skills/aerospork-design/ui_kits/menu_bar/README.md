@@ -8,7 +8,7 @@ desktop so the chips have something to describe.
 - **The menu is a remote control**: jump to a workspace, leave a mode, pause tiling, Settings, Quit.
   Everything that is configuration lives in Settings — that is why there is no "Reload config" or
   "Open config" row here.
-- **Pause Tiling** swaps the label for `pause.circle.fill` and lets the windows float, which is
+- **Pause tiling** swaps the label for `pause.circle.fill` and lets the windows float, which is
   what the real command does.
 - The "service" mode link shows the capsule chip and the *Leave mode* row that only appears while a
   non-main mode is active.

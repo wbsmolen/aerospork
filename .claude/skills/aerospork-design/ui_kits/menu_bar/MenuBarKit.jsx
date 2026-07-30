@@ -49,7 +49,7 @@ function MenuBarKit() {
       onClick: () => { setWorkspace(n); setOpen(false); },
     })),
     { divider: true },
-    { label: enabled ? 'Pause Tiling' : 'Resume Tiling', shortcut: '⌘E', onClick: () => { setEnabled(!enabled); setOpen(false); } },
+    { label: enabled ? 'Pause tiling' : 'Resume tiling', shortcut: '⌘E', onClick: () => { setEnabled(!enabled); setOpen(false); } },
     { divider: true },
     { label: 'Settings…', shortcut: '⌘,', onClick: () => { window.open('../settings_app/index.html', '_blank'); setOpen(false); } },
     { label: 'Quit AeroSpork', shortcut: '⌘Q', onClick: () => setOpen(false) },

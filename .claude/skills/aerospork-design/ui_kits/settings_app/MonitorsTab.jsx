@@ -4,7 +4,7 @@ function MonitorsTab({ monitors, assignments, setAssignments }) {
   const [selected, setSelected] = React.useState(null);
   const monitorOptions = [
     { value: 'main', label: 'Primary' },
-    { value: 'secondary', label: 'Non-primary' },
+    { value: 'secondary', label: 'Non-main' },
     { separator: true },
     ...monitors.flatMap((m) => [{ value: m.name, label: m.name }, { value: m.uuid, label: m.name + ' — exact display' }]),
   ];
@@ -42,7 +42,7 @@ function MonitorsTab({ monitors, assignments, setAssignments }) {
           rows={assignments}
           emptyState={<ContentUnavailable sf="arrow.triangle.branch" title="No assignments"
             message="Workspaces land wherever they were last used. Add an assignment to pin one to a specific monitor."
-            actionTitle="Add Assignment" onAction={add} />} />
+            actionTitle="Add assignment" onAction={add} />} />
       </div>
       <ListActionBar addHelp="Pin a workspace to a monitor" removeHelp="Remove the selected assignment"
         onAdd={add} onRemove={selected ? remove : null}

@@ -4,7 +4,7 @@ Use for the menu bar menu. Keep it a remote control: only what you reach for wit
 <MenuPanel items={[
   { label: '1', mono: true, checked: true, suffix: ' — Built-in' },
   { divider: true },
-  { label: 'Pause Tiling', shortcut: '⌘E' },
+  { label: 'Pause tiling', shortcut: '⌘E' },
   { label: 'Settings…', shortcut: '⌘,' },
 ]} />
 ~~~

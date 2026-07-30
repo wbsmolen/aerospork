@@ -35,7 +35,7 @@ function Card() {
       </div>
       <div className="col"><span className="lbl">Pickers</span>
         <SegmentedPicker options={['Tiles', 'Accordion']} value={layout} onChange={setLayout} />
-        <Select value="main" options={[{ value: 'main', label: 'Primary' }, { value: 'secondary', label: 'Non-primary' }]} width={150} />
+        <Select value="main" options={[{ value: 'main', label: 'Main' }, { value: 'secondary', label: 'Non-main' }]} width={150} />
       </div>
       <div className="col"><span className="lbl">Key recorder</span>
         <KeyRecorderField notation="alt-shift-h" showsClear={false} />

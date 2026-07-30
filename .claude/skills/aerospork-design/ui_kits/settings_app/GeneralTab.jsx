@@ -3,7 +3,7 @@ const { FormSection, SectionLabel, LabeledContent, Toggle, SegmentedPicker, Sele
 function GeneralTab({ s, set }) {
   return (
     <div className="form-page">
-      <FormSection header={<SectionLabel title="Startup & Behaviour" sf="power" />}>
+      <FormSection header={<SectionLabel title="Startup & behaviour" sf="power" />}>
         <Toggle label="Start AeroSpork at login" checked={s.startAtLogin} onChange={(v) => set('startAtLogin', v)} />
         <Toggle label="Automatically unhide macOS hidden apps" checked={s.unhide} onChange={(v) => set('unhide', v)}
           help="Undo Command-H automatically, so hidden windows keep tiling" />

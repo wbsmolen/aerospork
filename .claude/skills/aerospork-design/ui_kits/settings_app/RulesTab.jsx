@@ -36,7 +36,7 @@ function RulesTab({ rules, setRules }) {
           ]}
           emptyState={<ContentUnavailable sf="macwindow" title="No window rules"
             message="Rules run once, when a window first appears — the usual use is sending an app straight to its workspace."
-            actionTitle="Add Rule" onAction={add} />} />
+            actionTitle="Add rule" onAction={add} />} />
         <ListActionBar addHelp="Add a window rule" removeHelp="Remove the selected rule" onAdd={add} onRemove={selected ? remove : null} />
       </div>
       <div className="split-detail">

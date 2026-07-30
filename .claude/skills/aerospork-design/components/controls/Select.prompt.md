@@ -3,7 +3,7 @@ Use for a list of options that can grow at runtime (connected monitors, modes, k
 ```jsx
 <Select value={monitor} onChange={setMonitor} options={[
   { value: 'main', label: 'Primary' },
-  { value: 'secondary', label: 'Non-primary' },
+  { value: 'secondary', label: 'Non-main' },
   { separator: true },
   { value: 'DELL U2720Q', label: 'DELL U2720Q' },
 ]} />
