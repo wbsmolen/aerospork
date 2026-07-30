@@ -21,6 +21,30 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 echo "Copying executable..."
 cp .build/debug/aerosporkApp "$APP_BUNDLE/Contents/MacOS/AeroSporkApp"
 
+# Sparkle. The executable links it as @rpath/Sparkle.framework/Versions/B/Sparkle, so without a
+# copy inside the bundle the debug app does not start at all -- dyld kills it before main() with
+# "Library not loaded". SwiftPM leaves the framework in .build, which the .app cannot reach.
+#
+# cp -R, never cp -r: the framework is a versioned bundle built out of symlinks, and -r replaces
+# them with copies, which produces "bundle format is ambiguous".
+echo "Copying Sparkle.framework..."
+sparkle_src=".build/out/Products/Debug/Sparkle.framework"
+if ! test -d "$sparkle_src"; then
+    sparkle_src=$(find .build/artifacts -type d -name Sparkle.framework -path "*macos*" | head -1)
+fi
+if test -d "$sparkle_src"; then
+    mkdir -p "$APP_BUNDLE/Contents/Frameworks"
+    cp -R "$sparkle_src" "$APP_BUNDLE/Contents/Frameworks/"
+    # The release build gets this from LD_RUNPATH_SEARCH_PATHS in project.yml. SwiftPM does not
+    # set it, so the debug binary searches @executable_path but never ../Frameworks, and dyld
+    # fails even with the framework sitting right there. Ignore the error if it is already present.
+    install_name_tool -add_rpath "@executable_path/../Frameworks" \
+        "$APP_BUNDLE/Contents/MacOS/AeroSporkApp" 2>/dev/null || true
+else
+    echo "!!! Sparkle.framework not found; the debug app will not launch." > /dev/stderr
+    exit 1
+fi
+
 # Copy Info.plist
 echo "Copying Info.plist..."
 cp resources/Info-Debug.plist "$APP_BUNDLE/Contents/Info.plist"
