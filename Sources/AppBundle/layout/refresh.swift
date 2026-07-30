@@ -72,6 +72,10 @@ func runRefreshSessionBlocking(
             updateTrayText()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+            // Here rather than only at quit: a crash, a force quit and a `killall -9` never reach
+            // the quit path, and those are the restarts where remembering is worth the most. This
+            // already runs behind the 50ms refresh debounce, so it is once per burst, not per event.
+            WorkspaceMemory.save()
         }
     }
 }

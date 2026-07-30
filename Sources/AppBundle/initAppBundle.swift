@@ -22,6 +22,10 @@ import Foundation
         check(reloadConfig(forceConfigUrl: defaultConfigUrl))
     }
 
+    // Before anything can register a window: `MacWindow.getOrRegister` consults it on the very
+    // first adoption, and a miss there is permanent for that window.
+    WorkspaceMemory.load()
+
     checkAccessibilityPermissions()
     startUnixSocketServer()
     GlobalObserver.initObserver()
