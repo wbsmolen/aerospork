@@ -54,6 +54,12 @@ final class WorkspaceMemoryTest: XCTestCase {
         try? FileManager.default.removeItem(at: tempDir)
     }
 
+    /// Runs `body` as though AeroSpork were still starting up. `_isStartup` is a `@TaskLocal`, so
+    /// it is bound for the scope rather than assigned -- the same way `runRefreshSession` does it.
+    private func withStartup(_ body: () throws -> Void) rethrows {
+        try $_isStartup.withValue(true) { try body() }
+    }
+
     private func write(_ state: WorkspaceMemory.State) {
         try! JSONEncoder().encode(state).write(to: WorkspaceMemory.fileUrl)
     }
@@ -364,6 +370,69 @@ final class WorkspaceMemoryTest: XCTestCase {
         let recorded = WorkspaceMemory.workspaceMonitors(for: ["A"])
 
         assertEquals(recorded["A"]?.displayUUID, rightUuid)
+    }
+
+    /// At login, a window whose app has not answered Accessibility yet is absent from the startup
+    /// snapshot. Overwriting the file with that snapshot deletes its entry — and the memory is only
+    /// consulted while `isStartup`, so by the time the app appears its one chance is gone.
+    func testTheStartupSaveDoesNotPruneWindowsThatHaveNotAppearedYet() throws {
+        write(state(
+            session: WorkspaceMemory.session(),
+            windows: [
+                "42": .init(workspace: "A", bundleId: "com.apple.finder"),
+                "43": .init(workspace: "B", bundleId: "com.googlecode.iterm2"),
+            ],
+            monitors: ["A": fingerprint(uuid: rightUuid), "B": fingerprint(uuid: leftUuid)],
+        ))
+        WorkspaceMemory.load()
+
+        // A headless suite has no windows at all, which is exactly the "nothing has appeared yet"
+        // case: without the merge this save would write an empty map.
+        try withStartup {
+            WorkspaceMemory.save()
+            WorkspaceMemory.waitForWrites()
+        }
+
+        let data = try Data(contentsOf: WorkspaceMemory.fileUrl)
+        let written = try JSONDecoder().decode(WorkspaceMemory.State.self, from: data)
+        assertEquals(written.windows.count, 2)
+        assertEquals(written.windows["42"]?.workspace, "A")
+        // And the monitor must survive with it, or the window is restored with half its placement.
+        assertEquals(written.workspaceMonitors["A"]?.displayUUID, rightUuid)
+    }
+
+    /// Once startup is over, a window that has genuinely gone must be forgotten -- otherwise the
+    /// file grows without bound and stale ids linger for the whole session.
+    func testAfterStartupAWindowThatIsGoneIsForgotten() throws {
+        write(state(session: WorkspaceMemory.session(),
+                    windows: ["42": .init(workspace: "A", bundleId: "com.apple.finder")]))
+        WorkspaceMemory.load()
+
+        WorkspaceMemory.save() // not startup
+        WorkspaceMemory.waitForWrites()
+
+        let written = try JSONDecoder().decode(
+            WorkspaceMemory.State.self, from: try Data(contentsOf: WorkspaceMemory.fileUrl),
+        )
+        assertEquals(written.windows.count, 0)
+    }
+
+    /// A logout that another app vetoes leaves this process running. Staying frozen would mean
+    /// nothing is saved again for the rest of the session.
+    func testACancelledQuitLeavesTheMemoryWritable() throws {
+        WorkspaceMemory.load()
+        WorkspaceMemory.freezeAndSave()
+        try FileManager.default.removeItem(at: WorkspaceMemory.fileUrl)
+
+        WorkspaceMemory.unfreezeAfterCancelledQuit()
+        WorkspaceMemory.invalidateChangeCheckForTests()
+        WorkspaceMemory.save()
+        WorkspaceMemory.waitForWrites()
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: WorkspaceMemory.fileUrl.path),
+            "the memory stayed frozen after a cancelled quit, so nothing is saved for the rest of the session",
+        )
     }
 
     // MARK: - The hook

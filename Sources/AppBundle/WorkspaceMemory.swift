@@ -221,11 +221,18 @@ enum WorkspaceMemory {
     /// and the monitor list is rebuilt on every access, so this is only reached when `cheapKey`
     /// says something actually changed.
     private static func fullState(_ key: CheapKey) -> State {
-        State(
-            session: session(),
-            windows: key.windows,
-            workspaceMonitors: workspaceMonitors(for: Set(key.workspaceScreens.keys)),
-        )
+        var monitors = workspaceMonitors(for: Set(key.workspaceScreens.keys))
+        // Keep the remembered monitor for any workspace this snapshot cannot see yet. Dropping it
+        // would leave a restored window with its workspace and no monitor, which is precisely the
+        // half-restore that made the first version of this worse than no restore at all.
+        if let remembered = restored {
+            for (name, fingerprint) in remembered.workspaceMonitors where monitors[name] == nil {
+                if key.windows.values.contains(where: { $0.workspace == name }) {
+                    monitors[name] = fingerprint
+                }
+            }
+        }
+        return State(session: session(), windows: key.windows, workspaceMonitors: monitors)
     }
 
     /// The fingerprint of each named workspace's monitor.
@@ -266,7 +273,20 @@ enum WorkspaceMemory {
     /// do not.
     static func save() {
         guard isLoaded, !isFrozen else { return }
-        let key = cheapKey()
+        var key = cheapKey()
+        // During startup, add but never prune.
+        //
+        // AeroSpork launches alongside every other login item and macOS's own window restore, so an
+        // app that has not answered Accessibility yet is simply absent from this snapshot. Writing
+        // it as-is deletes that window's entry -- and since the memory is only consulted while
+        // `isStartup`, the window has already lost its one chance by the time it appears. Keeping
+        // the remembered entries means a slow app is restored when it does show up.
+        if isStartup, let remembered = restored {
+            key = CheapKey(
+                windows: remembered.windows.merging(key.windows) { _, new in new },
+                workspaceScreens: key.workspaceScreens,
+            )
+        }
         guard key != lastWritten else { return }
         lastWritten = key
         write(fullState(key), waitForCompletion: false)
@@ -287,6 +307,11 @@ enum WorkspaceMemory {
     /// pretending the session could not be read.
     static func writeForTests(_ state: State) { write(state, waitForCompletion: false) }
     static func forceSessionForTests(_ value: String) { cachedSession = value }
+
+    /// A quit that was asked for and then vetoed leaves us running. Without this the memory stays
+    /// frozen for the rest of the session, so a crash hours later restores the layout as it was at
+    /// the cancelled logout.
+    static func unfreezeAfterCancelledQuit() { isFrozen = false }
 
     /// Test seam: blocks until every queued write has landed, so a test can read the file back
     /// without racing the asynchronous path that production actually uses.

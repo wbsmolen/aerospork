@@ -29,6 +29,11 @@ public final class AeroSporkAppDelegate: NSObject, NSApplicationDelegate {
         // is what makes a logout appear to hang.
         Task {
             defer { sender.reply(toApplicationShouldTerminate: true) }
+            // If something else vetoes the logout, this process keeps running -- and would keep
+            // running with the memory frozen, so nothing would be saved again for the rest of the
+            // session. Cheap to make recoverable; `cleanupStarted` is deliberately not reset,
+            // because the window-restoring half of the cleanup is idempotent but not free.
+            defer { WorkspaceMemory.unfreezeAfterCancelledQuit() }
             do {
                 try await terminationHandler.beforeTermination()
             } catch {
