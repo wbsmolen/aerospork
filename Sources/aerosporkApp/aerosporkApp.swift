@@ -9,6 +9,11 @@ struct aerosporkApp: App {
     @MainActor // macOS 13
     @StateObject var viewModel = TrayMenuModel.shared
 
+    /// Gives the app a delegate so `applicationShouldTerminate` runs the pre-quit cleanup. Without
+    /// one, quitting by any route other than the menu bar item left hidden workspaces' windows
+    /// parked off screen, and the next launch filed them under the wrong workspace.
+    @NSApplicationDelegateAdaptor(AeroSporkAppDelegate.self) var appDelegate
+
     init() {
         initAppBundle()
     }

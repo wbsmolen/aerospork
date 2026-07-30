@@ -84,12 +84,11 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         if Updater.shared.isEnabled {
             Button("Check for Updates…") { Updater.shared.checkForUpdates() }
         }
-        Button("Quit \(aeroSporkAppName)") {
-            runDetached("menuBarQuit") {
-                defer { terminateApp() }
-                try await terminationHandler.beforeTermination()
-            }
-        }.keyboardShortcut("Q", modifiers: .command)
+        // Just terminate: `AeroSporkAppDelegate.applicationShouldTerminate` runs the cleanup for
+        // every quit route, so doing it here too would mean two paths, one of which only this
+        // button exercised -- which is how the other routes went unnoticed for so long.
+        Button("Quit \(aeroSporkAppName)") { terminateApp() }
+            .keyboardShortcut("Q", modifiers: .command)
     } label: {
         settingsBridged(
             Group {

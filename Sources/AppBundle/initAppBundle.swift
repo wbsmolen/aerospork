@@ -8,9 +8,16 @@ import Foundation
     initServerArgs()
     if isDebug {
         sendCommandToReleaseServer(args: ["enable", "off"])
-        interceptTermination(SIGINT)
-        interceptTermination(SIGKILL)
     }
+    // Not `if isDebug`. Hidden workspaces are emulated by parking windows off screen, and
+    // `beforeTermination` is what puts them back; a release build needs that at least as much as a
+    // debug one, and until now it registered no handlers at all.
+    //
+    // SIGTERM, not SIGKILL: SIGKILL cannot be caught by anyone, so registering it only implied a
+    // guarantee that never existed, while SIGTERM -- what `killall`, logout, restart and shut down
+    // send -- went untrapped. AppKit-initiated quits are handled by `AeroSporkAppDelegate`.
+    interceptTermination(SIGINT)
+    interceptTermination(SIGTERM)
     if !reloadConfig() {
         check(reloadConfig(forceConfigUrl: defaultConfigUrl))
     }

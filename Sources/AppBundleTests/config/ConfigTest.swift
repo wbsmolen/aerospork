@@ -484,6 +484,22 @@ final class ConfigTest: XCTestCase {
         assertEquals(ConfigurationWriter.render(baseText: Self.lossyConfigSample, from: vm), Self.lossyConfigSample)
     }
 
+    /// The same invariant, on a file that ends with a newline.
+    ///
+    /// The sample above does not end with one, because a Swift `"""` literal has no trailing
+    /// newline, so every writer test ran against input that no editor produces. A writer that
+    /// dropped or added a final newline would have round-tripped "identically" through the whole
+    /// suite while putting a one-byte diff in the user's dotfiles on every save.
+    ///
+    /// It passes today. It is here because the gap in coverage was real, not because it caught
+    /// anything.
+    func testWriterNoOpSavePreservesATrailingNewline() {
+        let vm = ConfigurationViewModel()
+        vm.markLoaded() // nothing edited
+        let base = Self.lossyConfigSample + "\n"
+        assertEquals(ConfigurationWriter.render(baseText: base, from: vm), base)
+    }
+
     /// Editing one gap must rewrite `[gaps]` and nothing else -- the fingerprint, the fallback
     /// list, the multi-command binding and the comment all stay untouched.
     func testWriterEditingGapsLeavesEverythingElseIntact() {
