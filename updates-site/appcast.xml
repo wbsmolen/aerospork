@@ -6,6 +6,47 @@
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>1.1.6</title>
+            <pubDate>Thu, 30 Jul 2026 17:16:47 -0500</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:version>1.1.6</sparkle:version>
+            <sparkle:shortVersionString>1.1.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>Fixes workspace memory doing nothing after a reboot, a case where editing a window rule could damage unrelated parts of your config, and the missing licence in every previous download.</p>
+<h2>Workspace memory now works on a cold boot</h2>
+<p>1.1.5 remembered which workspace each window was on, but at login it forgot any application that had not finished starting. AeroSpork launches alongside every other login item and macOS&#x27;s own window restore, so a slow app was absent from the first snapshot — and that snapshot was written straight over the memory, deleting its entry before the app ever appeared.</p>
+<p>So the case the feature exists for, restarting your Mac, was the one it skipped. It now waits for those windows instead of forgetting them.</p>
+<p>Also fixed: if a logout was cancelled by another app, AeroSpork kept running with its memory frozen and never saved again for the rest of the session.</p>
+<h2>Editing a window rule could damage unrelated config</h2>
+<p>Three ways, all fixed:</p>
+<ul>
+<li><strong>A regex containing <code>[</code></strong> — an ordinary thing to write in a window-title matcher — silently</li>
+</ul>
+<p>switched off every safety check for the rest of the file. Those checks are what stop the editor rewriting things it cannot represent, including a monitor pinned by hardware fingerprint, so an edit elsewhere could quietly degrade it to a plain name.</p>
+<ul>
+<li><strong>A comment after a section header</strong>, like <code>[on-window] # my rules</code>, made that section</li>
+</ul>
+<p>unrecognisable to the writer. It added a second copy instead of replacing it, so every rule in the table applied twice.</p>
+<ul>
+<li><strong>A monitor written as a list of fallbacks</strong> was reduced to its first entry — including on rows you</li>
+</ul>
+<p>did not touch, since one edit rewrites the whole section. It is now refused with a pointer to the Raw TOML tab rather than silently truncated.</p>
+<h2>The licence was missing from every download</h2>
+<p><code>legal/LICENSE.txt</code> was a link to a file that was never included in the archive, so every release shipped the four third-party licences and not AeroSpork&#x27;s own. The release now carries it, and the packaging refuses to build an archive with a broken link in it.</p>
+<h2>Update notes and the state file</h2>
+<p>The <strong>Check for Updates</strong> dialog showed a blank &quot;what&#x27;s new&quot; pane. It now shows these notes.</p>
+<p>Workspace memory moved from <code>/tmp</code> to <code>~/Library/Caches/com.wbs.aerospork/workspace-memory.json</code> and is readable only by you. It lists which applications are running and which monitors are attached, which no other account on the machine needs to see, and <code>/tmp</code> is writable by anyone — a file planted there decided where your windows went. Upgrading leaves the old file behind; it is ignored and safe to delete.</p>
+<p>Universal (arm64 + x86_64), signed with a Developer ID, notarized and stapled.</p>
+<h2>Install</h2>
+<pre>
+brew install --cask wbsmolen/tap/aerospork
+</pre>
+<p>Or download <code>aerospork-v1.1.6.zip</code>, move <code>aerospork-v1.1.6/AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when prompted. Optionally put <code>aerospork-v1.1.6/bin/aerospork</code> on your <code>PATH</code> for the CLI.</p>
+<p><code>AeroSpork-1.1.6.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.6/AeroSpork-1.1.6.zip" length="6310780" type="application/octet-stream" sparkle:edSignature="WGGvT6HkLe+9dCi2XkNDPIYZSAl5mXedoVgI0Juc3tMsfCTUCoXWAuG7Qx49166KHMVlrg9EeOs5QcWZj6hgAg=="/>
+        </item>
+        <item>
             <title>1.1.5</title>
             <pubDate>Thu, 30 Jul 2026 14:18:27 -0500</pubDate>
             <link>https://github.com/wbsmolen/aerospork</link>
@@ -22,15 +63,6 @@
             <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.4/AeroSpork-1.1.4.zip" length="6250094" type="application/octet-stream" sparkle:edSignature="Gbv8FYEh6gkvwiDd5I4W3PXtPkeqD5AI2znn85hCqmdZlU+jmr9gtdjY5KLheTa6LUD6kMqmtJmBW5m0v6JvCg=="/>
-        </item>
-        <item>
-            <title>1.1.3</title>
-            <pubDate>Thu, 30 Jul 2026 11:23:45 -0500</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.1.3</sparkle:version>
-            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.3/AeroSpork-1.1.3.zip" length="6241508" type="application/octet-stream" sparkle:edSignature="CWzb0IrprQyI9Fy1o6H1xyUEy58lfqvdEjVC8HbmOajBA+Ecf+qRkFumXsW3PyFVv1OTf/nNmVwdl1lrQiMzAQ=="/>
         </item>
     </channel>
 </rss>

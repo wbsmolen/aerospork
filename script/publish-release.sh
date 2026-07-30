@@ -45,13 +45,24 @@ sparkle_zip=".release/AeroSpork-$build_version.zip"
 # `setup.sh` replaces PATH with `.deps/bin:/bin:/usr/bin` so a build cannot pick up whatever happens
 # to be installed. These three are linked in there alongside the build tools; the check stays because
 # failing here costs nothing and failing after the twenty-minute universal build costs the build.
-for tool in gh swa az; do
+for tool in gh swa az node; do
     command -v "$tool" > /dev/null || {
         echo "Required tool not found: $tool" > /dev/stderr
         echo "Install it, then re-run: script/setup.sh links it into .deps/bin." > /dev/stderr
         exit 1
     }
 done
+
+# The appcast host has to be reachable before anything is published: everything after the tag is
+# irreversible-ish, and discovering the wrong Azure subscription then means a released version that
+# no existing install is offered.
+if ! az staticwebapp show --name aerospork-updates --resource-group aerospork-updates \
+        --query name -o tsv > /dev/null 2>&1; then
+    echo "Cannot reach the aerospork-updates Static Web App." > /dev/stderr
+    echo "Active subscription: '$(az account show --query name -o tsv 2>/dev/null)'." > /dev/stderr
+    echo "The appcast lives in 'billy MCT'; switch with: az account set --subscription <id>" > /dev/stderr
+    exit 1
+fi
 
 # The build embeds `git rev-parse HEAD` and then asserts the binary contains it, so a commit landing
 # mid-build fails the release ~20 minutes in. Refuse up front instead.
@@ -175,10 +186,20 @@ if ! "$sparkle_bin/sign_update" --verify "$published" "$signature" > /dev/null 2
     exit 1
 fi
 
-swa deploy updates-site \
-    --deployment-token "$(az staticwebapp secrets list --name aerospork-updates \
-        --resource-group aerospork-updates --query 'properties.apiKey' -o tsv)" \
-    --env production
+# Resolved before use. `set -e` does not abort on a failure inside `$(...)` when the result is just
+# an argument, so a wrong Azure subscription -- the active one is global CLI state and can be changed
+# by anything else on the machine -- silently produced an empty token and the deploy failed after the
+# release was already public and the tag pushed.
+deployment_token="$(az staticwebapp secrets list --name aerospork-updates \
+    --resource-group aerospork-updates --query 'properties.apiKey' -o tsv)"
+if test -z "$deployment_token"; then
+    echo "!!! Could not read the Static Web App deployment token !!!" > /dev/stderr
+    echo "The active Azure subscription is '$(az account show --query name -o tsv 2>/dev/null)'." > /dev/stderr
+    echo "The appcast lives in 'billy MCT'; switch with: az account set --subscription <id>" > /dev/stderr
+    exit 1
+fi
+
+swa deploy updates-site --deployment-token "$deployment_token" --env production
 
 ################
 ### THE CASK ###
