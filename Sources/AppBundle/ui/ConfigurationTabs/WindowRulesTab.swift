@@ -4,6 +4,9 @@ import SwiftUI
 /// `[[on-window-detected]]` — assign windows to workspaces, float them, etc. when they appear.
 /// Typically the most-configured feature after keybindings, and previously invisible to the GUI.
 struct WindowRulesTab: View {
+    /// Shown for a rule with no matchers at all. Prose, not config text -- see `matchCell`.
+    private static let anyWindow = "(any window)"
+
     @ObservedObject var viewModel: ConfigurationViewModel
     @State private var selection: ConfigurationViewModel.WindowRuleRow.ID?
 
@@ -62,7 +65,11 @@ struct WindowRulesTab: View {
     @ViewBuilder
     private func matchCell(_ rule: ConfigurationViewModel.WindowRuleRow) -> some View {
         HStack(spacing: 5) {
-            Text(summary(rule)).font(.system(.body, design: .monospaced))
+            // Monospace only for a real matcher, which is config text. "(any window)" is prose
+            // describing an absence, and reading it as something pasteable is misleading.
+            Text(summary(rule))
+                .font(summary(rule) == Self.anyWindow ? .body : .system(.body, design: .monospaced))
+                .foregroundStyle(summary(rule) == Self.anyWindow ? .secondary : .primary)
             // The UI has no control for `during-aerospork-startup`, but it round-trips it. Say so,
             // or a rule that only fires at startup looks identical to one that fires every time.
             if rule.duringStartup == true {
@@ -142,7 +149,7 @@ struct WindowRulesTab: View {
         if !r.appNameRegex.isEmpty { parts.append("name~\(r.appNameRegex)") }
         if !r.windowTitleRegex.isEmpty { parts.append("title~\(r.windowTitleRegex)") }
         if !r.workspace.isEmpty { parts.append("ws=\(r.workspace)") }
-        return parts.isEmpty ? "(any window)" : parts.joined(separator: " ")
+        return parts.isEmpty ? Self.anyWindow : parts.joined(separator: " ")
     }
 
     private func field(_ i: Int, _ keyPath: WritableKeyPath<ConfigurationViewModel.WindowRuleRow, String>) -> Binding<String> {

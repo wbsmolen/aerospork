@@ -46,7 +46,11 @@ struct GapsSettingsTab: View {
             // Plain prose, no backticks: a markdown code span containing brackets makes SwiftUI's
             // parser fail and fall back to the literal string, backticks included.
             SettingsFooter(
-                "Per-monitor gaps such as outer.top = [{ monitor.main = 16 }, 8] survive untouched until you change one of these — editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules.",
+                // Reworded so the config key fits in a code span. SwiftUI's markdown parser reads the
+                // `[` of an array inside backticks as the start of a link, fails, and falls back to
+                // the literal text -- backticks and all -- so the previous wording had to spell the
+                // array out in body font, which is the face this window reserves for prose.
+                "Per-monitor gaps, such as a list of values under `outer.top`, survive untouched until you change one of these — editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules.",
             )
         }
     }

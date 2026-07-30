@@ -70,9 +70,7 @@ struct CallbacksTab: View {
     ) -> some View {
         Section {
             if viewModel[keyPath: keyPath].isEmpty {
-                Text("Nothing runs on this event.")
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
+                SettingsHint("Nothing here yet. Anything you add runs every time this event fires — `exec-and-forget` for a shell command, or an aerospork command directly.")
             }
             ForEach(viewModel[keyPath: keyPath]) { row in
                 HStack(spacing: 8) {
@@ -106,6 +104,7 @@ struct CallbacksTab: View {
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
             .help("Remove")
+            .accessibilityLabel("Remove")
     }
 
     private func commandBinding(

@@ -37,7 +37,7 @@ struct WorkspacesMonitorsTab: View {
             // Same empty-state treatment as every other list in this window, rather than a section
             // header floating above nothing.
             if viewModel.liveMonitors.isEmpty {
-                SettingsHint("No monitors reported yet.")
+                SettingsHint("No monitors reported yet — they appear as soon as macOS reports one, and their UUIDs are what pins a workspace to a physical panel.")
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
             }
@@ -101,7 +101,9 @@ struct WorkspacesMonitorsTab: View {
                     .width(min: 110, ideal: 140)
 
                     TableColumn("Monitor") { row in
-                        Picker("", selection: binding(row.id, \.monitor)) {
+                        // A Table column header is not a control label, so without this the
+                        // picker is announced as an unnamed pop-up button.
+                        Picker("Monitor for this workspace", selection: binding(row.id, \.monitor)) {
                             Text("Main").tag("main")
                             Text("Non-main").tag("secondary")
                             Divider()

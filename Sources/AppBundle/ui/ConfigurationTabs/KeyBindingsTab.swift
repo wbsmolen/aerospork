@@ -80,7 +80,9 @@ struct KeyBindingsTab: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Filter", text: $query)
                     .textFieldStyle(.plain)
-                    .frame(width: 150)
+                    // Compressible. The mode picker beside it is `.fixedSize()`, so at the 780pt
+                    // minimum width a handful of modes pushed a hard-150pt filter box off the edge.
+                    .frame(minWidth: 70, idealWidth: 150)
                     .accessibilityLabel("Filter bindings")
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
@@ -115,6 +117,9 @@ struct KeyBindingsTab: View {
                 message: query.isEmpty
                     ? "Record a shortcut below to add the first one."
                     : "Nothing in “\(selectedMode)” matches “\(query)”.",
+                // The query is whatever the user typed; markdown would render `*foo*` as italic foo
+                // rather than the text they are actually searching for.
+                messageIsMarkdown: query.isEmpty,
             )
         } else {
             List {
@@ -326,6 +331,7 @@ private struct KeyRecorderField: View {
                         .foregroundStyle(.tertiary)
                         .padding(.trailing, 4)
                         .help("Clear")
+                        .accessibilityLabel("Clear this shortcut")
                 }
             }
     }
@@ -397,12 +403,28 @@ private struct KeyRecorderField: View {
             path.stroke()
 
             let text = !displayed.isEmpty ? KeyNotation.pretty(displayed) : (recording ? "Press a shortcut…" : "Click to record")
+            // Monospace is for the captured notation -- something the user could type into their
+            // config. The instructional placeholder is prose and takes the system face, the same
+            // split the colour below already makes.
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byTruncatingTail
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+                .font: displayed.isEmpty
+                    ? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+                    : NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
                 .foregroundColor: displayed.isEmpty ? NSColor.placeholderTextColor : NSColor.labelColor,
+                .paragraphStyle: paragraph,
             ]
             let size = (text as NSString).size(withAttributes: attrs)
-            (text as NSString).draw(at: NSPoint(x: 8, y: (bounds.height - size.height) / 2), withAttributes: attrs)
+            // `draw(in:)`, not `draw(at:)`: without a bounding rect AppKit clips at the view edge
+            // mid-glyph with no ellipsis, and a binding like `alt-shift-leftSquareBracket` is wider
+            // than the 150pt field.
+            let inset: CGFloat = 8
+            (text as NSString).draw(
+                in: NSRect(x: inset, y: (bounds.height - size.height) / 2,
+                           width: max(0, bounds.width - inset * 2), height: size.height),
+                withAttributes: attrs,
+            )
         }
     }
 }

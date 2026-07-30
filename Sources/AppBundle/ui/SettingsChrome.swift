@@ -39,8 +39,11 @@ struct NumberField: View {
                 Text(unit)
                     .foregroundStyle(.secondary)
                     .font(.callout)
-                Stepper("", value: clamped, in: range)
+                // Separately focusable, so it needs a name of its own: `LabeledContent` labels the
+                // row, not the second control inside it.
+                Stepper(title, value: clamped, in: range)
                     .labelsHidden()
+                    .accessibilityLabel(title)
             }
         }
     }
@@ -165,6 +168,10 @@ struct ContentUnavailableViewCompat: View {
     let icon: String
     let title: String
     let message: String
+    /// `message` is rendered as markdown so a static one can carry `code` spans. Pass `false` when
+    /// it interpolates anything the user typed: a filter query of `*foo*` would otherwise come back
+    /// italicised instead of as the literal text they are looking for.
+    var messageIsMarkdown = true
     var actionTitle: String?
     var action: (() -> Void)?
 
@@ -176,7 +183,7 @@ struct ContentUnavailableViewCompat: View {
                 .padding(.bottom, 2)
             Text(title).font(.headline)
             // Markdown, so `code` spans in an empty-state message don't read as literal backticks.
-            Text(LocalizedStringKey(message))
+            (messageIsMarkdown ? Text(LocalizedStringKey(message)) : Text(verbatim: message))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
