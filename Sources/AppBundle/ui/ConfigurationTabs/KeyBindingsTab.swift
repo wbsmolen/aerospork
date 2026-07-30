@@ -80,9 +80,17 @@ struct KeyBindingsTab: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Filter", text: $query)
                     .textFieldStyle(.plain)
-                    // Compressible. The mode picker beside it is `.fixedSize()`, so at the 780pt
-                    // minimum width a handful of modes pushed a hard-150pt filter box off the edge.
-                    .frame(minWidth: 70, idealWidth: 150)
+                    // Compressible, and capped. The mode picker beside it is `.fixedSize()`, so a
+                    // hard 150pt pushed the filter off the edge once a config had enough modes.
+                    //
+                    // `maxWidth` is not optional here: `minWidth:idealWidth:` alone leaves the upper
+                    // bound to the child, and a `.plain` TextField is greedy -- it ties with the
+                    // Spacer and swallows the slack, so at 880pt with the stock two modes the search
+                    // pill rendered 649pt wide instead of 150.
+                    //
+                    // This buys one more mode, not a fix: the segmented picker is still
+                    // `.fixedSize()`, so a config with nine modes still overflows 780pt.
+                    .frame(minWidth: 70, idealWidth: 150, maxWidth: 150)
                     .accessibilityLabel("Filter bindings")
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }

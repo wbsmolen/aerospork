@@ -68,8 +68,8 @@ struct WindowRulesTab: View {
             // Monospace only for a real matcher, which is config text. "(any window)" is prose
             // describing an absence, and reading it as something pasteable is misleading.
             Text(summary(rule))
-                .font(summary(rule) == Self.anyWindow ? .body : .system(.body, design: .monospaced))
-                .foregroundStyle(summary(rule) == Self.anyWindow ? .secondary : .primary)
+                .font(hasNoMatchers(rule) ? .body : .system(.body, design: .monospaced))
+                .foregroundStyle(hasNoMatchers(rule) ? .secondary : .primary)
             // The UI has no control for `during-aerospork-startup`, but it round-trips it. Say so,
             // or a rule that only fires at startup looks identical to one that fires every time.
             if rule.duringStartup == true {
@@ -141,6 +141,14 @@ struct WindowRulesTab: View {
         viewModel.markAsModified()
         viewModel.scheduleAutoSave()
         self.selection = nil
+    }
+
+    /// Whether the row shows the placeholder rather than a matcher.
+    ///
+    /// Asked of the rule, not of the rendered string: an app id of literally `(any window)` is legal
+    /// free text, and comparing the summary would render a real matcher as prose.
+    private func hasNoMatchers(_ r: ConfigurationViewModel.WindowRuleRow) -> Bool {
+        r.appId.isEmpty && r.appNameRegex.isEmpty && r.windowTitleRegex.isEmpty && r.workspace.isEmpty
     }
 
     private func summary(_ r: ConfigurationViewModel.WindowRuleRow) -> String {

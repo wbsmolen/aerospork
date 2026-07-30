@@ -6,7 +6,7 @@ function CommandRows({ title, sf, footer, list, onChange }) {
   return (
     <FormSection header={<SectionLabel title={title} sf={sf} />} footer={footer}>
       {rows.map((c, i) => (c === null
-        ? <span key="empty" style={{ fontSize: 'var(--text-callout)', color: 'var(--label-tertiary)' }}>Nothing runs on this event.</span>
+        ? <span key="empty" style={{ fontSize: 'var(--text-callout)', color: 'var(--label-tertiary)' }}>Nothing here yet. Anything you add runs every time this event fires — exec-and-forget for a shell command, or an aerospork command directly.</span>
         : <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <TextField mono value={c} placeholder="command" onChange={(v) => set(i, v)} style={{ flex: 1 }} />
             <Button variant="borderless" iconOnly title="Remove" onClick={() => onChange(list.filter((_, j) => j !== i))}>

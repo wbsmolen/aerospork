@@ -31,16 +31,18 @@ struct NumberField: View {
     var body: some View {
         LabeledContent(title) {
             HStack(spacing: 6) {
+                // Both controls in this row are separately focusable, and `LabeledContent` names
+                // the row rather than either of them. An explicit `accessibilityLabel` on each,
+                // rather than relying on a hidden title surviving `labelsHidden()`.
                 TextField("", value: clamped, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
                     .frame(width: 58)
                     .labelsHidden()
+                    .accessibilityLabel(title)
                 Text(unit)
                     .foregroundStyle(.secondary)
                     .font(.callout)
-                // Separately focusable, so it needs a name of its own: `LabeledContent` labels the
-                // row, not the second control inside it.
                 Stepper(title, value: clamped, in: range)
                     .labelsHidden()
                     .accessibilityLabel(title)

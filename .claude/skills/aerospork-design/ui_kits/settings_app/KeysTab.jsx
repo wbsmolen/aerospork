@@ -33,7 +33,7 @@ function KeysTab({ bindings, setBindings }) {
           <span style={{ flex: 1 }} />
           <div className="filter">
             <Icon sf="magnifyingglass" size={12} style={{ color: 'var(--label-secondary)' }} />
-            <TextField variant="plain" placeholder="Filter" value={query} onChange={setQuery} width={150} />
+            <TextField variant="plain" placeholder="Filter" value={query} onChange={setQuery} width={150} /* capped: minWidth 70, idealWidth 150, maxWidth 150 in the Swift */ />
             {query && <button className="clear" onClick={() => setQuery('')}><Icon sf="xmark.circle.fill" size={12} /></button>}
           </div>
         </div>

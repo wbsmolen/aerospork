@@ -1634,7 +1634,7 @@ function MenuBarKit() {
   })), {
     divider: true
   }, {
-    label: enabled ? 'Pause Tiling' : 'Resume Tiling',
+    label: enabled ? 'Pause tiling' : 'Resume tiling',
     shortcut: '⌘E',
     onClick: () => {
       setEnabled(!enabled);
@@ -1920,7 +1920,7 @@ function CommandRows({
       fontSize: 'var(--text-callout)',
       color: 'var(--label-tertiary)'
     }
-  }, "Nothing runs on this event.") : /*#__PURE__*/React.createElement("div", {
+  }, "Nothing here yet. Anything you add runs every time this event fires — exec-and-forget for a shell command, or an aerospork command directly.") : /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       display: 'flex',
@@ -2131,7 +2131,7 @@ function GapsTab({
     title: "Right",
     value: s.outerRight,
     onChange: v => set('outerRight', v)
-  }))), /*#__PURE__*/React.createElement(SettingsFooter, null, "Per-monitor gaps such as outer.top = [", '{', " monitor.main = 16 ", '}', ", 8] survive untouched until you change one of these \u2014 editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules."));
+  }))), /*#__PURE__*/React.createElement(SettingsFooter, null, "Per-monitor gaps, such as a list of values under outer.top, = [", '{', " monitor.main = 16 ", '}', ", 8] survive untouched until you change one of these \u2014 editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules."));
 }
 Object.assign(window, {
   GapsTab
@@ -2158,7 +2158,7 @@ function GeneralTab({
     className: "form-page"
   }, /*#__PURE__*/React.createElement(FormSection, {
     header: /*#__PURE__*/React.createElement(SectionLabel, {
-      title: "Startup & Behaviour",
+      title: "Startup & behaviour",
       sf: "power"
     })
   }, /*#__PURE__*/React.createElement(Toggle, {
@@ -2528,10 +2528,10 @@ function MonitorsTab({
   const [selected, setSelected] = React.useState(null);
   const monitorOptions = [{
     value: 'main',
-    label: 'Primary'
+    label: 'Main'
   }, {
     value: 'secondary',
-    label: 'Non-primary'
+    label: 'Non-main'
   }, {
     separator: true
   }, ...monitors.flatMap(m => [{
@@ -2653,7 +2653,7 @@ function MonitorsTab({
       sf: "arrow.triangle.branch",
       title: "No assignments",
       message: "Workspaces land wherever they were last used. Add an assignment to pin one to a specific monitor.",
-      actionTitle: "Add Assignment",
+      actionTitle: "Add assignment",
       onAction: add
     })
   })), /*#__PURE__*/React.createElement(ListActionBar, {
@@ -2851,7 +2851,7 @@ function RulesTab({
       sf: "macwindow",
       title: "No window rules",
       message: "Rules run once, when a window first appears \u2014 the usual use is sending an app straight to its workspace.",
-      actionTitle: "Add Rule",
+      actionTitle: "Add rule",
       onAction: add
     })
   }), /*#__PURE__*/React.createElement(ListActionBar, {

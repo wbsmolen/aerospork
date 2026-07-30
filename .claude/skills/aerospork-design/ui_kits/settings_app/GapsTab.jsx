@@ -23,7 +23,7 @@ function GapsTab({ s, set }) {
           <NumberField title="Right" value={s.outerRight} onChange={(v) => set('outerRight', v)} />
         </FormSection>
       </div>
-      <SettingsFooter>Per-monitor gaps such as outer.top = [{ '{' } monitor.main = 16 { '}' }, 8] survive untouched until you change one of these — editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules.</SettingsFooter>
+      <SettingsFooter>Per-monitor gaps, such as a list of values under outer.top, survive untouched until you change one of these — editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules.</SettingsFooter>
     </div>
   );
 }
