@@ -102,7 +102,13 @@ targets:
         # of an EdDSA pair whose private half never leaves the release machine's login keychain;
         # Sparkle refuses any update it cannot verify against it, so the key is what makes the
         # channel safe, not the transport.
-        SUFeedURL: https://agreeable-glacier-0a845c510.7.azurestaticapps.net/appcast.xml
+        #
+        # This URL is baked into each build at compile time, so changing it only affects builds
+        # made after the change. Copies of 1.1.0 and earlier ask for
+        # agreeable-glacier-0a845c510.7.azurestaticapps.net, which is the Static Web App's own
+        # default hostname and cannot be removed while the app exists: it keeps answering, and
+        # those copies keep updating. Retiring the Static Web App would strand them.
+        SUFeedURL: https://aerospork.app/appcast.xml
         SUPublicEDKey: +/aLciv0lm3XT3X1XqxDZs2U6d0jbvL65PsPBCxGObA=
         # Checking is opt-in on first launch: Sparkle asks once rather than phoning home before
         # the user has agreed to it.

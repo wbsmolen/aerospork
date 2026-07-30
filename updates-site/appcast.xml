@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>AeroSpork</title>
+    <link>https://aerospork.app/appcast.xml</link>
+    <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
+    <language>en</language>
+    <!-- No items yet. Sparkle reads an empty channel as "you are up to date", which is correct
+         until a release is published with a publicly reachable download URL. -->
+  </channel>
+</rss>
