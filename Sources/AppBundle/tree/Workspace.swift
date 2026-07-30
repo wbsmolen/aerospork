@@ -194,6 +194,16 @@ extension Workspace {
         }
     }
 
+    /// Pins an *invisible* workspace to a monitor.
+    ///
+    /// `assignedMonitorPoint` is otherwise only written when a workspace becomes visible or is
+    /// force-assigned, so a workspace materialized by name -- as `WorkspaceMemory` does when
+    /// restoring after a restart -- had no monitor at all and `workspaceMonitor` answered
+    /// `mainMonitor` for it.
+    @MainActor func assignMonitor(_ monitor: Monitor) {
+        assignedMonitorPoint = monitor.rect.topLeftCorner
+    }
+
     @MainActor var forceAssignedMonitor: Monitor? {
         guard let monitorDescriptions = config.workspaceToMonitorForceAssignment[name] else {
             return nil

@@ -72,6 +72,10 @@ func runRefreshSessionBlocking(
             updateTrayText()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+            // Here as well as at quit: a crash, a force quit and `killall -9` never reach the quit
+            // path, and those are the restarts where remembering is worth the most. The snapshot is
+            // one dictionary walk and returns early when nothing changed; the write is off-thread.
+            WorkspaceMemory.save()
         }
     }
 }

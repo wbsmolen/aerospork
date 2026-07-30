@@ -396,7 +396,27 @@ While a workspace is not active, all of its windows sit outside the visible area
 the bottom right or left corner.
 Switching back to the workspace (with the xref:commands.adoc#workspace[workspace] command, or `cmd + tab`) returns its windows to the visible area.
 
-On quit, and when AeroSpork detects that it is about to crash, all windows are returned to the visible area of the screen.
+On quit, and when AeroSpork detects that it is about to crash, all windows are returned to the
+visible area of the screen, each centred on the monitor it was on.
+
+[#workspace-memory]
+=== Workspaces across a restart
+
+AeroSpork remembers which workspace each window was on and puts it back when it restarts, along with
+the monitor that workspace was on.
+
+The memory is keyed on the window id issued by the macOS window server, so it holds for exactly as
+long as that server does. Restarting AeroSpork -- an update, a crash, `killall`, or Quit from the
+menu bar -- keeps it. Logging out, restarting the Mac, or quitting and relaunching an *application*
+does not: those windows are new as far as the system is concerned, and there is no way to recognise
+them. AeroSpork does not guess. It falls back to placing a window by where it physically sits, which
+is what it did before.
+
+For windows that must land somewhere specific after their app restarts, say so explicitly with
+xref:guide.adoc#on-window-detected-callback[on-window-detected] and `if.during-aerospork-startup`.
+
+The state lives in `/tmp` and is disposable: deleting it costs you one restart's worth of placement
+and nothing else.
 
 The name of the active workspace is shown in the menu bar icon.
 

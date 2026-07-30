@@ -144,6 +144,26 @@ with its own XPC helpers in `Contents/Frameworks`, so the release script signs n
 deepest-first before sealing the bundle, copies with `cp -R` to keep the framework's symlinks, and
 checks that every nested Mach-O is independently signed rather than rejecting nested code outright.
 
+**Workspace memory across a restart**: `WorkspaceMemory.swift` persists window -> workspace, plus
+the monitor each workspace was on, to `/tmp/<bundle-id>-<user>.state.json`.
+
+> **Both halves, or neither.** A first version restored only the workspace *name* and was reverted:
+> `Workspace.get(byName:)` mints a workspace whose `assignedMonitorPoint` is nil, and the only
+> writers of that field run when a workspace becomes visible or is force-assigned — so
+> `workspaceMonitor` fell through to `mainMonitor` and every restored workspace collapsed onto the
+> main display. Worse than binding by location, which at least kept the monitor.
+> `restoredWorkspace(forWindowId:bundleId:)` is the single entry point that does both, and
+> `WorkspaceMemoryTest` fails if registration calls the name-only lookup.
+
+The key is the `CGWindowID` and nothing else. It comes from a monotonic counter owned by
+**WindowServer**, so it is stable across a restart of *this* process and meaningless afterwards. The
+generation token is therefore WindowServer's pid and start time, **not** `kern.boottime`: the counter
+restarts on log out, `killall WindowServer` and graphics faults, none of which reboot the machine,
+and the kernel also *adjusts* `boottime` whenever the calendar clock is stepped. A composite key
+(bundle id + title + index + frame) cannot substitute — `AXIdentifier` names a window *class*
+(`TerminalWindowRestoration`, `FinderWindow`), so identical windows are genuinely indistinguishable
+and a fuzzy key would permute them silently.
+
 **MRU Tracking**: Tree nodes track most-recently-used order for focus navigation.
 
 ## Design System
@@ -241,6 +261,7 @@ it is present.
 - `Sources/AppBundle/config/parseConfig.swift`: Configuration parser
 - `Sources/AppBundle/runLoop.swift`: Main refresh session loop
 - `Sources/AppBundle/ui/SettingsChrome.swift`: Every shared settings control, and the only copy of each
+- `Sources/AppBundle/WorkspaceMemory.swift`: Window→workspace placement across a restart
 - `.claude/skills/aerospork-design/readme.md`: Design system — voice, visual foundations, components
 
 ## Testing

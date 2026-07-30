@@ -31,6 +31,9 @@ func initTerminationHandler() {
 
 private struct AppServerTerminationHandler: TerminationHandler {
     func beforeTermination() async throws {
+        // BEFORE the cleanup, which moves every window -- and frozen, so the refresh those moves
+        // trigger cannot overwrite this snapshot with the dumped positions.
+        WorkspaceMemory.freezeAndSave()
         try await makeAllWindowsVisibleAndRestoreSize()
         if isDebug {
             sendCommandToReleaseServer(args: ["enable", "on"])
