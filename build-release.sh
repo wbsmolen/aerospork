@@ -313,6 +313,16 @@ cd .release
     mkdir -p "aerospork-v$build_version/bin"
     ln -sf "../AeroSpork.app/Contents/MacOS/aerospork-cli" "aerospork-v$build_version/bin/aerospork"
     zip -ry "aerospork-v$build_version.zip" "aerospork-v$build_version"
+
+    # A SECOND archive, for Sparkle only. The zip above is a distribution bundle: the .app sits
+    # under aerospork-v$VERSION/ next to bin/, manpage/ and legal/. Sparkle refuses that outright
+    # -- "No supported items ... only .app bundles are supported" -- because it expects the bundle
+    # at the archive root. Pointing the appcast at the distribution zip produces a feed that every
+    # client fails to install.
+    #
+    # ditto rather than zip: it preserves the bundle's internal symlinks, extended attributes and
+    # the stapled notarization ticket, which plain zip mangles.
+    ditto -c -k --keepParent AeroSpork.app "AeroSpork-$build_version.zip"
 cd -
 
 #################

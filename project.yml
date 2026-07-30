@@ -33,7 +33,14 @@ targets:
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         MARKETING_VERSION: ${XCODEGEN_AEROSPORK_VERSION}
-        CURRENT_PROJECT_VERSION: 1
+        # CFBundleVersion, and the field Sparkle compares to decide whether an update is newer:
+        # it becomes <sparkle:version> in the appcast. This was hardcoded to 1, so every build
+        # ever shipped claimed the same version -- 1.1.0 and 1.1.1 were both "1" -- and Sparkle
+        # could never offer an update to anyone. It has to track the release version.
+        #
+        # It must never go backwards, and it must match what the downloaded build reports, or
+        # Sparkle re-offers the same update forever.
+        CURRENT_PROJECT_VERSION: ${XCODEGEN_AEROSPORK_VERSION}
         # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html#//apple_ref/doc/uid/20001431-108256
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window
