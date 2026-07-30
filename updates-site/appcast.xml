@@ -1,11 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>AeroSpork</title>
-    <link>https://aerospork.app/appcast.xml</link>
-    <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
-    <language>en</language>
-    <!-- No items yet. Sparkle reads an empty channel as "you are up to date", which is correct
-         until a release is published with a publicly reachable download URL. -->
-  </channel>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>AeroSpork</title>
+        <link>https://aerospork.app/appcast.xml</link>
+        <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
+        <language>en</language>
+        <item>
+            <title>1.1.1</title>
+            <pubDate>Thu, 30 Jul 2026 09:35:23 -0500</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:version>1.1.1</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.1/AeroSpork-1.1.1.zip" length="6227539" type="application/octet-stream" sparkle:edSignature="EL1urCWCCBXgeIaQSn3wRQ7TEH3ruXu1Ar9ELfvGukGEmIAd4vy+cQ4MlRZKIGVFE49FunYaJw4SxmVbGMU0CA=="/>
+        </item>
+    </channel>
 </rss>
