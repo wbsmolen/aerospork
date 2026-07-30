@@ -43,13 +43,27 @@ final class QuitCleanupGeometryTest: XCTestCase {
         XCTAssertEqual(point.y, -1080 + (1080 - 300) / 2)
     }
 
-    /// The main monitor sits at the origin, so this is the case the old code got right -- and the
-    /// reason it survived. Pinned so a "fix" cannot regress it.
-    func testTheMainMonitorIsUnaffected() {
-        let main = Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080)
-        let size = CGSize(width: 1000, height: 700)
+    /// Even the main monitor is offset, so the old code was wrong on a single display too.
+    ///
+    /// What gets passed is `visibleRect`, not `rect`, and the menu bar always insets it: measured on
+    /// a 5120x1440 main display, `visibleRect.topLeftY` is 30, never 0. A Dock on the left insets
+    /// `topLeftX` as well. The old arithmetic therefore put a full-height window's title bar
+    /// *underneath* the menu bar.
+    ///
+    /// A fixture with origin (0,0) would be fiction, and would make this test agree with the old
+    /// code -- which is exactly the wrong thing for it to do.
+    func testEvenTheMainMonitorIsInsetByTheMenuBar() {
+        let menuBarHeight: CGFloat = 30
+        let mainVisible = Rect(topLeftX: 0, topLeftY: menuBarHeight, width: 5120, height: 1440 - menuBarHeight)
+        let fullHeight = CGSize(width: mainVisible.width, height: mainVisible.height)
 
-        assertEquals(centredOnMonitor(main, size), CGPoint(x: (1920 - 1000) / 2, y: (1080 - 700) / 2))
+        // A window sized to the visible area lands exactly on it: both offsets are zero, so the
+        // result is the corner itself.
+        assertEquals(centredOnMonitor(mainVisible, fullHeight), CGPoint(x: 0, y: menuBarHeight))
+        XCTAssertGreaterThanOrEqual(
+            centredOnMonitor(mainVisible, fullHeight).y, menuBarHeight,
+            "a window placed above the menu bar has its title bar covered and cannot be dragged",
+        )
     }
 
     /// A window larger than the monitor centres to a negative offset rather than being clamped;
