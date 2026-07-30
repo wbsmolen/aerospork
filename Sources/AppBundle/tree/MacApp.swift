@@ -31,7 +31,7 @@ final class MacApp: AbstractApp {
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
     /*conforms*/ var bundlePath: String? { nsApp.bundleURL?.path }
 
-    // todo think if it's possible to integrate this global mutable state to https://github.com/wbsmolen/aerospork/issues/1215
+    // todo think if it's possible to fold this global mutable state into the tree
     //      and make deinitialization automatic in deinit
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     /// Registrations currently in flight. Not private: the tests drive the park/unpark paths of

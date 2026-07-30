@@ -15,7 +15,9 @@ aerospork is an i3-like tiling window manager for macOS written in Swift. It use
 ### Debug Build
 ```bash
 ./build-debug.sh              # Build debug version to .debug/
-./run-debug.sh                # Run the debug app (.debug/AeroSpork-Debug.app)
+./run-debug.sh                # Run the debug binary directly (.debug/aerosporkApp)
+./build-debug-app.sh          # Assemble .debug/AeroSpork-Debug.app (needed for Accessibility)
+./launch-debug-app.sh         # Launch that bundle
 ./run-cli.sh [args]           # Run aerospork CLI (forwards args to binary)
 ```
 
@@ -38,7 +40,7 @@ Debug builds use `~/.aerospork-debug.toml` instead of `~/.aerospork.toml` for co
 ```bash
 ./generate.sh                 # Regenerate generated files (*.xcodeproj, *Generated.swift)
 ./build-docs.sh               # Build site and man pages to .site/ and .man/
-./build-shell-completion.sh   # Build shell completion to .shell-completion/
+./build-shell-completion.sh   # Regenerate the vendored completions in shell-completion/
 ```
 
 ## Architecture

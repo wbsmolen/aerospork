@@ -18,16 +18,6 @@ extension TOMLValueConvertible {
     func expectString(_ backtrace: TomlBacktrace) -> ParsedToml<String> {
         string.orFailure(expectedActualTypeError(expected: .string, actual: type, backtrace))
     }
-
-    /// Validates this value is an integer, returning ParsedToml
-    func expectInt(_ backtrace: TomlBacktrace) -> ParsedToml<Int> {
-        int.orFailure(expectedActualTypeError(expected: .int, actual: type, backtrace))
-    }
-
-    /// Validates this value is a boolean, returning ParsedToml
-    func expectBool(_ backtrace: TomlBacktrace) -> ParsedToml<Bool> {
-        bool.orFailure(expectedActualTypeError(expected: .bool, actual: type, backtrace))
-    }
 }
 
 // MARK: - Error Collection Helpers

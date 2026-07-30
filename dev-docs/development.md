@@ -97,8 +97,8 @@ syspolicy_check distribution .release/AeroSpork.app
 -   `run-debug.sh` - Run the debug app (`.debug/AeroSpork-Debug.app`).
 -   `run-cli.sh` - Run `aerospork` in CLI. Arguments are forwarded to `aerospork` binary.
 -   `build-docs.sh` - Build the site and man pages to `.site` and `.man` dirs respectively.
--   `build-shell-completion.sh` - Build shell completion to `.shell-completion`.
-    You can test that the completion works properly by sourcing the file `source ./.shell-completion/zsh/_aerospork`
+-   `build-shell-completion.sh` - Regenerate the vendored completions in `shell-completion/` (tracked in git).
+    You can test that the completion works properly by sourcing the file `source ./shell-completion/zsh/_aerospork`
 -   `generate.sh` - Regenerate generated project files. `aerospork.xcodeproj` is generated, and some of the source files
     (the source files have `Generated` suffix in their names).
 

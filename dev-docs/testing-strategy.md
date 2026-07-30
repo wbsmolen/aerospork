@@ -240,7 +240,7 @@ Both are optional but recommended. They convert "parse an unstable debug dump" i
 ## 8. Toolchain selection & preflight (the most-reused skill)
 
 The trap: `script/setup.sh`'s `swift()` wrapper runs `swiftly run swift` and
-`.swift-version` pins `6.2`; on macOS 27 that toolchain is broken and a mismatched SDK
+`.swift-version` pins `6.4`; on macOS 27 that toolchain is broken and a mismatched SDK
 makes `swift build` **hang with no error**.
 
 **Recommendations:**

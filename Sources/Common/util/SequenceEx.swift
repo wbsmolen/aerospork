@@ -53,10 +53,6 @@ extension Sequence {
         self.min(by: { a, b in selector(a) < selector(b) })
     }
 
-    @inlinable public func maxBy(_ selector: (Self.Element) -> some Comparable) -> Self.Element? {
-        self.max(by: { a, b in selector(a) < selector(b) })
-    }
-
     @inlinable public func sortedBy(_ selector: (Self.Element) -> some Comparable) -> [Self.Element] {
         sorted(by: { a, b in selector(a) < selector(b) })
     }

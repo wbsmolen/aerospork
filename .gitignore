@@ -1,7 +1,6 @@
 /.idea
 /.debug
 /.release
-/.shell-completion
 /.site
 /.man
 # IDK, AppCode randomly creates this EMPTY file. I have no idea what this is
