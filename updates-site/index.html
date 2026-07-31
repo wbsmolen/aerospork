@@ -3,10 +3,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AeroSpork — a tiling window manager for macOS</title>
 <meta name="description" content="An i3-like tiling window manager for macOS. Tree layout, workspaces without animation, TOML config, a CLI, and a settings GUI.">
+<link rel="icon" href="/icon.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon.png">
 <style>
-  :root { color-scheme: light dark; --fg: #1c202c; --dim: #5b6070; --bg: #fff; --card: #f4f5f7; --link: #0064e1; }
+  :root { color-scheme: light dark; --fg: #1c202c; --dim: #5b6070; --bg: #fff; --card: #f4f5f7; --link: #0064e1; --rule: #e2e4ea; }
   @media (prefers-color-scheme: dark) {
-    :root { --fg: #e6e8ee; --dim: #9aa0b0; --bg: #14161c; --card: #1e2129; --link: #5e9eff; }
+    :root { --fg: #e6e8ee; --dim: #9aa0b0; --bg: #14161c; --card: #1e2129; --link: #5e9eff; --rule: #2c303a; }
   }
   * { box-sizing: border-box }
   body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -19,20 +21,54 @@
   a:hover { text-decoration: underline }
   code, pre { font: 13.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace }
   code { background: var(--card); padding: .15em .4em; border-radius: 4px }
-  pre { background: var(--card); padding: .9rem 1rem; border-radius: 8px; overflow-x: auto; margin: 0 0 1rem }
+  pre { background: var(--card); padding: .9rem 1rem; border-radius: 8px; overflow-x: auto; margin: 0 }
   pre code { background: none; padding: 0 }
   ul { padding-left: 1.1rem; margin: 0 0 1rem }
   li { margin-bottom: .35rem }
-  footer { margin-top: 3rem; color: var(--dim); font-size: .9rem }
+  footer { margin-top: 3rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); color: var(--dim); font-size: .9rem }
+
+  /* Header: icon beside the wordmark */
+  .head { display: flex; align-items: center; gap: .8rem; margin-bottom: .3rem }
+  .head img { width: 56px; height: 56px; flex: none; border-radius: 12px }
+  .head h1 { margin: 0 }
+
+  /* Command box with a copy button */
+  .cmd { position: relative; margin: 0 0 1rem }
+  .cmd pre { padding-right: 3.1rem }
+  .copy { position: absolute; top: 50%; right: .5rem; transform: translateY(-50%);
+          width: 30px; height: 30px; display: grid; place-items: center;
+          border: 1px solid transparent; border-radius: 6px; background: none;
+          color: var(--dim); cursor: pointer; padding: 0;
+          transition: color .12s, background .12s, border-color .12s }
+  .copy:hover { color: var(--fg); background: var(--bg); border-color: var(--rule) }
+  .copy:focus-visible { outline: 2px solid var(--link); outline-offset: 1px }
+  .copy svg { width: 16px; height: 16px; fill: none; stroke: currentColor;
+              stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+  .copy .tick { display: none }
+  .copy.ok { color: #2c9c5a }
+  .copy.ok .sheets { display: none }
+  .copy.ok .tick { display: block }
 </style>
 
-<h1>AeroSpork</h1>
+<header class="head">
+  <img src="/icon.png" alt="" width="56" height="56">
+  <h1>AeroSpork</h1>
+</header>
 <p class="tag">An i3-like tiling window manager for macOS. Windows are leaves of a layout tree,
 workspaces are emulated rather than mapped onto native Spaces, and nothing requires disabling System
 Integrity Protection.</p>
 
 <h2>Install</h2>
-<pre><code>brew install --cask wbsmolen/tap/aerospork</code></pre>
+<div class="cmd">
+  <pre><code id="brew">brew install --cask wbsmolen/tap/aerospork</code></pre>
+  <button class="copy" type="button" aria-label="Copy install command" data-copies="brew">
+    <svg class="sheets" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="9" width="12" height="12" rx="2.5"></rect>
+      <path d="M6 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V6"></path>
+    </svg>
+    <svg class="tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"></path></svg>
+  </button>
+</div>
 <p>Or take a notarized build from the
 <a href="https://github.com/wbsmolen/aerospork/releases">releases page</a>, move
 <code>AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when
@@ -61,5 +97,29 @@ covers all 37 CLI commands, which are also installed as man pages. The
   <p>Installed copies check <code>/appcast.xml</code> on this host for updates. Each one is signed
   with an EdDSA key whose public half ships in the app, and a build refuses any update it cannot
   verify.</p>
+  <p>No analytics, no telemetry, and update checks are off until you turn them on — the
+  <a href="/privacy.html">privacy page</a> says exactly what that means.</p>
   <p>MIT licensed. A fork of AeroSpace by Nikita Bobko.</p>
 </footer>
+
+<script>
+  for (const b of document.querySelectorAll('.copy')) {
+    b.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(document.getElementById(b.dataset.copies).textContent)
+        b.classList.add('ok')
+        b.setAttribute('aria-label', 'Copied')
+        setTimeout(() => {
+          b.classList.remove('ok')
+          b.setAttribute('aria-label', 'Copy install command')
+        }, 1400)
+      } catch {
+        // Clipboard blocked (insecure origin, or the user declined). Select the text so
+        // Cmd-C still works rather than leaving the click doing nothing at all.
+        const r = document.createRange()
+        r.selectNodeContents(document.getElementById(b.dataset.copies))
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r)
+      }
+    })
+  }
+</script>

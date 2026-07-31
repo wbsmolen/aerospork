@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — AeroSpork</title>
+<meta name="description" content="What AeroSpork stores, what it sends, and what this website sees.">
+<link rel="icon" href="/icon.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon.png">
+<style>
+  :root { color-scheme: light dark; --fg: #1c202c; --dim: #5b6070; --bg: #fff; --card: #f4f5f7; --link: #0064e1; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e6e8ee; --dim: #9aa0b0; --bg: #14161c; --card: #1e2129; --link: #5e9eff; }
+  }
+  * { box-sizing: border-box }
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+         max-width: 46rem; margin: 0 auto; padding: 5vh 1.5rem 6rem; color: var(--fg); background: var(--bg) }
+  h1 { font-size: 2.1rem; letter-spacing: -.022em; margin: 0 0 .3rem }
+  h2 { font-size: 1.05rem; letter-spacing: -.01em; margin: 2.4rem 0 .6rem }
+  p { margin: 0 0 1rem }
+  .tag { color: var(--dim); font-size: 1.05rem; margin-bottom: 1.8rem }
+  a { color: var(--link); text-decoration: none }
+  a:hover { text-decoration: underline }
+  code { font: 13.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--card); padding: .15em .4em; border-radius: 4px }
+  ul { padding-left: 1.1rem; margin: 0 0 1rem }
+  li { margin-bottom: .35rem }
+  footer { margin-top: 3rem; color: var(--dim); font-size: .9rem }
+  .head { display: flex; align-items: center; gap: .8rem; margin-bottom: .3rem }
+  .head img { width: 56px; height: 56px; flex: none; border-radius: 12px }
+  .head h1 { margin: 0 }
+</style>
+
+<header class="head">
+  <a href="/"><img src="/icon.png" alt="AeroSpork home" width="56" height="56"></a>
+  <h1>Privacy</h1>
+</header>
+<p class="tag">What AeroSpork stores, what it sends, and what this website sees. Short, because
+there is not much of it.</p>
+
+<h2>There is no analytics and no telemetry</h2>
+<p>AeroSpork contains no analytics SDK, no crash reporter, and no usage tracking. It makes no
+network request of its own. The only outbound connection it can make is the update check described
+below, and that is off until you turn it on.</p>
+
+<h2>What it needs Accessibility permission for</h2>
+<p>Managing windows is only possible through the macOS Accessibility APIs, which is why AeroSpork
+asks for that permission. It is a broad one: while it is granted, AeroSpork can read the title and
+owning application of every window on your Mac, and move them.</p>
+<p>It uses that to lay windows out and to match your window rules. None of it is transmitted
+anywhere, stored beyond what is described below, or shared with anyone.</p>
+
+<h2>What it writes to your Mac</h2>
+<ul>
+  <li>Your configuration, at <code>~/.aerospork.toml</code> or under
+      <code>$XDG_CONFIG_HOME</code> — whichever you use. The settings window edits this file in
+      place.</li>
+  <li>Timestamped backups of that file beside it, so a bad edit is recoverable.</li>
+  <li><code>~/Library/Caches/com.wbs.aerospork/workspace-memory.json</code>, readable only by your
+      user account. It records which workspace each open window was on, along with the bundle
+      identifier of its application and an identifier for the monitor the workspace was on, so a
+      restart does not scatter your layout. It holds no window titles and no document contents.
+      Deleting it costs you one restart's worth of window placement.</li>
+</ul>
+<p>All of it stays on your Mac. Uninstalling the app leaves these files behind; delete them if you
+want them gone.</p>
+
+<h2>The update check</h2>
+<p>Automatic update checks are <strong>off</strong> when you install AeroSpork. Nothing is requested
+until you either allow them or choose <strong>Check for Updates…</strong> yourself.</p>
+<p>When a check does run, it is an ordinary HTTPS request to <code>aerospork.app</code> for a small
+file listing the current version. Like any web request, it necessarily tells this server your IP
+address, the time, and a user-agent string naming the app and its version. That is the whole of it:
+AeroSpork does not send a system profile, a machine identifier, or anything about your windows,
+configuration, or the applications you run. Sparkle, the update framework, can send a hardware and
+software profile — that feature is not enabled here.</p>
+<p>If an update is available, the download comes from GitHub, and GitHub sees that request the same
+way any download host would.</p>
+
+<h2>What this website sees</h2>
+<p>These pages are static files on Azure Static Web Apps. Nothing is loaded from another host — no
+third-party fonts, images, scripts, embeds or trackers — there are no cookies, and nothing follows
+you between visits. The only script on the site is a few lines on the front page that put the
+install command on your clipboard when you click the copy button; it sends nothing anywhere.</p>
+<p>Azure receives the requests that serve these pages, which as with any web host includes IP
+addresses. That is infrastructure logging outside our control, and it is not collected, read, or
+combined with anything by this project.</p>
+
+<h2>Commands you configure</h2>
+<p>AeroSpork can run shell commands you put in your own configuration, through
+<code>exec-and-forget</code> and the event callbacks. Those are your commands, doing whatever you
+wrote them to do, and anything they send is between you and them. Treat a configuration file from
+someone else the way you would treat a shell script from someone else.</p>
+
+<h2>Changes</h2>
+<p>If this ever stops being accurate, the page changes with the release that made it inaccurate. Its
+history is in the
+<a href="https://github.com/wbsmolen/aerospork/commits/main/updates-site/privacy.html">repository</a>,
+so you can see exactly what changed and when.</p>
+
+<footer>
+  <p>Last updated 30 July 2026. Questions, or something here that does not match what you observe:
+  <a href="https://github.com/wbsmolen/aerospork/issues">open an issue</a>. Security reports have
+  their own route in <a href="https://github.com/wbsmolen/aerospork/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+  <p><a href="/">AeroSpork</a> · MIT licensed</p>
+</footer>
