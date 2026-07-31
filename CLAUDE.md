@@ -26,7 +26,7 @@ Debug builds use `~/.aerospork-debug.toml` instead of `~/.aerospork.toml` for co
 ### Release Build
 ```bash
 ./build-release.sh            # Build release to .release/ using Xcode
-./install-from-sources.sh     # Build and install as aerospork-dev brew cask (WIP)
+./install-from-sources.sh     # Build and install as the aerospork-dev brew cask
 ```
 
 ### Testing & Code Quality
@@ -133,14 +133,14 @@ Sources/
 > **Shared chrome invariant.** `SettingsChrome.swift` holds every shared settings control and is
 > the only copy of each: `NumberField`, `SettingsHint`, `SettingsFooter`, `ListActionBar`,
 > `ContentUnavailableViewCompat`, `SectionLabel`, `Badge`, `StatusLabel`, `Banner`, `CodeEditor`,
-> `CopyButton`. A tab uses what is there rather than growing its own. Status symbols and tints come
+> `CopyButton`, `SettingsField`. A tab uses what is there rather than growing its own. Status symbols and tints come
 > from `StatusLabel.Kind` / `Banner.Kind`, never string literals in a tab.
 > `UIChromeConsistencyTest` enforces both rules. `dev-docs/architecture.md` explains why they exist.
 
 **In-app updates**: `ui/Updater.swift` wraps `SPUStandardUpdaterController`. Two things about it
 are easy to get wrong. Sparkle's `SUFeedURL`/`SUPublicEDKey` **cannot** be set through
 `INFOPLIST_KEY_*` in `project.yml`; that prefix only supports keys Xcode recognises and drops
-third-party ones silently, so they come from the `info.properties` plist instead and
+third-party ones silently, so they come from the `info:`/`properties:` block in `project.yml` and
 `build-release.sh` asserts both are present in the finished bundle. And Sparkle embeds a framework
 with its own XPC helpers in `Contents/Frameworks`, so the release script signs nested code
 deepest-first before sealing the bundle, copies with `cp -R` to keep the framework's symlinks, and

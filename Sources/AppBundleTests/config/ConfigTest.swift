@@ -878,6 +878,53 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(reason?.contains("fallback") == true, reason ?? "nil")
     }
 
+    /// Saving the same edit repeatedly must not grow the file.
+    ///
+    /// Every emitted block starts with its own blank line while the walk-back keeps the blank the
+    /// previous save left, so an editing session -- 600ms autosave, so several saves -- stacks them
+    /// up. The user sees a growing run of blank lines in their dotfiles diff. The no-op invariant
+    /// cannot see this: it only compares bytes when nothing was edited.
+    func testRepeatedSavesDoNotAccumulateBlankLines() {
+        let base = """
+            mod = 'alt'
+
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+            """
+        var text = base
+        var sizes: [Int] = []
+        for i in 0 ..< 4 {
+            let vm = ConfigurationViewModel()
+            vm.loadWindowRules(fromText: text)
+            vm.markLoaded()
+            vm.windowRules[0].run = "move-node-to-workspace \(i + 4)"
+            text = ConfigurationWriter.render(baseText: text, from: vm)
+            sizes.append(text.split(separator: "\n", omittingEmptySubsequences: false).count)
+        }
+        assertEquals(
+            Set(sizes).count, 1,
+            additionalMsg: "line count grew across repeated saves: \(sizes)\n\(text)",
+        )
+    }
+
+    /// And a file that ended with a newline must still end with one.
+    func testAnEditedSaveKeepsTheTrailingNewline() {
+        let base = """
+            mod = 'alt'
+
+            [on-window]
+            "com.apple.finder" = "move-node-to-workspace 3"
+
+            """
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules[0].run = "move-node-to-workspace 4"
+
+        let out = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertTrue(out.hasSuffix("\n"), "the trailing newline was eaten:\n\(out.suffix(60).debugDescription)")
+    }
+
     /// An *applied* Raw TOML tab is authoritative -- it is exactly what lands on disk.
     /// See `ConfigurationWriterSafetyTest` for the counterpart: an unapplied buffer must NOT win.
     func testWriterRawTomlWins() {

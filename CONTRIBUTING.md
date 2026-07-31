@@ -25,8 +25,9 @@ day to day.
 on an unclean working tree, because several checked-in files are generated (`./generate.sh`) and
 drift between the source and the generated copy is a real bug rather than noise.
 
-`./format.sh` runs SwiftFormat and SwiftLint. Run it before committing; CI checks formatting is
-already clean rather than fixing it for you.
+`./format.sh` runs SwiftFormat and SwiftLint, rewriting in place. Run it before committing: CI runs
+it too, and then fails on the resulting dirty tree, so an unformatted commit shows up as
+"uncommitted files detected" rather than as a formatting message.
 
 ## Things the tests enforce, and why
 
@@ -76,6 +77,6 @@ aerospork config --config-path
 log show --last 15m --predicate 'subsystem == "com.wbs.aerospork"' --style compact
 ```
 
-For a layout or focus problem, `AEROSPORK_DEBUG_LOG=1` adds a per-refresh trace. It goes to stderr,
-not the unified log, so run the binary directly to capture it. `docs/guide.adoc` has the full
-recipe under *Troubleshooting and bug reports*.
+For a layout or focus problem, `AEROSPORK_DEBUG_LOG=1` adds a per-refresh trace. It is written at
+`.debug` level, which the unified log does not persist, so run the binary directly and capture its
+stderr. `docs/guide.adoc` has the full recipe under *Troubleshooting and bug reports*.

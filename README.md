@@ -179,7 +179,7 @@ Both the tap and this repository are public, so either route works without a Git
 Installed copies check for updates themselves through [Sparkle](https://sparkle-project.org),
 against a signed appcast served from
 [`aerospork.app/appcast.xml`](https://aerospork.app/appcast.xml). Updates are verified against an
-EdDSA public key compiled into the app, so a build refuses anything it cannot verify. Automatic
+EdDSA public key in the app's Info.plist, so a build refuses anything it cannot verify. Automatic
 checking is off until you allow it; **Check for Updates…** in the menu bar checks on demand. There
 is no App Store update path to inherit, because the Accessibility APIs this app is built on do not
 work in a sandbox.
@@ -233,8 +233,7 @@ aerospork --help
 
 Troubleshooting: `aerospork config --config-path` prints the file actually loaded. A path inside the
 `.app` bundle means no user config is loaded, either because you have none or because yours failed to
-parse; `aerospork reload-config --dry-run` says which.
-`aerospork reload-config --dry-run` parses without applying and says why not, and `aerospork
+parse; `aerospork reload-config --dry-run` parses without applying and says which. `aerospork
 --version` reports both client and server. Logs go to the unified log, with no files and nothing to
 enable:
 
@@ -243,9 +242,9 @@ log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compac
 ```
 
 Use `com.wbs.aerospork.debug` for a debug build and add `AND category == "config"` to narrow.
-`AEROSPORK_DEBUG_LOG=1` adds a verbose per-refresh trace, which goes to stderr rather than the
-unified log, so run the binary directly to read it. See *Troubleshooting and bug reports* in
-[the guide](docs/guide.adoc) for what to attach to a report.
+`AEROSPORK_DEBUG_LOG=1` adds a verbose per-refresh trace. It is written at `.debug` level, which
+the unified log does not persist, so run the binary directly and read its stderr. See
+*Troubleshooting and bug reports* in [the guide](docs/guide.adoc) for what to attach to a report.
 
 ## Development
 

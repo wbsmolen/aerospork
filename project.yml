@@ -64,7 +64,7 @@ targets:
         # Xcode knows about: it emitted CFBundleDisplayName, LSUIElement and friends and dropped
         # SUFeedURL and SUPublicEDKey silently, leaving a build whose updater could never find a
         # feed. Third-party keys have to come from a real plist, so they live in
-        # `info.properties` below, which XcodeGen merges into the generated Info.plist.
+        # the `info:`/`properties:` block below, which XcodeGen merges into the generated Info.plist.
         # Sparkle ships as an XCFramework and lands in Contents/Frameworks. Without this the
         # framework is linked but not embedded, and the app fails to launch on any machine that
         # does not happen to have it in a search path.

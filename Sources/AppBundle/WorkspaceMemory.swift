@@ -197,7 +197,7 @@ enum WorkspaceMemory {
 
     /// Puts a restored workspace back on its monitor. Idempotent, and a no-op when the monitor is
     /// gone -- that workspace then falls back to today's behaviour instead of to a wrong answer.
-    static func restoreMonitor(of workspace: Workspace) {
+    private static func restoreMonitor(of workspace: Workspace) {
         guard let monitor = monitor(forWorkspace: workspace.name) else { return }
         workspace.assignMonitor(monitor)
     }

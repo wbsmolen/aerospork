@@ -34,7 +34,7 @@ serious, and the config file is the most likely route:
   is discarded rather than applied.
 
 Reports about any of the above are in scope. So are signing, notarization and update-channel
-problems: updates are verified against an EdDSA public key compiled into the app, and a way to make
+problems: updates are verified against an EdDSA public key in the app's Info.plist, and a way to make
 it accept an update signed by another key would be a serious finding.
 
 ## Out of scope

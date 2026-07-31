@@ -1,1 +1,5 @@
 # GitHub: linguist-generated marks paths that you would like to be ignored for the repository's language statistics and hidden by default in diffs
+#
+# The rule was missing, so these counted toward the language stats and expanded in every diff even
+# though `generate.sh` writes them and `run-tests.sh` fails if they drift from it.
+*Generated.swift linguist-generated=true

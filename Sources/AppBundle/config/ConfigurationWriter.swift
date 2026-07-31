@@ -158,9 +158,21 @@ enum ConfigurationWriter {
         if vm.windowRulesEdited { replaceWindowRules(&lines, vm, isV2: isV2(base)) }
         applyBindingDiff(&lines, vm, base: base)
 
-        // Give the file back the line ending it arrived with. Silently converting a CRLF config to
-        // LF would show up as a whole-file diff in the user's dotfiles repo.
-        return lines.joined(separator: usesCRLF ? "\r\n" : "\n")
+        // Give the file back the line ending and the trailing newline it arrived with.
+        //
+        // Splitting on "\n" yields a final empty element for a file that ends with one, and the
+        // emitted blocks were appended AFTER it -- so the newline turned into an interior blank line
+        // and the file lost its terminator. Repeating that per save stacked a blank line each time:
+        // measured 5, 6, 7, 8 lines over four saves of the same edit, which reads as a growing diff
+        // in the user's dotfiles.
+        //
+        // Handled by `appendBlock`, which strips that artifact before appending and never doubles a
+        // blank, rather than by collapsing blank runs globally: the fuzzer proved a global collapse
+        // rewrites blank lines the user wrote themselves, which is precisely the do-no-harm
+        // invariant this writer exists to keep.
+        var result = lines.joined(separator: usesCRLF ? "\r\n" : "\n")
+        if base.hasSuffix("\n"), !result.hasSuffix("\n") { result += usesCRLF ? "\r\n" : "\n" }
+        return result
     }
 
     /// Validate before writing. A config that fails to parse used to land on disk anyway and only
@@ -394,7 +406,7 @@ enum ConfigurationWriter {
                 block.append("\(tomlKey(v.name)) = \(quoted(v.value))")
             }
         }
-        lines.append(contentsOf: block)
+        appendBlock(&lines, block)
     }
 
     /// A rule the `[on-window]` shorthand can express: an app id and a command, nothing else.
@@ -445,7 +457,7 @@ enum ConfigurationWriter {
             for rule in rules.sorted(by: { $0.appId < $1.appId }) {
                 block.append("\(quoted(rule.appId)) = \(tomlArray(splitCommands(rule.run)))")
             }
-            lines.append(contentsOf: block)
+            appendBlock(&lines, block)
             return
         }
 
@@ -460,8 +472,19 @@ enum ConfigurationWriter {
             if let during = rule.duringStartup { block.append("if.during-aerospork-startup = \(bool(during))") }
             if rule.checkFurtherCallbacks { block.append("check-further-callbacks = true") }
             block.append("run = \(tomlArray(splitCommands(rule.run)))")
-            lines.append(contentsOf: block)
+            appendBlock(&lines, block)
         }
+    }
+
+    /// Appends an emitted block, keeping exactly one blank line before it.
+    ///
+    /// Two things go wrong with a bare `append(contentsOf:)`. A file ending in a newline splits to a
+    /// final empty element, and appending after it turns the terminator into an interior blank line;
+    /// and every block opens with its own blank while the removal walk-back keeps the one the
+    /// previous save left, so the gap grew by a line on every save.
+    private static func appendBlock(_ lines: inout [String], _ block: [String]) {
+        while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeLast() }
+        lines.append(contentsOf: lines.isEmpty ? Array(block.drop(while: { $0.isEmpty })) : block)
     }
 
     /// Name of an array-of-table header (`[[on-window-detected]]` -> "on-window-detected"), nil for
@@ -569,7 +592,7 @@ enum ConfigurationWriter {
         for r in rows.sorted(by: { $0.workspace < $1.workspace }) {
             block.append("\(tomlKey(r.workspace)) = \(formatMonitorValue(r.monitor))")
         }
-        lines.append(contentsOf: block)
+        appendBlock(&lines, block)
     }
 
     private static func formatMonitorValue(_ token: String) -> String {
