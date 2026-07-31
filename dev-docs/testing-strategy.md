@@ -34,7 +34,8 @@ headless and reusable:
   (`.debug/aerospork`), `--json` on `list-windows`/`list-workspaces`/`list-monitors`,
   rich `--format` vars, and `trigger-binding`/`enable` for driving the live app.
 - **`run-tests.sh`** already does build → `swift test` → CLI smoke → format/lint →
-  generate → uncommitted-file check. **It is a CI job body with no CI calling it.**
+  generate → uncommitted-file check. `.github/workflows/ci.yml` runs exactly that on every push and pull
+    request, and it is a required status check on `main`.
 
 **The real gaps:**
 
@@ -82,8 +83,12 @@ ships. CI now runs `run-tests.sh` on a hosted `macos-latest` runner.
 
 ## 3. Layer 1 — Unit test gaps (headless, do these first)
 
-All items below have **zero** current coverage (grep-confirmed) unless noted. None need
-a running app. Priority = value × cheapness.
+None of these need a running app. Priority = value × cheapness.
+
+Coverage notes here rot: several rows first written as "zero coverage" have since been covered --
+socket framing by `CommonTests/SocketCodecTest.swift` and `AppBundleTests/model/UnixSocketTest.swift`,
+default-config parsing by `ConfigurationWriterSafetyTest.testShippedDefaultConfigIsEditable`. Check
+before believing a row.
 
 ### P0 — cheap, high-value, no new seam
 
@@ -277,7 +282,8 @@ harness, and the existing scripts (`build-debug-app.sh`,
 1. **Toolchain preflight.** bash, `script/preflight-toolchain.sh`. §8. *Build first.*
 2. ~~**CI workflow.**~~ Done: `.github/workflows/ci.yml` runs `run-tests.sh` on a hosted runner. §9.
 3. **ConfigurationWriter round-trip + fuzz.** XCTest,
-   `Sources/AppBundleTests/config/ConfigurationWriterTest.swift`. §3 P0. *Build first.*
+   Config-writer coverage landed instead across `ConfigTest.swift`,
+   `ConfigurationWriterSafetyTest.swift` and `ConfigSafetyWriterFuzzTest.swift`. *Done.*
 4. **Layout golden-rects.** extend XCTest under `Sources/AppBundleTests/layout/`, golden
    JSON in `.../golden/`. Needs Seam A (§4). Snapshot computed rects for canonical trees
    (h/v split, accordion, nested, 2-monitor); a diff is a layout regression, zero AX.

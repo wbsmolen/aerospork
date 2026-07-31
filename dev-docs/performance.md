@@ -170,7 +170,9 @@ AEROSPORK_DEBUG_LOG=1 /Applications/AeroSpork.app/Contents/MacOS/AeroSpork 2>&1 
 ## Known remaining items
 
 - **`model/Monitor.swift`.** `monitors`/`sortedMonitors` rebuild from `NSScreen.screens` on every
-  access; 26 call sites, 4 inside `updateTrayText` alone. **Attempted and deliberately reverted.**
+  access, from around 30 call sites. `updateTrayText` hoists it into a local and reads that, so the
+  hot path costs one rebuild per refresh rather than one per use. **Attempted and deliberately
+  reverted.**
   A `@MainActor` cache cascades isolation into `MonitorEx.monitorId`, `MonitorResolution` and their
   callers (all currently non-isolated); a `nonisolated(unsafe)` cache would be an unsound data
   race. No measurement shows this path is hot, so neither price is justified yet. Profile first.

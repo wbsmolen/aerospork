@@ -66,6 +66,27 @@ todo
 
 ../Sources/AppBundle/layout/
 
+## Workspace memory
+
+`WorkspaceMemory.swift` persists window -> workspace, and the monitor each workspace was on, so a
+restart does not scatter the layout. Written to `~/Library/Caches/<bundle-id>/workspace-memory.json`
+at mode `0600`.
+
+Three things about it are load-bearing:
+
+- **Both halves, or neither.** `Workspace.get(byName:)` mints a workspace whose
+  `assignedMonitorPoint` is nil, and the only writers of that field run when a workspace becomes
+  visible or is force-assigned -- so a workspace restored by name alone reports `mainMonitor`, and a
+  multi-monitor layout collapses onto one display. That shipped once and was reverted.
+  `restoredWorkspace(forWindowId:bundleId:)` is the single entry point that does both.
+- **The key is the `CGWindowID` and nothing else.** It comes from a counter owned by WindowServer, so
+  it survives a restart of this process and nothing else. The generation token is WindowServer's pid
+  and start time rather than `kern.boottime`, because the counter restarts on log out and on a
+  graphics fault, neither of which reboots the machine.
+- **Startup adds, never prunes.** At login AeroSpork races every other login item, so an app that has
+  not answered Accessibility yet is absent from the first snapshot; writing that snapshot over the
+  file deletes its entry, and the memory is only consulted while `isStartup`.
+
 ## UI subsystem
 
 ../Sources/AppBundle/ui/

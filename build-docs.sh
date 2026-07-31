@@ -22,7 +22,6 @@ build-site() {
         # Delete "aerospork " prefifx in synopsis
         sed -E -i '' '/tag::synopsis/, /end::synopsis/ s/^(aerospork | {10})//' aerospork*
         bundler exec asciidoctor ./guide.adoc ./commands.adoc ./goodies.adoc
-        cp goodies.html goodness.html # backwards compatibility
         rm -rf ./*.adoc
     cd - > /dev/null
 
