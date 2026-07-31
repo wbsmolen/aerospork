@@ -184,6 +184,11 @@ checking is off until you allow it; **Check for Updates…** in the menu bar che
 is no App Store update path to inherit, because the Accessibility APIs this app is built on do not
 work in a sandbox.
 
+Because update checks are the only network request AeroSpork can make, and the Accessibility
+permission it needs is a broad one, [aerospork.app/privacy.html](https://aerospork.app/privacy.html)
+sets out exactly what is stored, what is sent, and what is not: no analytics, no telemetry, and no
+system profile.
+
 ## Configuration
 
 AeroSpork reads whichever of these exists, and reports an error at startup if both do:

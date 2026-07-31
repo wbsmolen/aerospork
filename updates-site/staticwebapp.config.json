@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/staticwebapp.config.json",
+
+  "globalHeaders": {
+    "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "Permissions-Policy": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "X-Frame-Options": "DENY"
+  },
+
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/404.html"
+    }
+  }
+}

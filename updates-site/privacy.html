@@ -3,30 +3,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy — AeroSpork</title>
 <meta name="description" content="What AeroSpork stores, what it sends, and what this website sees.">
+<link rel="canonical" href="https://aerospork.app/privacy.html">
 <link rel="icon" href="/icon.png" type="image/png">
 <link rel="apple-touch-icon" href="/icon.png">
-<style>
-  :root { color-scheme: light dark; --fg: #1c202c; --dim: #5b6070; --bg: #fff; --card: #f4f5f7; --link: #0064e1; }
-  @media (prefers-color-scheme: dark) {
-    :root { --fg: #e6e8ee; --dim: #9aa0b0; --bg: #14161c; --card: #1e2129; --link: #5e9eff; }
-  }
-  * { box-sizing: border-box }
-  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-         max-width: 46rem; margin: 0 auto; padding: 5vh 1.5rem 6rem; color: var(--fg); background: var(--bg) }
-  h1 { font-size: 2.1rem; letter-spacing: -.022em; margin: 0 0 .3rem }
-  h2 { font-size: 1.05rem; letter-spacing: -.01em; margin: 2.4rem 0 .6rem }
-  p { margin: 0 0 1rem }
-  .tag { color: var(--dim); font-size: 1.05rem; margin-bottom: 1.8rem }
-  a { color: var(--link); text-decoration: none }
-  a:hover { text-decoration: underline }
-  code { font: 13.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--card); padding: .15em .4em; border-radius: 4px }
-  ul { padding-left: 1.1rem; margin: 0 0 1rem }
-  li { margin-bottom: .35rem }
-  footer { margin-top: 3rem; color: var(--dim); font-size: .9rem }
-  .head { display: flex; align-items: center; gap: .8rem; margin-bottom: .3rem }
-  .head img { width: 56px; height: 56px; flex: none; border-radius: 12px }
-  .head h1 { margin: 0 }
-</style>
+<link rel="stylesheet" href="/site.css">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="AeroSpork">
+<meta property="og:url" content="https://aerospork.app/privacy.html">
+<meta property="og:title" content="AeroSpork — Privacy">
+<meta property="og:description" content="No analytics, no telemetry, and update checks off by default. What AeroSpork stores, what it sends, and what this website sees.">
+<meta property="og:image" content="https://aerospork.app/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="AeroSpork — an i3-like tiling window manager for macOS">
+<meta name="twitter:card" content="summary_large_image">
 
 <header class="head">
   <a href="/"><img src="/icon.png" alt="AeroSpork home" width="56" height="56"></a>
@@ -77,8 +67,13 @@ way any download host would.</p>
 <h2>What this website sees</h2>
 <p>These pages are static files on Azure Static Web Apps. Nothing is loaded from another host — no
 third-party fonts, images, scripts, embeds or trackers — there are no cookies, and nothing follows
-you between visits. The only script on the site is a few lines on the front page that put the
-install command on your clipboard when you click the copy button; it sends nothing anywhere.</p>
+you between visits. That is not only a promise: the site sends a
+<code>Content-Security-Policy</code> of <code>default-src 'none'</code> with everything else
+restricted to <code>'self'</code>, so your browser refuses any off-site request this page might make,
+including one added by mistake.</p>
+<p>The only script on the site is <a href="/copy.js">a few lines on the front page</a> that put the
+install command on your clipboard when you click the copy button. It sends nothing anywhere, and you
+can read it.</p>
 <p>Azure receives the requests that serve these pages, which as with any web host includes IP
 addresses. That is infrastructure logging outside our control, and it is not collected, read, or
 combined with anything by this project.</p>
