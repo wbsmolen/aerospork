@@ -6,6 +6,36 @@
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>1.1.8</title>
+            <pubDate>Sun, 02 Aug 2026 11:27:08 -0500</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:version>1.1.8</sparkle:version>
+            <sparkle:shortVersionString>1.1.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Settings, redesigned</h2>
+<p>Every pane got a full pass — same seven panes, now behaving like a native macOS preferences window.</p>
+<ul>
+<li><strong>Native pane toolbar.</strong> The settings window uses the standard macOS preferences toolbar, remembers which pane you were on, and titles the window after it.</li>
+<li><strong>Raw TOML is now a real editor.</strong> Line numbers, native Find (⌘F), horizontal scrolling instead of wrapping, restrained TOML highlighting, a section jump menu, cursor line/column readout, and parser errors that link to the failing line.</li>
+<li><strong>Keys.</strong> Bindings grouped by what they do, search across every mode at once, one-click Duplicate, and a mode picker that stays usable however many modes you define.</li>
+<li><strong>Monitors.</strong> The arrangement schematic is now the control: click a monitor to see its details and the workspaces pinned to it, then pin, move, or unpin workspaces from a menu right there. Assignments too rich for the editor are shown as such and preserved untouched — editing one workspace can no longer re-spell another&#x27;s regex or fallback list.</li>
+<li><strong>The settings window is finally resizable.</strong> It was silently fixed at its ideal size; the documented 780×520 minimum is now real.</li>
+<li><strong>Window Rules.</strong> Guided controls for the common cases — float/tile and send-to-workspace — with your exact command preserved verbatim whenever it says something the controls can&#x27;t.</li>
+<li><strong>Gaps.</strong> A live preview, and &quot;same value&quot; links so symmetric gaps take one edit instead of four.</li>
+<li><strong>Events.</strong> Real command placeholders, per-event explanations, and a heads-up when callbacks inherit your shell environment.</li>
+</ul>
+<h2>Also in this release</h2>
+<ul>
+<li>The standard &quot;About AeroSpork&quot; menu item is back.</li>
+<li>Short-value fields (workspace names, the assignment picker) are sized to their content instead of stretching across the row.</li>
+<li>Badge text contrast now meets WCAG AA in light mode, and the monitor schematic stays legible with asymmetric arrangements (an ultrawide above two 4Ks no longer overlaps its labels).</li>
+<li>&quot;Choose app…&quot; in Window Rules now opens as a sheet on the settings window. It used to open behind everything — a menu-bar app can&#x27;t bring a detached panel forward — which read as the button hanging the app.</li>
+<li>Backup timestamps are now locale-independent; if your system uses a non-Gregorian calendar, backups made by older versions may show raw filenames in the Restore menu once.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.8/AeroSpork-1.1.8.zip" length="6721062" type="application/octet-stream" sparkle:edSignature="3bjx8nGP1oYcfavdhou6yUEWNjohtBs6WzyCJ0doNOQQQMTuyUPKk9zE9ZeLUE6CM0MUt74dPxW7NkAgRXLcCA=="/>
+        </item>
+        <item>
             <title>1.1.7</title>
             <pubDate>Thu, 30 Jul 2026 19:20:19 -0500</pubDate>
             <link>https://github.com/wbsmolen/aerospork</link>
@@ -67,15 +97,6 @@ brew install --cask wbsmolen/tap/aerospork
 <p><code>AeroSpork-1.1.6.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
 ]]></description>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.6/AeroSpork-1.1.6.zip" length="6310780" type="application/octet-stream" sparkle:edSignature="WGGvT6HkLe+9dCi2XkNDPIYZSAl5mXedoVgI0Juc3tMsfCTUCoXWAuG7Qx49166KHMVlrg9EeOs5QcWZj6hgAg=="/>
-        </item>
-        <item>
-            <title>1.1.5</title>
-            <pubDate>Thu, 30 Jul 2026 14:18:27 -0500</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.1.5</sparkle:version>
-            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.5/AeroSpork-1.1.5.zip" length="6298579" type="application/octet-stream" sparkle:edSignature="XYCDlGjjpCnKAbPSqzkf09uCQQ8HQrUbHsn7TqT2+SuCfulIspvOTaNoZe8YJ7KuMcflak27JIEyvagAdFzvDg=="/>
         </item>
     </channel>
 </rss>
