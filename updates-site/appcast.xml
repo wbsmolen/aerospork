@@ -6,6 +6,69 @@
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>1.2.0</title>
+            <pubDate>Sun, 13 Sep 2026 17:32:28 -0500</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:version>1.2.0</sparkle:version>
+            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>Fixes focus moving on its own when an app is slow to respond, and a set of problems that a config migrated from AeroSpace ran into: empty workspaces disappearing, window rules waiting for a click, and a settings window that could open out of sight. Reported in <a href="https://github.com/wbsmolen/aerospork/issues/39">#39</a> and <a href="https://github.com/wbsmolen/aerospork/issues/40">#40</a>.</p>
+<h2>Upgrade notes</h2>
+<ul>
+<li><strong>Declared workspaces always exist.</strong> Every workspace named in <code>workspaces</code> (with or without <code>mod</code>), in <code>persistent-workspaces</code>, or pinned to a monitor now exists even while empty. The default config declares <code>1-9</code>, so all nine appear in <code>list-workspaces --all</code>, the menu bar and <code>workspace next</code>/<code>prev</code> from launch. A workspace you reach only through a binding of your own is still created when you switch to it and released once empty.</li>
+<li><strong>One copy at a time.</strong> Starting AeroSpork while it is already running prints &quot;AeroSpork is already running&quot; and exits. Debug and release builds can still run side by side.</li>
+<li><strong>AeroSpork no longer manages its own windows.</strong> The settings window is never tiled or moved to a workspace.</li>
+<li><strong>Four AeroSpace keys are ignored instead of fatal.</strong> <code>config-version</code>, <code>auto-reload-config</code>, <code>on-mode-changed</code> and <code>focus-follows-mouse</code> are reported and ignored. Previously any of them made AeroSpork reject the whole config and run its default.</li>
+</ul>
+<h2>Focus and unresponsive apps</h2>
+<ul>
+<li>A window whose app is slow to answer Accessibility requests is no longer treated as closed. Previously it was dropped, focus moved to another window, and the window could come back on a different workspace.</li>
+<li>Focus moves after a window closes only if that window was focused. If macOS moves focus to another workspace because of the close, AeroSpork brings it back.</li>
+<li>A late answer from a busy app no longer pulls you back across a workspace switch.</li>
+<li>A minimized window comes back on its own workspace rather than the one you are on.</li>
+<li>While an app is hung, a workspace switch waits about a second for it, not a second per window.</li>
+<li><code>killall AeroSpork</code> exits within 10 seconds even when AeroSpork itself is stuck.</li>
+</ul>
+<h2>Window rules</h2>
+<ul>
+<li>A rule applies without clicking the window when the app was still starting, or when the window first looked like a popup.</li>
+<li>A rule&#x27;s command list always runs to the end. Previously a refresh at the wrong moment could stop it after <code>layout tiling</code>.</li>
+</ul>
+<h2>Callbacks</h2>
+<ul>
+<li><code>exec-and-forget</code> run from <code>on-focused-workspace-changed</code> now receives <code>AEROSPORK_FOCUSED_WORKSPACE</code> and <code>AEROSPORK_PREV_WORKSPACE</code>, so the documented replacement for <code>exec-on-workspace-change</code> works.</li>
+</ul>
+<h2>Settings</h2>
+<ul>
+<li>Settings comes to the front when opened from the menu, with <code>aerospork open-settings</code>, or by opening AeroSpork again from Finder or Spotlight.</li>
+<li>A change made just before closing the window is saved instead of dropped.</li>
+<li>A saved change takes effect on screen immediately.</li>
+<li>The General pane says which settings apply only to new workspaces, and that turning off a normalization does not undo earlier changes.</li>
+</ul>
+<h2>Coming from AeroSpace</h2>
+<ul>
+<li><code>persistent-workspaces</code> is supported.</li>
+<li>When only an AeroSpace config exists, AeroSpork says that it is running its default config.</li>
+<li>A string <code>if</code> in <code>[[on-window-detected]]</code> is rejected with an error that names the table form.</li>
+<li>A command that still uses <code>AEROSPACE_*</code> variables or the <code>aerospace</code> CLI loads with a warning naming the line.</li>
+<li>The guide has a new &quot;Coming from AeroSpace&quot; section.</li>
+</ul>
+<h2>Troubleshooting</h2>
+<ul>
+<li>AeroSpork logs a startup record with its version and whether verbose tracing is on, and logs focus changes it makes on its own under the <code>session</code> category.</li>
+<li>The troubleshooting guide and bug report template give the right log subsystem for release builds and explain how to capture a verbose trace.</li>
+</ul>
+<p>Universal (arm64 + x86_64), signed with a Developer ID, notarized and stapled.</p>
+<h2>Install</h2>
+<pre>
+brew install --cask wbsmolen/tap/aerospork
+</pre>
+<p>Or download <code>aerospork-v1.2.0.zip</code>, move <code>aerospork-v1.2.0/AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when prompted. For the CLI, symlink the installed copy: <code>ln -s /Applications/AeroSpork.app/Contents/MacOS/aerospork-cli /usr/local/bin/aerospork</code>.</p>
+<p><code>AeroSpork-1.2.0.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.2.0/AeroSpork-1.2.0.zip" length="6788074" type="application/octet-stream" sparkle:edSignature="UQc2nYG5f0JqX1NmBXbas3K+d2t6bI06pldKCLQ+wJv9vwwbIWet6/VuBw5klpAtWEHfEirbXkChRg6wo14MBQ=="/>
+        </item>
+        <item>
             <title>1.1.8</title>
             <pubDate>Sun, 02 Aug 2026 11:27:08 -0500</pubDate>
             <link>https://github.com/wbsmolen/aerospork</link>
@@ -56,47 +119,6 @@ brew install --cask wbsmolen/tap/aerospork
 <p><code>AeroSpork-1.1.7.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
 ]]></description>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.7/AeroSpork-1.1.7.zip" length="6311356" type="application/octet-stream" sparkle:edSignature="j8DnGsc71nFqOKD/w4xEjLwB5CDmJCVt9wwgJV8OqNtPeL+VK2SzQ9vVxK0FeBd6fnnUoldsuWZt2jw329kxDg=="/>
-        </item>
-        <item>
-            <title>1.1.6</title>
-            <pubDate>Thu, 30 Jul 2026 17:16:47 -0500</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.1.6</sparkle:version>
-            <sparkle:shortVersionString>1.1.6</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<p>Fixes workspace memory doing nothing after a reboot, a case where editing a window rule could damage unrelated parts of your config, and the missing licence in every previous download.</p>
-<h2>Workspace memory now works on a cold boot</h2>
-<p>1.1.5 remembered which workspace each window was on, but at login it forgot any application that had not finished starting. AeroSpork launches alongside every other login item and macOS&#x27;s own window restore, so a slow app was absent from the first snapshot — and that snapshot was written straight over the memory, deleting its entry before the app ever appeared.</p>
-<p>So the case the feature exists for, restarting your Mac, was the one it skipped. It now waits for those windows instead of forgetting them.</p>
-<p>Also fixed: if a logout was cancelled by another app, AeroSpork kept running with its memory frozen and never saved again for the rest of the session.</p>
-<h2>Editing a window rule could damage unrelated config</h2>
-<p>Three ways, all fixed:</p>
-<ul>
-<li><strong>A regex containing <code>[</code></strong> — an ordinary thing to write in a window-title matcher — silently</li>
-</ul>
-<p>switched off every safety check for the rest of the file. Those checks are what stop the editor rewriting things it cannot represent, including a monitor pinned by hardware fingerprint, so an edit elsewhere could quietly degrade it to a plain name.</p>
-<ul>
-<li><strong>A comment after a section header</strong>, like <code>[on-window] # my rules</code>, made that section</li>
-</ul>
-<p>unrecognisable to the writer. It added a second copy instead of replacing it, so every rule in the table applied twice.</p>
-<ul>
-<li><strong>A monitor written as a list of fallbacks</strong> was reduced to its first entry — including on rows you</li>
-</ul>
-<p>did not touch, since one edit rewrites the whole section. It is now refused with a pointer to the Raw TOML tab rather than silently truncated.</p>
-<h2>The licence was missing from every download</h2>
-<p><code>legal/LICENSE.txt</code> was a link to a file that was never included in the archive, so every release shipped the four third-party licences and not AeroSpork&#x27;s own. The release now carries it, and the packaging refuses to build an archive with a broken link in it.</p>
-<h2>Update notes and the state file</h2>
-<p>The <strong>Check for Updates</strong> dialog showed a blank &quot;what&#x27;s new&quot; pane. It now shows these notes.</p>
-<p>Workspace memory moved from <code>/tmp</code> to <code>~/Library/Caches/com.wbs.aerospork/workspace-memory.json</code> and is readable only by you. It lists which applications are running and which monitors are attached, which no other account on the machine needs to see, and <code>/tmp</code> is writable by anyone — a file planted there decided where your windows went. Upgrading leaves the old file behind; it is ignored and safe to delete.</p>
-<p>Universal (arm64 + x86_64), signed with a Developer ID, notarized and stapled.</p>
-<h2>Install</h2>
-<pre>
-brew install --cask wbsmolen/tap/aerospork
-</pre>
-<p>Or download <code>aerospork-v1.1.6.zip</code>, move <code>aerospork-v1.1.6/AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when prompted. Optionally put <code>aerospork-v1.1.6/bin/aerospork</code> on your <code>PATH</code> for the CLI.</p>
-<p><code>AeroSpork-1.1.6.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
-]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.6/AeroSpork-1.1.6.zip" length="6310780" type="application/octet-stream" sparkle:edSignature="WGGvT6HkLe+9dCi2XkNDPIYZSAl5mXedoVgI0Juc3tMsfCTUCoXWAuG7Qx49166KHMVlrg9EeOs5QcWZj6hgAg=="/>
         </item>
     </channel>
 </rss>
