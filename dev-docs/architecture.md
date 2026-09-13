@@ -56,9 +56,22 @@ todo
 
 ## Tree Model subsystem
 
-todo
-
 ../Sources/AppBundle/tree/
+
+A few invariants that are easy to break and expensive to rediscover:
+
+- **Which workspaces exist.** `Config.persistentWorkspaces` (`workspaces`, `persistent-workspaces`,
+  force-assignments) always exist; `Workspace.garbageCollectUnusedWorkspaces` creates and exempts them on
+  every call, and releases every other empty invisible workspace. The binding-derived
+  `preservedWorkspaceNames` only steers `getStubWorkspace` and is never materialized.
+- **AeroSpork is not a managed app.** `MacApp.getOrRegister` returns nil for its own pid, so the Settings
+  window is never bound to a workspace or hidden in a corner.
+- **A registered window is never "new" again**, so its `on-window-detected` rules run inside
+  `shieldedFromCancellation`: a refresh cancelled mid-rule would otherwise leave the rule half-applied
+  permanently.
+- **macOS's focus is read through `syncFocusFromMacOs`.** An unanswered read (`NativeFocusUnknown`) must
+  not reach `updateFocusCache`, and a death macOS reacted to first is matched through
+  `focusAdoptedAwayFrom`. Both are #39; `InvoluntaryFocusTest` pins them.
 
 ## Layout subsystem
 

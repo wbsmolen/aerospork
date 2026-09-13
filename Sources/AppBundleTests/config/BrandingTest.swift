@@ -44,12 +44,17 @@ final class BrandingTest: XCTestCase {
         return result
     }
 
+    /// The one file allowed to spell the upstream name. Recognising a config brought over from
+    /// upstream -- its file name, its env vars, its CLI, its keys -- means naming them, so every such
+    /// string lives there and nowhere else. One file, so the exemption cannot spread.
+    private static let upstreamMigrationFile = "Sources/AppBundle/config/upstreamMigration.swift"
+
     /// The upstream product name, in any case, in any of the owned sources. `during-…-startup` and
     /// `AEROSPACE_*` were removed outright rather than deprecated, so there is no legitimate
-    /// remaining occurrence -- not in a literal, not in a comment.
+    /// remaining occurrence -- not in a literal, not in a comment -- outside `upstreamMigrationFile`.
     func testOwnedSourcesDoNotMentionTheUpstreamProductName() throws {
         var offenders: [String] = []
-        for (path, text) in try swiftFiles() {
+        for (path, text) in try swiftFiles() where path != Self.upstreamMigrationFile {
             for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
                 where line.lowercased().contains("aerospace")
             {
@@ -73,6 +78,12 @@ final class BrandingTest: XCTestCase {
             }
         }
         XCTAssertEqual(offenders, [], "use aeroSporkAppId, not a literal:\n" + offenders.joined(separator: "\n"))
+    }
+
+    /// The exemption must not outlive its reason: the file exists, is scanned, and still needs it.
+    func testTheUpstreamMigrationExemptionIsStillNeeded() throws {
+        let file = try XCTUnwrap(try swiftFiles().first { $0.path == Self.upstreamMigrationFile }, "exempted file is gone; drop the exemption")
+        XCTAssertTrue(file.text.lowercased().contains("aerospace"), "the exempted file no longer names upstream; drop the exemption")
     }
 
     /// Counter-check: the scan must actually be looking at file contents. Without this, a broken

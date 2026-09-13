@@ -32,6 +32,10 @@ a leaked credential costs you the credential.
 Redaction is a shoulder-surfing guard for *display only*. The child process still receives the real
 environment, because a script that posts to Slack needs its token. See `man aerospork-exec-and-forget`.
 
+It lists the environment every such command starts from. The variables AeroSpork adds per command --
+`AEROSPORK_WINDOW_ID`, `AEROSPORK_WORKSPACE`, `AEROSPORK_FOCUSED_WORKSPACE`, `AEROSPORK_PREV_WORKSPACE`
+-- depend on what triggered it, so they cannot appear here.
+
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 

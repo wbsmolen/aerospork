@@ -37,7 +37,7 @@ function EventsTab({ events, setEvents, env, setEnv, inherit, setInherit }) {
         placeholder="move-mouse window-lazy-center"
         footer="Any focus change at all: window, workspace or monitor. Fires the most often — keep it cheap." />
       <FormSection header={<SectionLabel title="Environment for exec commands" sf="terminal" />}
-        footer="`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`: check the exact values with `aerospork list-exec-env-vars`.">
+        footer="`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`, and workspace-change commands get `AEROSPORK_FOCUSED_WORKSPACE` and `AEROSPORK_PREV_WORKSPACE`. `aerospork list-exec-env-vars` shows the environment they all start from.">
         <Toggle label="Inherit AeroSpork's environment" checked={inherit} onChange={setInherit} />
         {inherit && <SettingsHint>Every command on this page runs with AeroSpork's full environment, including anything sensitive in it. Turn this off and list only what you need below.</SettingsHint>}
         {env.map((v) => (

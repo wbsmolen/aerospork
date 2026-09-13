@@ -207,6 +207,9 @@ private func compactRanges(_ names: [String]) -> [String] {
         cmds(a.onFocusedWorkspaceChanged) == cmds(b.onFocusedWorkspaceChanged) &&
         cmds(a.onFocusedMonitorChanged) == cmds(b.onFocusedMonitorChanged) &&
         a.preservedWorkspaceNames.sorted() == b.preservedWorkspaceNames.sorted() &&
+        // `persistentWorkspaces` is deliberately NOT compared. Folding a v1 keymap's `alt-1..9` pairs
+        // into `workspaces` makes those workspaces persistent, which is a change -- but the one that
+        // matches what upstream's v1 did with bound names, and so what a migrating user expects.
         bindings(a.modes) == bindings(b.modes) &&
         monitors(a.workspaceToMonitorForceAssignment) == monitors(b.workspaceToMonitorForceAssignment) &&
         windows(a.onWindowDetected) == windows(b.onWindowDetected)

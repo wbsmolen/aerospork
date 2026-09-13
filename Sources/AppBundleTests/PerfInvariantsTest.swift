@@ -87,7 +87,8 @@ final class PerfInvariantsTest: XCTestCase {
     /// listed all of them. Measured on the real machine: **32 workspaces, 0 windows**.
     ///
     /// The invariant is not "few workspaces" but "a workspace exists only if something is in it, it
-    /// is on screen, or you are looking at it".
+    /// is on screen, you are looking at it, or the config declares it". Declared workspaces are
+    /// `PersistentWorkspacesTest`'s business; here the config declares none.
     func testEmptyWorkspacesAreCollectedNoMatterHowManyNamesAreBound() {
         let bound = (1 ... 9).map(String.init) + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".map(String.init)
         config.preservedWorkspaceNames = bound

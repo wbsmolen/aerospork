@@ -45,9 +45,20 @@ final class MacWindow: Window {
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
 
-        try await debugWindowsIfRecording(window)
-        if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
-            try await tryOnWindowDetected(window)
+        // Committed: from here the window is registered, and no refresh looks at it as new again. So
+        // the rest runs to the end even if this refresh is cancelled; see `shieldedFromCancellation`.
+        try await shieldedFromCancellation {
+            try await debugWindowsIfRecording(window)
+            if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
+                try await tryOnWindowDetected(window)
+            }
+        }
+        // A window that arrives looking like a popup is re-checked by `validateStillPopups` -- but only
+        // when something refreshes, and an app still drawing its first window (Electron) may send
+        // nothing more. Two bounded looks, so it is laid out and its rules run without a click (#40).
+        if case .macosPopupWindowsContainer = window.parent?.cases {
+            scheduleFollowUpRefresh(after: 1, "popupRecheck")
+            scheduleFollowUpRefresh(after: 3, "popupRecheck")
         }
         return window
     }

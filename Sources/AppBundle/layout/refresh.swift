@@ -201,6 +201,30 @@ func refreshObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: Unsaf
     }
 }
 
+/// A refresh some time from now that nothing else would trigger, and that no later event cancels.
+///
+/// Not `RefreshDebouncer`: every new event cancels its pending task, so a retry queued there is
+/// replaced by a refresh that fires too early to help and never comes back. Each call is its own
+/// one-shot, so callers bound how many they make.
+@MainActor func scheduleFollowUpRefresh(after delay: TimeInterval, _ reason: String) {
+    Task { @MainActor in
+        try? await Task.sleep(for: .seconds(delay))
+        if !TrayMenuModel.shared.isEnabled { return }
+        runRefreshSession(.globalObserver(reason), screenIsDefinitelyUnlocked: false)
+    }
+}
+
+/// Runs `body` where the caller's cancellation cannot reach it.
+///
+/// For work that must not stop halfway. An `on-window-detected` rule is a sequence of commands, none
+/// of them idempotent, and a refresh is cancelled whenever a newer event arrives. Cancelled between
+/// `layout tiling` and `move-node-to-workspace`, the window was left tiled on the wrong workspace --
+/// and never retried, because by then it was registered. The caller still sees its own cancellation
+/// at its next check.
+@MainActor func shieldedFromCancellation(_ body: sending @escaping @MainActor () async throws -> Void) async throws {
+    try await Task { @MainActor in try await body() }.value
+}
+
 enum OptimalHideCorner {
     case bottomLeftCorner, bottomRightCorner
 }

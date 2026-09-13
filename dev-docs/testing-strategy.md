@@ -104,6 +104,7 @@ before believing a row.
 | ✅ **UnixSocket framing** | `SocketCodecTest` and `UnixSocketTest`: codec, loopback, EOF, and framing boundaries | Replaced BlueSocket; a framing bug would be silent IPC corruption. |
 | ✅ **ConfigurationWriter round-trip + fuzz** | `ConfigTest`, `ConfigurationWriterSafetyTest`, and `ConfigSafetyWriterFuzzTest` | Managed changes parse, comments/order/unknown sections survive, no-op is byte-identical, and save paths are exercised over generated valid states. |
 | ✅ **Settings structure and editor behavior** | `UIRenderSmokeTest`, `UISettingsTest`, `UIChromeConsistencyTest`, `UIKeysBindingsTest`, and `ConfigTest` | All panes evaluate in loaded/empty states; pane metadata, shared chrome, editor sections/highlighting, and exact source diagnostics are regression-tested without a live window server. |
+| ✅ **Focus, detection and migration decisions** | `InvoluntaryFocusTest`, `WindowDetectionRetryTest`, `PersistentWorkspacesTest`, `MigrationTrapsTest`, `ExecEnvTest`, `OwnWindowsAndSingleInstanceTest`, `SettingsApplyTest` | The decisions behind #39 and #40 are pure functions pinned headlessly (`axErrorMeansDestroyed`, `shouldRestoreFocusAfterDeath`, `runningCopyToYieldTo`, `execAndForgetProcess`, `shieldedFromCancellation`); a throwing `TestApp.getFocusedWindow` simulates an app that misses the AX timeout. Paths that need a real `MacApp` are pinned by source checks. |
 
 ### P1 — cheap, protects the DisplayLink/hotkey revamp
 
@@ -202,6 +203,23 @@ teardown: aerospork enable off ; close spawned apps
 Use a locked fixture `~/.aerospork-debug.toml` for determinism. Discover window ids from
 `list-windows --json`; drive/assert by `window-id`. Deterministic placement of a spawned
 window is best done with an `on-window-detected` config rule.
+
+**Until this harness exists: the live checklist.** Each check for the #39/#40 fixes is a one-liner
+against a debug build (`AEROSPORK_SWIFT=xcrun ./build-debug-app.sh`, CLI `.debug/aerospork`). Two
+techniques do most of the work with no new files: `kill -STOP <pid>` / `kill -CONT <pid>` on a real app
+makes every AX call to it miss the 1s messaging timeout (`.cannotComplete` on macOS 26 and 27),
+and polling `list-workspaces --focused` or `list-windows --workspace N --count` asserts the outcome
+without screenshots.
+
+| Scenario | Drive | Assert |
+|---|---|---|
+| Focused window closes; macOS keys one on another workspace (#39) | windows of one app on ws1 and ws3, ⌘W on ws1 | `list-workspaces --focused` stays `1` |
+| App too busy to answer during a switch (#39) | `kill -STOP` the focused app, `workspace 2`, wait 3s, `kill -CONT` | stays `2` for 5s |
+| Empty declared workspaces (#40) | `workspaces = "1-9"` and no `mod` | `list-workspaces --all` lists 1-9 at launch |
+| A rule applies without a click (#40) | `open -a "Visual Studio Code"` with a rule to ws3; again with `kill -STOP` right after launch | `list-windows --workspace 3 --app-bundle-id com.microsoft.VSCode --count` is 1 within 10s |
+| Settings comes to the front (#40) | `open-settings` from Terminal, then `workspace 2` | `lsappinfo front` names the app; the window is still on screen |
+| One copy at a time | exec the bundle's binary while it runs | stderr says so; `pgrep -x AeroSporkApp` counts 1 |
+| Workspace-change env (#40) | `on-focused-workspace-changed = ['exec-and-forget echo "$AEROSPORK_PREV_WORKSPACE>$AEROSPORK_FOCUSED_WORKSPACE" >> /tmp/ws.log']` | both names logged per switch |
 
 ---
 

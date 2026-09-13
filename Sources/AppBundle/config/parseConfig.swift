@@ -17,6 +17,12 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
         case .noCustomConfigExists:
             customConfigUrl = defaultConfigUrl
             isUserConfig = false
+            // A migrating user's first launch: the config they brought is right there and not read,
+            // so they get the default keymap and no hint why.
+            if let hint = upstreamConfigLeftBehindHint() {
+                AppLog.config.notice("\(hint, privacy: .public)")
+                printStderr(hint)
+            }
         case .ambiguousConfigError(let candidates):
             let msg = """
                 Ambiguous config error. Several configs found:
@@ -135,6 +141,13 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "monitors": Parser(\._deprecatedNoOp, skipParsing(())),
     "on-window": Parser(\._deprecatedNoOp, skipParsing(())),
 
+    // Upstream's spelling of "these workspaces always exist". Read by the generic walker, NOT listed
+    // in `configV2RootKeys`: that would reclassify an upstream `[mode.*]` config as v2 and skip its
+    // migration. `workspaces` and force-assigned names join the same set later in `parseConfig`.
+    "persistent-workspaces": Parser(\.persistentWorkspaces) { raw, backtrace, errors in
+        Set(parseWorkspaceNames(raw, backtrace, &errors))
+    },
+
     "gaps": Parser(\.gaps, parseGaps),
     "workspace-to-monitor-force-assignment": Parser(\.workspaceToMonitorForceAssignment, parseWorkspaceToMonitorAssignment),
     "on-window-detected": Parser(\.onWindowDetected, parseOnWindowDetectedArray),
@@ -168,7 +181,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
             "There is no startup-specific layout: every workspace root container uses default-root-container-layout.")),
     "indent-for-nested-containers-with-the-same-orientation": Parser(\._deprecatedNoOp, deprecatedNoOp(
         "indent-for-nested-containers-with-the-same-orientation is deprecated and does nothing. See https://github.com/wbsmolen/aerospork/issues/96")),
-]
+].merging(upstreamOnlyKeyParsers) { own, _ in own } // upstream-only keys: reported and ignored
 
 /// A finding against an obsolete key: the key is ignored (or still honoured), and the rest of the
 /// config loads.
@@ -260,6 +273,13 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
 
     if isV2 { applyConfigV2(rawTable, &config, &errors) }
 
+    // Declared workspaces always exist -- see `Workspace.garbageCollectUnusedWorkspaces`. `workspaces`
+    // was added in `applyConfigV2` and `persistent-workspaces` by the table walker; a force-assignment
+    // is a declaration too, since pinning a workspace to a monitor says it exists. Unlike the
+    // binding-derived names below, this holds for the bundled default as well: copying the default to
+    // a file of your own must not change what it does.
+    config.persistentWorkspaces.formUnion(config.workspaceToMonitorForceAssignment.keys)
+
     // Only preserve workspace names if this is a user config, not the default config
     if isUserConfig {
         config.preservedWorkspaceNames = config.modes.values.lazy
@@ -296,6 +316,8 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
             )]
         }
     }
+
+    errors += upstreamNameWarnings(rawToml)
 
     warnings = errors.filter(\.isDeprecation)
     let fatal = errors.filter { !$0.isDeprecation }

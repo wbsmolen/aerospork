@@ -81,7 +81,13 @@ func workspaceKeyNotation(_ name: String) -> String? {
     let mapping = config.keyMapping.resolve()
     var modes: [String: Mode] = [:]
 
-    if let generated = generatedModeV2(rawTable, mapping, &errors) {
+    // Parsed here, once, whether or not there is a `mod`. It used to be read only inside
+    // `generatedModeV2`, behind its `mod` guard -- so a config without `mod`, which is every config
+    // migrated from upstream, listed nine workspaces and got none of them, without a word (#40).
+    let workspaceNames = rawTable["workspaces"].map { parseWorkspaceNames($0, .rootKey("workspaces"), &errors) } ?? []
+    config.persistentWorkspaces.formUnion(workspaceNames)
+
+    if let generated = generatedModeV2(rawTable, workspaceNames, mapping, &errors) {
         modes[mainModeId] = generated
     }
     for (name, mode) in rawTable["keys"].map({ parseKeysTable($0, .rootKey("keys"), &errors, mapping) }) ?? [:] {
@@ -113,7 +119,7 @@ func workspaceKeyNotation(_ name: String) -> String? {
 /// migration dishonest: a v1 config whose bindings do NOT match the generated set is migrated to a
 /// bare `[keys]` block, and if `mod` defaulted to something, that file would silently grow thirteen
 /// bindings the user never had.
-@MainActor private func generatedModeV2(_ rawTable: TOMLTable, _ mapping: [String: Key], _ errors: inout [TomlParseError]) -> Mode? {
+@MainActor private func generatedModeV2(_ rawTable: TOMLTable, _ workspaces: [String], _ mapping: [String: Key], _ errors: inout [TomlParseError]) -> Mode? {
     let backtrace: TomlBacktrace = .rootKey("mod")
     guard let rawMod = rawTable["mod"] else { return nil }
     guard let mod = parseString(rawMod, backtrace).getOrNil(appendErrorTo: &errors) else { return nil }
@@ -122,7 +128,6 @@ func workspaceKeyNotation(_ name: String) -> String? {
         errors.append(.semantic(backtrace, "'\(unknown.joined(separator: "-"))' is not a modifier. Use cmd, alt, ctrl or shift"))
         return nil
     }
-    let workspaces = rawTable["workspaces"].map { parseWorkspaceNames($0, .rootKey("workspaces"), &errors) } ?? []
     return Mode(name: nil, bindings: bindingsFrom(generatedBindingsV2(mod: mod, workspaces: workspaces), backtrace, &errors, mapping))
 }
 
@@ -169,7 +174,10 @@ func workspaceKeyNotation(_ name: String) -> String? {
 ///
 /// A token is a range only when it is `<char>-<char>` -- so `my-workspace` stays the literal name
 /// it obviously is.
-private func parseWorkspaceNames(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> [String] {
+///
+/// Shared by `workspaces` and `persistent-workspaces`. Every name must be one a command can reach:
+/// `next` or `focused` would be declared, kept alive, and impossible to switch to.
+func parseWorkspaceNames(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> [String] {
     if let array = raw.array {
         return array.enumerated().flatMap { index, item in parseWorkspaceNames(item, backtrace + .index(index), &errors) }
     }
@@ -177,7 +185,14 @@ private func parseWorkspaceNames(_ raw: TOMLValueConvertible, _ backtrace: TomlB
         errors.append(expectedActualTypeError(expected: [.string, .int, .array], actual: raw.type, backtrace))
         return []
     }
-    return expandWorkspaceRange(token) ?? [token]
+    return (expandWorkspaceRange(token) ?? [token]).filter { name in
+        switch WorkspaceName.parse(name) {
+            case .success: return true
+            case .failure(let message):
+                errors.append(.semantic(backtrace, message))
+                return false
+        }
+    }
 }
 
 /// `"1-9"` -> `["1", ..., "9"]`. nil when the token is not a range.

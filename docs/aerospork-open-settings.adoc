@@ -19,9 +19,11 @@ aerospork open-settings [-h|--help]
 // tag::body[]
 {manpurpose}
 
-Equivalent to choosing *Settings…* from the menu bar icon, or pressing kbd:[Cmd+,] while
-AeroSpork is frontmost. The settings window is a singleton: running this while it is already open
-brings the existing window to the front.
+Equivalent to choosing *Settings…* from the menu bar icon, pressing kbd:[Cmd+,] while AeroSpork is
+frontmost, or opening AeroSpork again (from Finder, Spotlight or `open -a AeroSpork`) while it is
+running. The settings window is a singleton: running this while it is already open brings the
+existing window to the front. The window comes to the front even when another app is frontmost, and
+AeroSpork never tiles it or moves it to a workspace.
 
 The command is allowed in config, so it can be bound to a key:
 
@@ -34,7 +36,8 @@ alt-shift-comma = 'open-settings'
 The window has seven panes: General, Gaps, Keys, Monitors, Events, Window Rules, and Raw TOML.
 It is resizable (opens at 880×620, minimum 780×520) and remembers its selected pane.
 
-Structured settings apply live as you change them. The *Raw TOML* pane is the exception: it applies
+Structured settings apply live as you change them, and a change still pending when you close the
+window is saved. The *Raw TOML* pane is the exception: it applies
 explicitly, so half-typed TOML is never written. Raw TOML
 supports native Find, line numbers, section jumps, and parser errors that link to the failing line.
 

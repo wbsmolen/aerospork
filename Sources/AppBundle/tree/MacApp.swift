@@ -124,6 +124,9 @@ final class MacApp: AbstractApp {
         // Don't perceive any of the lock screen windows as real windows
         // Otherwise, false positive ax notifications might trigger that lead to gcWindows
         if nsApp.bundleIdentifier == lockScreenAppBundleId { return nil }
+        // Never our own windows. Registered, the Settings window was bound to whichever workspace was
+        // focused and parked off screen on the next switch -- so it "never appeared" (#40).
+        if nsApp.processIdentifier == ProcessInfo.processInfo.processIdentifier { return nil }
         let pid = nsApp.processIdentifier
 
         if let existing = allAppsMap[pid] { return existing }
@@ -174,6 +177,13 @@ final class MacApp: AbstractApp {
                     } else {
                         let backoff = failedPids[pid].map { min($0.backoff * 2, registrationRetryMaxDelay) } ?? registrationRetryMinDelay
                         failedPids[pid] = (nextAttempt: .now + backoff, backoff: backoff, launchDate: launchDate)
+                        // Something has to look again. An app we could not subscribe to sends no AX events,
+                        // and the launch burst that brought us here is over, so a window of an app that was
+                        // merely still launching sat unmanaged until an unrelated event -- usually a click --
+                        // refreshed (#40). Stops below the ceiling, after 1+2+4+8+16 seconds.
+                        if backoff < registrationRetryMaxDelay {
+                            scheduleFollowUpRefresh(after: backoff, "registrationRetry")
+                        }
                     }
                     wipPids.remove(pid)
                     for (id, _) in registrationWaiters[pid] ?? [:] { resumeRegistrationWaiter(pid, id) }

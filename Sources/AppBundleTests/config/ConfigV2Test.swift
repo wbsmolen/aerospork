@@ -202,7 +202,8 @@ final class ConfigV2Test: XCTestCase {
     // MARK: - Workspace lifetime
 
     /// `getStubWorkspace` must not hijack a name the user has bound, and a generated binding is
-    /// still a binding. (Preserving the NAME is all this does -- no workspace is materialized.)
+    /// still a binding. (This is only the NAME set `getStubWorkspace` reads; keeping the workspaces
+    /// themselves alive is `persistentWorkspaces`, pinned in `PersistentWorkspacesTest`.)
     func testGeneratedWorkspaceNamesArePreserved() {
         assertEquals(parse("mod = 'alt'\nworkspaces = '1-3'").preservedWorkspaceNames.toSet().sorted(), ["1", "2", "3"])
     }

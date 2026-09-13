@@ -110,7 +110,12 @@ struct Config: ConvenienceCopyable {
     var modes: [String: Mode] = [:]
     var onWindowDetected: [WindowDetectedCallback] = []
 
+    /// Names bound by keybindings, plus force-assigned ones. Only steers `getStubWorkspace` away from
+    /// hijacking a name the user can reach -- these workspaces are NOT kept alive.
     var preservedWorkspaceNames: [String] = []
+    /// Workspaces that always exist, empty or not: `workspaces`, `persistent-workspaces`, and every
+    /// force-assigned name. See `Workspace.garbageCollectUnusedWorkspaces`.
+    var persistentWorkspaces: Set<String> = []
     var autoMoveWorkspacesOnMonitorConnect: Bool = true
 
     /// Where the app is visible from. Defaults match what the bundle's `LSUIElement` used to hard

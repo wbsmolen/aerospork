@@ -178,6 +178,36 @@ and a fuzzy key would permute them silently.
 
 **MRU Tracking**: Tree nodes track most-recently-used order for focus navigation.
 
+**Which workspaces exist**: a workspace the config declares -- `workspaces` (with or without `mod`),
+`persistent-workspaces`, or a force-assignment -- is in `Config.persistentWorkspaces` and always exists;
+`garbageCollectUnusedWorkspaces` creates and exempts it on every call. Every other empty invisible
+workspace is released. Keep it separate from `preservedWorkspaceNames`, the binding-derived name set
+`getStubWorkspace` reads, which must stay lazy (`PerfInvariantsTest`). `setUpWorkspacesForTests` zeroes
+both, because the bundled default declares `1-9`.
+
+**Taking focus from macOS**: both session entry points call `syncFocusFromMacOs`, never
+`updateFocusCache` directly. A focused-window read the app does not answer throws `NativeFocusUnknown`
+and leaves the focus cache alone -- passing it on as nil spent `lastKnownNativeFocusedWindowId` and
+bounced workspace switches (#39). `updateFocusCache` runs *before* `refresh()` collects dead windows, so a
+death macOS reacted to first is recognised through `focusAdoptedAwayFrom`, which only a macOS-driven
+cross-workspace adopt records; a hotkey switch goes through `setFocus` and must never match it.
+
+**AeroSpork never manages itself**: `MacApp.getOrRegister` returns nil for its own pid, so the Settings
+window is never bound to a workspace or parked off screen. `initAppBundle` exits when an older copy with
+the same bundle id is running (`runningCopyToYieldTo`), before anything binds the CLI socket. Open
+Settings through `openSettingsWindow()`, which activates the app and orders the window front -- not
+`SettingsLink`.
+
+**Window rules run to the end**: a window in `MacWindow.allWindowsMap` is never "new" again, so
+`on-window-detected` (at registration and in `validateStillPopups`) runs inside `shieldedFromCancellation`;
+a refresh cancelled mid-rule used to leave the rule half-applied for good. A retry nothing else would
+trigger goes through `scheduleFollowUpRefresh`, not `RefreshDebouncer`, whose pending task every event
+cancels.
+
+**Upstream's name lives in one file**: `config/upstreamMigration.swift` holds every string that has to
+spell the upstream product -- its config path, `AEROSPACE_*`, its CLI, its keys -- and `BrandingTest`
+exempts that file and nothing else.
+
 ## Design System
 
 `.claude/skills/aerospork-design/` is an invocable Agent Skill holding the design system: tokens,
@@ -233,7 +263,8 @@ Two channels, and the distinction matters:
   `.notice` / `.error` / `.fault`, which the unified log **persists**, so `log show --last 1h
   --predicate 'subsystem == "com.wbs.aerospork"'` answers a bug report after the fact. Because it is
   unconditional it must stay **cheap and rare**: the startup record, config loaded/rejected, config warnings,
-  socket lifecycle, CLI commands that exited non-zero, focus AeroSpork moved on its own (`session`).
+  socket lifecycle, a second copy exiting, CLI commands that exited non-zero, focus AeroSpork moved on
+  its own (`session`).
   Never per-refresh, never per-window.
 - **`debugLog`** (`Common/util/commonUtil.swift`) — verbose tracing, `@autoclosure` so the message is
   never built when off, gated at runtime on `AEROSPORK_DEBUG_LOG` (**not** `#if DEBUG`: the gate has

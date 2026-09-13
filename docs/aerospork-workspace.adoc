@@ -27,17 +27,18 @@ aerospork workspace [-h|--help] [--wrap-around] (next|prev)
 Focuses next or previous workspace in *the list*.
 
 * If stdin is not TTY and stdin contains non whitespace characters then *the list* is taken from stdin
-* Otherwise, *the list* is defined as all workspaces on focused monitor in alphabetical order
+* Otherwise, *the list* is defined as all workspaces on focused monitor in alphabetical order, including empty
+  workspaces the config declares
 
 *Workspace lifecycle*
 
-Workspaces are created the first time you switch to one, and released once they are empty and no
-longer visible. There is no list of workspaces to declare or maintain, and an empty workspace costs
-nothing: switching to it recreates it indistinguishably, because an empty workspace is nothing but
-its name.
+A workspace the config declares always exists, even while it is empty: every name in `workspaces`,
+every name in `persistent-workspaces`, and every workspace pinned to a monitor. `aerospork
+list-workspaces --all`, the menu bar and `workspace next`/`prev` show all of them.
 
-This is why `aerospork list-workspaces --all` shows only the workspaces actually in use rather than
-every name your config mentions.
+Any other workspace -- one only a keybinding of your own mentions -- is created the first time you
+switch to it and released once it is empty and no longer visible. It costs nothing until you use it:
+switching back recreates it indistinguishably, because an empty workspace is nothing but its name.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]

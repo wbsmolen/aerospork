@@ -197,13 +197,19 @@ extension Workspace {
     }
     if callbacks.isEmpty { return }
     guard let token: RunSessionGuard = .isServerEnabled else { return }
+    // Captured now, not when the session body runs: by then the user may have switched again.
+    let workspaceChange = hasFocusedWorkspaceChanged
+        ? _prevFocusedWorkspaceName.map { (from: $0, to: frozenFocus.workspaceName) }
+        : nil
     // todo potential optimization: don't run runSession if we are already in runSession
     runDetached("onFocusChangedCallbacks") {
         // The session is tagged with the first applicable event; the tag is only used for logging
         // and for `isStartup`, and none of these three are startup events.
         try await runSession(callbacks[0].0, token) {
-            for (_, commands) in callbacks {
-                _ = try await commands.runCmdSeq(.defaultEnv.withFocus(focus), .emptyStdin)
+            for (event, commands) in callbacks {
+                var env = CmdEnv.defaultEnv.withFocus(focus)
+                if case .onFocusedWorkspaceChanged = event { env.workspaceChange = workspaceChange }
+                _ = try await commands.runCmdSeq(env, .emptyStdin)
             }
         }
     }

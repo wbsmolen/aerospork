@@ -21,8 +21,9 @@ mod = "alt"
 # Each one gets   mod-<key>        -> switch to it
 #                 mod-shift-<key>  -> move the focused window to it
 # where <key> is the first character of the name, lower-cased ("dev" -> mod-d).
-# Workspaces are created when you first switch to one and released when they empty out, so listing
-# nine here costs nothing until you use them.
+# Workspaces listed here always exist, even while empty, so the menu bar, `list-workspaces` and
+# `workspace next/prev` show all of them. One you reach only through a binding of your own is created
+# when you switch to it and released when it empties out.
 workspaces = "1-9"
 
 # ---------------------------------------------------------------------------------------------

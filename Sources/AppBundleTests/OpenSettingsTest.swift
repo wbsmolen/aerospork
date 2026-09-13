@@ -39,7 +39,7 @@ final class OpenSettingsTest: XCTestCase {
             encoding: .utf8,
         )
         let body = try XCTUnwrap(
-            source.range(of: "func openSettingsWindow()").map { String(source[$0.lowerBound...].prefix(900)) },
+            source.range(of: "func openSettingsWindow()").map { String(source[$0.lowerBound...].prefix(1400)) },
             "openSettingsWindow() not found",
         )
         let guardIndex = try XCTUnwrap(body.range(of: "#available(macOS 14, *) { return false }")?.lowerBound)

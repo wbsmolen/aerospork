@@ -15,14 +15,14 @@ function GeneralTab({ s, set }) {
       </FormSection>
 
       <FormSection header={<SectionLabel title="Menu bar & Dock" sf="menubar.rectangle" />}
-        footer="AeroSpork has no window of its own, so these two icons are the only ways back into Settings without the command line. `aerospork open-settings` opens this window from anywhere.">
+        footer="AeroSpork has no window of its own, so these two icons are the quickest way back into Settings. Opening AeroSpork again, or `aerospork open-settings`, also opens this window.">
         <Toggle label="Show icon in the menu bar" checked={s.menuBarIcon} onChange={(v) => set('menuBarIcon', v)}
           help="The workspace chips, and the menu with workspace switching and Settings in it" />
         <Toggle label="Show icon in the Dock" checked={s.dockIcon} onChange={(v) => set('dockIcon', v)} />
       </FormSection>
 
       <FormSection header={<SectionLabel title="Layout" sf="rectangle.split.3x1" />}
-        footer="Auto gives wide monitors a horizontal split and tall monitors a vertical one. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.">
+        footer="Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.">
         <LabeledContent label="New workspaces use">
           <SegmentedPicker options={[{ value: 'tiles', label: 'Tiles' }, { value: 'accordion', label: 'Accordion' }]}
             value={s.layout} onChange={(v) => set('layout', v)} />
@@ -35,7 +35,7 @@ function GeneralTab({ s, set }) {
       </FormSection>
 
       <FormSection header={<SectionLabel title="Normalization" sf="wand.and.stars" />}
-        footer="Housekeeping applied after every layout change. Turn both off if you want the tree to stay exactly as you built it.">
+        footer="Housekeeping applied after every layout change. Turning one off leaves the tree as it is; it does not undo earlier changes. Turn both off if you want the tree to stay exactly as you built it.">
         <Toggle label="Flatten single-child containers" checked={s.flatten} onChange={(v) => set('flatten', v)} />
         <Toggle label="Alternate orientation for nested containers" checked={s.alternate} onChange={(v) => set('alternate', v)} />
       </FormSection>
