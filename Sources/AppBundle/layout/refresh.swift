@@ -59,9 +59,8 @@ func runRefreshSessionBlocking(
     if !TrayMenuModel.shared.isEnabled { return }
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let nativeFocused = try await getNativeFocusedWindow()
-            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
+            MacApp.timedOutThisPass = []
+            try await syncFocusFromMacOs()
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
@@ -100,13 +99,16 @@ func runSession<T>(
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             resetClosedWindowsCache()
+            MacApp.timedOutThisPass = []
 
-            let nativeFocused = try await getNativeFocusedWindow()
-            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
-            let focusBefore = focus.windowOrNil
+            try await syncFocusFromMacOs()
 
             refreshModel()
+            // AFTER `refreshModel()`, not before. That call is "catch the model up before we start",
+            // and it rebinds tree nodes -- which moves the MRU, which moves the derived `focus`.
+            // Reading the baseline before it therefore attributed the model's own catch-up to the
+            // body, and the push below raised a window nobody asked for.
+            let focusBefore = focus.windowOrNil
             debugLog("SESSION: Executing body")
             let result = try await body()
             refreshModel()
@@ -115,8 +117,19 @@ func runSession<T>(
 
             updateTrayText()
             try await layoutWorkspaces()
-            if focusBefore != focusAfter {
+            // By window id, not by identity. `TreeNode.==` is `===`, so a window garbage collected
+            // and re-registered during the session is a different object with the same id, and that
+            // alone used to fire a focus request.
+            //
+            // Do not also skip when `lastKnownNativeFocusedWindowId` already names the target.
+            // `updateFocusCache` deliberately does NOT update that variable while one of our own
+            // requests is in flight, so it can name a window macOS is about to move away from; skipping
+            // on it would drop a focus the user just asked for.
+            if focusBefore?.windowId != focusAfter?.windowId {
                 debugLog("SESSION: Focus changed from \(focusBefore?.windowId ?? 0) to \(focusAfter?.windowId ?? 0)")
+                if !event.isUserInitiated {
+                    AppLog.session.notice("focus synced to macOS by \(event.description, privacy: .public): \(focusBefore?.windowId ?? 0, privacy: .public) -> \(focusAfter?.windowId ?? 0, privacy: .public)")
+                }
                 focusAfter?.nativeFocus() // syncFocusToMacOs
             }
             runRefreshSession(event, screenIsDefinitelyUnlocked: false, debounce: false) // Don't debounce within critical sessions

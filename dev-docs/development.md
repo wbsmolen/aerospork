@@ -19,11 +19,13 @@ If you struggle to build aerospork locally, you can also refer to [builds in Git
     > The Xcode / Swift toolchain must match your macOS version. On a beta macOS you need the
     > matching Xcode beta (its SDK + Swift toolchain), otherwise `swift build` compiles against a
     > mismatched SDK and can hang indefinitely (manifest eval still works, so it looks stuck at 0
-    > compiled files). E.g. on **macOS 27** use **Xcode 27 beta**:
+    > compiled files). E.g. on **macOS 27** use **Xcode 27.0**, and route the build scripts through
+    > it rather than swiftly:
     > ```bash
-    > sudo xcode-select -s /Applications/Xcode-27.0.0-Beta.2.app
+    > sudo xcode-select -s /Applications/Xcode.app
     > # or, without changing the global selection, per-build:
-    > DEVELOPER_DIR=/Applications/Xcode-27.0.0-Beta.2.app/Contents/Developer xcrun swift build
+    > DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift build
+    > AEROSPORK_SWIFT=xcrun ./run-tests.sh
     > ```
 2.  Install [swiftly](https://github.com/swiftlang/swiftly).
     Swiftly is a Swift toolchain manager that will make sure that you use the same swift version as written in `.swift-version` file.

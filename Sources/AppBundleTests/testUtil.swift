@@ -12,6 +12,24 @@ let projectRoot: URL = {
     return url
 }()
 
+/// The source from `declaration` on, `length` characters of it, for tests that pin wiring which needs a
+/// real `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment
+/// explaining a fix would satisfy or trip the assertion.
+func sourceBody(_ declaration: String, in relativePath: String, length: Int) throws -> String {
+    let source = try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
+    let start = try XCTUnwrap(
+        source.range(of: declaration),
+        "\(declaration) was renamed; re-point this test rather than deleting it",
+    )
+    return withoutComments(source[start.lowerBound...].prefix(length))
+}
+
+func withoutComments(_ text: some StringProtocol) -> String {
+    text.split(separator: "\n")
+        .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+        .joined(separator: "\n")
+}
+
 @MainActor
 func setUpWorkspacesForTests() {
     config = defaultConfig

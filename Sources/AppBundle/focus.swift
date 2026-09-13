@@ -60,6 +60,41 @@ struct FrozenFocus: AeroAny, Equatable, Sendable {
 /// AEROSPORK_WORKSPACE env before accessing the global focus.
 @MainActor var focus: LiveFocus { _focus.live }
 
+/// The window id focus was last *assigned* to, as opposed to the one `focus` derives now.
+///
+/// The two differ exactly when the model has drifted: `FrozenFocus.live` falls back to the
+/// workspace's most-recent window whenever the stored id no longer resolves, so after
+/// `MacWindow.garbageCollect` removes a window from `allWindowsMap`, `focus.windowOrNil` has
+/// *already* moved on and cannot answer "was this the focused window?". This can.
+@MainActor var focusedWindowId: UInt32? { _focus.windowId }
+
+/// Should the death of `windowId`, last seen on `workspace`, move the user's focus?
+///
+/// Extracted from `MacWindow.garbageCollect`, which needs a real `MacApp`, so the decision behind
+/// issue #39 can be tested headlessly.
+///
+/// `focusedWindowId`, not `focus.windowOrNil`, is the load-bearing half. By the time this is asked
+/// the window is already out of `allWindowsMap`, so the derived focus has fallen back to the
+/// workspace's most-recent window and can no longer say whether the dying window was the focused
+/// one. Without that check, ANY window dying on the focused workspace re-pointed focus at
+/// `mostRecentWindowRecursive ?? anyLeafWindowRecursive` and force-activated it -- and that "any leaf
+/// window" fallback is where the reported randomness came from.
+@MainActor func shouldRestoreFocusAfterDeath(of windowId: UInt32, on workspace: Workspace?) -> Bool {
+    guard let workspace else { return false }
+    if focusedWindowId == windowId { return workspace == focus.workspace }
+    // The focused window died and macOS got there first: it keyed a window on another workspace, and
+    // `updateFocusCache` -- which runs before `refresh()` collects the dead -- followed it, so
+    // `focusedWindowId` already names that window. Without this the user is left over there, which
+    // is what cmd-W did in an app with windows on several workspaces.
+    //
+    // Only a macOS-driven adopt records `focusAdoptedAwayFrom`. A workspace switch the user made goes
+    // through `setFocus` and can never match, so a slow window closing behind a hotkey switch does not
+    // drag the user back. Bounded at a second: an app slower than that to report the death leaves the
+    // user where macOS put them.
+    guard let away = focusAdoptedAwayFrom else { return false }
+    return away.windowId == windowId && away.workspaceName == workspace.name && away.date.distance(to: .now) < 1
+}
+
 @MainActor func setFocus(to newFocus: LiveFocus) -> Bool {
     if _focus == newFocus.frozen { return true }
     let oldFocus = focus
@@ -107,12 +142,7 @@ extension Workspace {
 @MainActor private var _lastKnownFocus: FrozenFocus = _focus
 
 // Used by workspace-back-and-forth
-@MainActor var _prevFocusedWorkspaceName: String? = nil {
-    didSet {
-        prevFocusedWorkspaceDate = .now
-    }
-}
-@MainActor var prevFocusedWorkspaceDate: Date = .distantPast
+@MainActor var _prevFocusedWorkspaceName: String? = nil
 @MainActor var prevFocusedWorkspace: Workspace? { _prevFocusedWorkspaceName.map { Workspace.get(byName: $0) } }
 
 // Used by focus-back-and-forth

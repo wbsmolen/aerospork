@@ -69,6 +69,15 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         workspaceNameToWorkspace.values.sorted()
     }
 
+    /// The workspace with this name if it is still live. Never creates one.
+    ///
+    /// `get(byName:)` mints on a miss, and a minted workspace has no `assignedMonitorPoint`, so
+    /// `workspaceMonitor` answers `mainMonitor` however far from the main display the original was.
+    /// Anything restoring a node to a *remembered* workspace has to be able to tell "still there"
+    /// from "collected", or it parks the node on the wrong display -- the same half-restore that
+    /// `WorkspaceMemory` documents at length.
+    @MainActor static func existing(byName name: String) -> Workspace? { workspaceNameToWorkspace[name] }
+
     @MainActor static func get(byName name: String) -> Workspace {
         if let existing = workspaceNameToWorkspace[name] {
             return existing

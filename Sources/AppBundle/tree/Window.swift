@@ -51,6 +51,10 @@ class Window: TreeNode, Hashable {
         let full = try await isMacosFullscreen
         return (full, full ? false : (try await isMacosMinimized))
     } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
+    /// Is this window's app hidden (cmd-H)? A member rather than `macAppUnsafe.nsApp.isHidden` at the
+    /// call site so `normalizeLayoutReason`'s hidden-app branch is reachable from a test double.
+    @MainActor
+    var isMacosAppHidden: Bool { macAppUnsafe.nsApp.isHidden }
     var isHiddenInCorner: Bool { die("Not implemented") }
     @MainActor
     func nativeFocus() { die("Not implemented") }
@@ -68,7 +72,13 @@ class Window: TreeNode, Hashable {
 enum LayoutReason: Equatable {
     case standard
     /// Reason for the cur temp layout is macOS native fullscreen, minimize, or hide
-    case macos(prevParentKind: NonLeafTreeNodeKind)
+    ///
+    /// `prevWorkspaceName` is carried because `macosMinimizedWindowsContainer` is global -- it hangs
+    /// off `NilTreeNode`, not off a workspace -- so once a window is minimized the tree no longer
+    /// records where it came from. Restoring used `focus.workspace`, which teleported a window
+    /// minimized on one workspace onto whichever one happened to be focused when it came back.
+    /// Nil for a window whose parent had no workspace to begin with (a popup).
+    case macos(prevParentKind: NonLeafTreeNodeKind, prevWorkspaceName: String?)
 }
 
 extension Window {

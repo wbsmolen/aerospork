@@ -26,6 +26,14 @@ enum AppLog {
     static let config = Logger(subsystem: aeroSporkAppId, category: "config")
     /// Socket lifecycle and commands that came in over it.
     static let server = Logger(subsystem: aeroSporkAppId, category: "server")
-    /// Failures inside detached refresh sessions -- see `runDetached`.
+    /// Failures inside detached refresh sessions -- see `runDetached` -- and every focus change the
+    /// user did not ask for.
+    ///
+    /// Focus qualifies under the cheap-and-rare rule because only the *involuntary* changes are
+    /// recorded: a window dying under the focused one, a session syncing a focus the user never
+    /// moved, the closed-windows-cache restore, and macOS pulling focus onto a workspace that was not
+    /// on screen. Focus commands, workspace switches and clicks -- including a click on another
+    /// monitor -- stay silent. In a healthy system that is a handful of records a day; in a broken one
+    /// it is the whole bug report. Issue #39 was undiagnosable because none of these logged anything.
     static let session = Logger(subsystem: aeroSporkAppId, category: "session")
 }

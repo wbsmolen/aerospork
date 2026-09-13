@@ -360,6 +360,37 @@ extension AXUIElement: AxUiElementMock {
         var cgWindowId = CGWindowID()
         return _AXUIElementGetWindow(self, &cgWindowId) == .success ? cgWindowId : nil
     }
+
+    func isDestroyed() -> Bool {
+        let state = signposter.beginInterval(#function, "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        defer { signposter.endInterval(#function, state) }
+        var cgWindowId = CGWindowID()
+        return axErrorMeansDestroyed(_AXUIElementGetWindow(self, &cgWindowId))
+    }
+}
+
+/// Does this `_AXUIElementGetWindow` result mean the window is gone, as opposed to unanswered?
+///
+/// "Anything but the timeout", and deliberately NOT `== .invalidUIElement`. What a real TextEdit
+/// window's element returns on macOS 26 and 27 when it is held and read again:
+///
+///   window alive                          -> .success
+///   window closed, app still running      -> kAXErrorIllegalArgument (-25201)
+///   app busy past `axMessagingTimeout`    -> .cannotComplete, after the full timeout
+///   app terminated                        -> .cannotComplete
+///
+/// So the intuitive spelling would be wrong twice over. `.invalidUIElement` is never what a destroyed
+/// window reports, so windows would linger in the tree forever; and a busy app is indistinguishable
+/// from a terminated one. Excluding only `.cannotComplete` gets both right: a closed window is still
+/// collected, and a busy app keeps its windows. A terminated app is handled before this is reached --
+/// `refreshAllAndGetAliveWindowIds` drops it from `allAppsMap`, so its windows leave the tree by being
+/// absent from the mapping rather than by this check.
+///
+/// Not an allowlist of "destroyed" codes either. The alive-window filter only ever removes entries,
+/// so a closed window reported with a code missing from such a list would keep its tiling slot until
+/// the app quits. Treating an unexpected code as destroyed costs one re-registration instead.
+func axErrorMeansDestroyed(_ error: AXError) -> Bool {
+    error != .success && error != .cannotComplete
 }
 
 extension AXObserver {

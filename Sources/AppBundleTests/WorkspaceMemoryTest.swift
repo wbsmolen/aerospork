@@ -213,6 +213,15 @@ final class WorkspaceMemoryTest: XCTestCase {
         assertEquals(WorkspaceMemory.currentSession(), WorkspaceMemory.currentSession())
     }
 
+    /// `""` is a failure to look, not an answer. A cache that kept it turned one transient `sysctl`
+    /// failure at startup into every save silently doing nothing for the life of the process, since
+    /// `write()` refuses to persist a state with an empty session.
+    func testAFailedSessionLookupIsRetriedRatherThanCached() throws {
+        try XCTSkipIf(WorkspaceMemory.currentSession().isEmpty, "no WindowServer visible to this process")
+        WorkspaceMemory.cacheSessionForTests("")
+        XCTAssertFalse(WorkspaceMemory.session().isEmpty, "an empty session token was served from the cache")
+    }
+
     // MARK: - Refusals
 
     func testAnUnknownWindowIdIsNotAnswered() {

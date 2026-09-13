@@ -114,6 +114,27 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
         if case .startup = self { return true } else { return false }
     }
 
+    /// Did a person ask for this session, or did the world just move?
+    ///
+    /// Only used to decide what is worth an always-on log record: a focus change under a hotkey, a
+    /// CLI command or a menu click is the user getting what they asked for, while one under an
+    /// accessibility notification is the window manager acting on its own -- which is the half a
+    /// bug report needs. Callbacks are not user-initiated: `on-focus-changed` fires *because*
+    /// focus already moved.
+    public var isUserInitiated: Bool {
+        switch self {
+            // `.ax` counts. It looks like the world moving, but the only two places that tag a
+            // *session* with it are `movedObs` and `resizedObs`, and both take that branch only when
+            // `isManipulatedWithMouse` -- i.e. the user has the window under the pointer right now.
+            // The `.ax` notifications that are genuinely involuntary go to `runRefreshSession`, which
+            // never reaches this. `resetManipulatedWithMouse` is the end of that same drag.
+            case .hotkeyBinding, .socketServer, .menuBarButton, .globalObserverLeftMouseUp,
+                 .resetManipulatedWithMouse, .ax: true
+            case .globalObserver, .startup,
+                 .onFocusedMonitorChanged, .onFocusedWorkspaceChanged, .onFocusChanged: false
+        }
+    }
+
     public var description: String {
         switch self {
             case .ax(let str): "ax(\(str))"
@@ -122,7 +143,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .hotkeyBinding: "hotkeyBinding"
             case .menuBarButton: "menuBarButton"
             case .resetManipulatedWithMouse: "resetManipulatedWithMouse"
-            case .socketServer: " socketServer"
+            case .socketServer: "socketServer"
             case .startup: "startup"
             case .onFocusedMonitorChanged: "onFocusedMonitorChanged"
             case .onFocusedWorkspaceChanged: "onFocusedWorkspaceChanged"
@@ -237,7 +258,7 @@ public func allowOnlyCancellationError<T>(isolation: isolated (any Actor)? = #is
 // Debug logging infrastructure
 private let debugLogger = OSLog(subsystem: aeroSporkAppId, category: "Debug")
 
-/// Opt-in at runtime, not compile time: the shipped .app is itself a debug build, so an
+/// Opt-in at runtime, not compile time: a build that ships to users can still be compiled with DEBUG, so an
 /// `#if DEBUG` gate would leave this on for everyone. Set AEROSPORK_DEBUG_LOG=1 to enable.
 public let isDebugLoggingEnabled = ProcessInfo.processInfo.environment["AEROSPORK_DEBUG_LOG"] != nil
 

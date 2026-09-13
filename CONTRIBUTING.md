@@ -77,6 +77,13 @@ aerospork config --config-path
 log show --last 15m --predicate 'subsystem == "com.wbs.aerospork"' --style compact
 ```
 
+`category == "session"` records the focus changes AeroSpork made on its own initiative — a window
+dying under the focused one, a session syncing focus back to macOS, a windows-cache restore — and
+focus following macOS onto a workspace that was not on screen. Start there for a "focus jumped on
+its own" report.
+
 For a layout or focus problem, `AEROSPORK_DEBUG_LOG=1` adds a per-refresh trace. It is written at
-`.debug` level, which the unified log does not persist, so run the binary directly and capture its
-stderr. `docs/guide.adoc` has the full recipe under *Troubleshooting and bug reports*.
+`.debug` level, which the unified log does not persist — `log stream --debug` sees it live, `log
+show` never will — so start the stream before reproducing. Note that `com.wbs.aerospork.debug` is
+the *debug build's* subsystem, not "the debug records": a release build's trace is under
+`com.wbs.aerospork`. `docs/guide.adoc` has the full recipe under *Troubleshooting and bug reports*.

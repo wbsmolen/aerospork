@@ -5,8 +5,8 @@ test the hard parts (real windows, multi-monitor, DisplayLink) without flaking,
 and the tooling/skills to build and maintain to keep it honest over time.
 
 > **Toolchain gotcha, read first.** This app is bound to the macOS SDK, not just a
-> Swift version. The current macOS 27 development environment uses Xcode 27 beta 2
-> (Swift 6.4); a mismatched SDK can make `swift build` **hang silently**. Use the
+> Swift version. The current macOS 27 development environment uses Xcode 27.0
+> (Swift 6.4, `/Applications/Xcode.app`); a mismatched SDK can make `swift build` **hang silently**. Use the
 > repository wrappers. If Swiftly is installed but the `.swift-version` toolchain is not, or the
 > selected Xcode SDK is the intended toolchain, use the documented `xcrun` escape hatch:
 > ```
@@ -28,10 +28,12 @@ headless and reusable:
   tree out of `TestWindow.new(...)`, run *real* `Command` objects, and assert on
   `layoutDescription` (a structural snapshot). Tree mutation, focus order,
   normalization, split/join/move/resize are all exercised with no real windows.
-- **An AX read seam**: `protocol AxUiElementMock` (`get` + `containingWindowId`) with a
-  real `AXUIElement` conformance and a `[String: Json]` fake. `AxWindowKindTest` replays
-  the captured real-window AX dumps in `axDumps/` through the window-kind
-  heuristics — genuinely headless classification regression tests.
+- **An AX read seam**: `protocol AxUiElementMock` (`get`, `set`, `containingWindowId`,
+  `isDestroyed`) with a real `AXUIElement` conformance and a `[String: Json]` fake. `AxWindowKindTest`
+  replays the captured real-window AX dumps in `axDumps/` through the window-kind
+  heuristics — genuinely headless classification regression tests. The `AXError` meanings that only a
+  live element can produce are pinned through the pure `axErrorMeansDestroyed`, and an app that misses
+  the AX timeout is simulated with `TestApp.focusedWindowReadTimesOut`.
 - **A machine-readable control/observability surface**: a socket-speaking CLI
   (`.debug/aerospork`), `--json` on `list-windows`/`list-workspaces`/`list-monitors`,
   rich `--format` vars, and `trigger-binding`/`enable` for driving the live app.

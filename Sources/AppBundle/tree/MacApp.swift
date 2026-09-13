@@ -26,6 +26,15 @@ final class MacApp: AbstractApp {
     private var thread: Thread?
     private var setFrameJobs: [UInt32: RunLoopJob] = [:]
     @MainActor private static var focusJob: RunLoopJob? = nil
+    /// Apps that have already made this refresh pass wait out `axMessagingTimeout`.
+    ///
+    /// Since #39 a busy app's windows stay in the tree, and a pass asks about each of them in turn --
+    /// a frame read per hidden window, a native-state read per window -- on that app's one AX thread.
+    /// With the app stopped every one of those waits the full second, so switching away from a few of
+    /// its windows could take ten seconds. The answers are "timed out" regardless, so after the first,
+    /// the rest of the pass skips the app. Cleared when a pass starts, so an app that recovers is asked
+    /// again at once.
+    @MainActor static var timedOutThisPass: Set<pid_t> = []
 
     /*conforms*/ var name: String? { nsApp.localizedName }
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
@@ -204,13 +213,30 @@ final class MacApp: AbstractApp {
     // todo merge together with detectNewWindows
     @MainActor
     func getFocusedWindow() async throws -> Window? {
-        let windowId = try await thread?.runInLoop { [nsApp, axApp, windows] job in
-            let axWindow = try axApp.threadGuarded.get(Ax.focusedWindowAttr)
-                .flatMap {
-                    guard let casted = $0.ax.cast else { return nil as AxWindow? }
-                    return try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, casted, nsApp, job)
-                }
-            return axWindow?.windowId
+        if MacApp.timedOutThisPass.contains(pid) { throw NativeFocusUnknown() }
+        let windowId: UInt32?
+        do {
+            windowId = try await thread?.runInLoop { [nsApp, axApp, windows] job in
+                // Not `get(Ax.focusedWindowAttr)`, which collapses every failure to nil. An app that
+                // misses `axMessagingTimeout` has not said it has no focused window, and reporting it as
+                // if it had spends `updateFocusCache`'s record of what macOS last said -- so the app's
+                // next, stale answer reads as a focus change and bounces the user back across a workspace
+                // switch. On macOS 26 and 27 a busy app's read fails `.cannotComplete` after
+                // the full timeout. (`windowOrNil` makes a second AX call, `_AXUIElementGetWindow`, which
+                // can still time out and read as nil; not covered.)
+                var raw: AnyObject?
+                let error = AXUIElementCopyAttributeValue(axApp.threadGuarded, Ax.focusedWindowAttr.key as CFString, &raw)
+                if error == .cannotComplete { throw NativeFocusUnknown() }
+                let axWindow = try (error == .success ? raw.flatMap(Ax.focusedWindowAttr.getter) : nil)
+                    .flatMap {
+                        guard let casted = $0.ax.cast else { return nil as AxWindow? }
+                        return try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, casted, nsApp, job)
+                    }
+                return axWindow?.windowId
+            }
+        } catch let unknown as NativeFocusUnknown {
+            MacApp.timedOutThisPass.insert(pid)
+            throw unknown
         }
         guard let windowId else { return nil }
         return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
@@ -437,25 +463,40 @@ final class MacApp: AbstractApp {
             return []
         }
         guard let thread else { return [] }
-        return try await thread.runInLoop { [nsApp, windows, axApp] (job) -> [UInt32] in
+        let outcome = try await thread.runInLoop { [nsApp, windows, axApp] (job) -> (ids: [UInt32], timedOut: Bool) in
             var result: [UInt32: AxWindow] = windows.threadGuarded
+            var timedOut = false
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
             if frontmostAppBundleId != lockScreenAppBundleId {
                 result = try result.filter {
                     try job.checkCancellation()
-                    return $0.value.ax.containingWindowId() != nil
+                    // Once one read has waited out the timeout the rest would too; keeping the window is
+                    // what a timed-out `isDestroyed()` answers anyway. See `timedOutThisPass`.
+                    if timedOut { return true }
+                    let start = DispatchTime.now()
+                    // `isDestroyed()`, not `containingWindowId() != nil`. Everything absent from the
+                    // returned set is garbage collected by `refresh()`, which unbinds the window and
+                    // hands focus elsewhere -- so a window merely belonging to an app that missed the
+                    // 1s `axMessagingTimeout` used to be treated as closed. See issue #39.
+                    let destroyed = $0.value.ax.isDestroyed()
+                    timedOut = isAxTimeout(since: start)
+                    return !destroyed
                 }
             }
 
-            for (id, window) in axApp.threadGuarded.get(Ax.windowsAttr) ?? [] {
-                try job.checkCancellation()
-                try result.getOrRegisterAxWindow(windowId: id, window, nsApp, job)
+            if !timedOut {
+                for (id, window) in axApp.threadGuarded.get(Ax.windowsAttr) ?? [] {
+                    try job.checkCancellation()
+                    try result.getOrRegisterAxWindow(windowId: id, window, nsApp, job)
+                }
             }
 
             windows.threadGuarded = result
-            return Array(result.keys)
+            return (Array(result.keys), timedOut)
         }
+        if outcome.timedOut { MacApp.timedOutThisPass.insert(pid) }
+        return outcome.ids
     }
 
     @MainActor
@@ -476,10 +517,16 @@ final class MacApp: AbstractApp {
 
     @MainActor
     private func withWindow<T>(_ windowId: UInt32, _ body: @Sendable @escaping (AXUIElement, RunLoopJob) throws -> T?) async throws -> T? {
-        try await thread?.runInLoop { [windows] job in
-            guard let window = windows.threadGuarded[windowId] else { return nil }
-            return try body(window.ax, job)
+        // Already waited out once this pass: every read would answer "timed out" again, a second each.
+        if MacApp.timedOutThisPass.contains(pid) { return nil }
+        let outcome = try await thread?.runInLoop { [windows] (job) -> (value: T?, timedOut: Bool) in
+            guard let window = windows.threadGuarded[windowId] else { return (nil, false) }
+            let start = DispatchTime.now()
+            let value = try body(window.ax, job)
+            return (value, isAxTimeout(since: start))
         }
+        if outcome?.timedOut == true { MacApp.timedOutThisPass.insert(pid) }
+        return outcome?.value
     }
 
     private func withWindowAsync(_ windowId: UInt32, _ body: @Sendable @escaping (AXUIElement, RunLoopJob) -> ()) -> RunLoopJob {
@@ -488,6 +535,18 @@ final class MacApp: AbstractApp {
             body(window.ax, job)
         } ?? .cancelled
     }
+}
+
+/// Did an AX call that started at `start` wait out `axMessagingTimeout`? Timed on the app's own
+/// thread around the call, so time spent queued behind other jobs never counts.
+private func isAxTimeout(since start: DispatchTime) -> Bool {
+    isAxTimeout(elapsedSeconds: Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000)
+}
+
+/// A call to a stopped app returns after about 1000ms on macOS 27; a healthy round trip takes
+/// single-digit milliseconds.
+func isAxTimeout(elapsedSeconds: Double) -> Bool {
+    elapsedSeconds >= Double(axMessagingTimeout) * 0.9
 }
 
 private class AxWindow {
