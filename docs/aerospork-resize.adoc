@@ -33,7 +33,7 @@ The second argument controls how much the size changes
 * If the `<number>` is prefixed with `-` then the dimension is decreased
 * If the `<number>` is prefixed with neither `+` nor `-` then the command changes the absolute value of the dimension
 
-`resize` on a floating window is not supported yet: https://github.com/wbsmolen/aerospork/issues/9
+`resize` on a floating window is not supported yet.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]

@@ -189,6 +189,8 @@ brew install --cask wbsmolen/tap/aerospork
 
 Both the tap and this repository are public, so either route works without a GitHub account.
 
+What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
+
 Installed copies check for updates themselves through [Sparkle](https://sparkle-project.org),
 against a signed appcast served from
 [`aerospork.app/appcast.xml`](https://aerospork.app/appcast.xml). Updates are verified against an
