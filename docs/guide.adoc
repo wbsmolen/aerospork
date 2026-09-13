@@ -656,10 +656,10 @@ defaults write com.apple.dock expose-group-apps -bool true && killall Dock
 macOS behaves better with `Displays have separate Spaces` disabled. It is enabled by default.
 Reported focus and performance issues with it enabled:
 
-* Wrong window may receive focus in multi monitor setup: https://github.com/wbsmolen/aerospork/issues/101[#101] (Bug in Apple API)
-* Wrong borderless Alacritty window may receive focus in *single monitor* setup: https://github.com/wbsmolen/aerospork/issues/247[#247] (Bug in Apple API)
-* Performance issues: https://github.com/wbsmolen/aerospork/issues/333[#333]
-* macOS randomly switches focus back: https://github.com/wbsmolen/aerospork/issues/289[#289]
+* Wrong window may receive focus in multi monitor setup (bug in Apple API)
+* Wrong borderless Alacritty window may receive focus in *single monitor* setup (bug in Apple API)
+* Performance issues
+* macOS randomly switches focus back
 
 When `Displays have separate Spaces` is enabled, moving a window between monitors also moves it
 between Spaces, which the public APIs AeroSpork uses do not handle correctly: those APIs are not
@@ -729,7 +729,7 @@ By default, the first callback that matches the criteria is run, and further cal
 xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] — other `layout` arguments are
 rejected here. `move-node-to-workspace` may appear at most once, and only as the last command in
 the list.
-Post your use case to https://github.com/wbsmolen/aerospork/issues/20[the issue] if you need another command.
+If you need another command, https://github.com/wbsmolen/aerospork/issues[open an issue] describing your use case.
 
 A rule's `run` list always runs to the end. The app does not have to send an event for its new
 window to be seen: an app that is still starting when AeroSpork first asks about it is asked again

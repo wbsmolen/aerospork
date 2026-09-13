@@ -28,7 +28,7 @@ It treats them as part of xref:guide.adoc#floating-windows[the tree], which remo
 separate binding.
 Pass `--ignore-floating` to turn that off.
 
-`focus child|parent` is not supported: https://github.com/wbsmolen/aerospork/issues/5
+`focus child|parent` is not supported.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
