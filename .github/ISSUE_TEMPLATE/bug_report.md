@@ -27,7 +27,7 @@ $ log show --last 15m --predicate 'subsystem == "com.wbs.aerospork"' --style com
 
 ```
 
-Use `com.wbs.aerospork.debug` **only if you built a debug build** — the `.debug` there names the
+Use `com.wbs.aerospork.debug` only if you built a debug build. The `.debug` there names the
 build, not the log level. A release build always logs under `com.wbs.aerospork`.
 
 For a focus problem, `AND category == "session"` narrows this to the focus changes AeroSpork made on
@@ -35,7 +35,7 @@ its own initiative. It does not record focus that followed a click, so if the ju
 so: that is useful too.
 
 For a layout or focus problem, add the verbose trace. It is written at debug level, which the
-unified log keeps only for a stream that is **already running** — so start the stream first, then
+unified log keeps only for a stream that is already running, so start the stream first, then
 reproduce. Don't add a `category` filter to it: the trace is under category `Debug`.
 
 ```
