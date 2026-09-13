@@ -232,8 +232,9 @@ Two channels, and the distinction matters:
   and release builds are distinguishable, categories `config`, `server` and `session`. Writes at
   `.notice` / `.error` / `.fault`, which the unified log **persists**, so `log show --last 1h
   --predicate 'subsystem == "com.wbs.aerospork"'` answers a bug report after the fact. Because it is
-  unconditional it must stay **cheap and rare**: config loaded/rejected, config warnings, socket
-  lifecycle, CLI commands that exited non-zero. Never per-refresh, never per-window.
+  unconditional it must stay **cheap and rare**: the startup record, config loaded/rejected, config warnings,
+  socket lifecycle, CLI commands that exited non-zero, focus AeroSpork moved on its own (`session`).
+  Never per-refresh, never per-window.
 - **`debugLog`** (`Common/util/commonUtil.swift`) — verbose tracing, `@autoclosure` so the message is
   never built when off, gated at runtime on `AEROSPORK_DEBUG_LOG` (**not** `#if DEBUG`: the gate has
   to be runtime, because a build that ships to users can still be compiled with `DEBUG`). Writes at
@@ -287,18 +288,19 @@ Run tests with `./run-tests.sh` which:
 4. Runs formatting and linting checks
 5. Checks for uncommitted generated files
 
-> **Toolchain:** on a beta macOS, the swiftly-pinned toolchain (`.swift-version`) cannot compile
-> this project: the frontend spins at 100% CPU indefinitely on the TOMLKit manifest, writing
-> nothing. It is the toolchain, not the SDK: setting `DEVELOPER_DIR` alone does not help, because
-> `script/setup.sh` routes `swift` through `swiftly run swift`. Use the Xcode beta toolchain:
+> **Toolchain:** use Xcode's toolchain, not swiftly's. On a beta macOS the swiftly-pinned toolchain
+> (`.swift-version`) can spin at 100% CPU indefinitely on the TOMLKit manifest, and swiftly may not
+> offer the pinned version at all. Setting `DEVELOPER_DIR` alone does not help, because
+> `script/setup.sh` routes `swift` through `swiftly run swift`. Point `DEVELOPER_DIR` at the Xcode
+> that matches your macOS, and route the build scripts through `xcrun`:
 >
 > ```bash
 > # tests
-> DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcrun swift test
+> DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test
 >
 > # any build script (setup.sh honours AEROSPORK_SWIFT=xcrun as an escape hatch)
-> DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
->   AEROSPORK_SWIFT=xcrun ./build-debug-app.sh
+> AEROSPORK_SWIFT=xcrun ./run-tests.sh
+> AEROSPORK_SWIFT=xcrun ./build-debug-app.sh
 > ```
 
 The suite (`AppBundleTests` + `CommonTests`) is fully headless — it

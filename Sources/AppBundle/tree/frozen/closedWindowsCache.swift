@@ -65,6 +65,7 @@ struct FrozenWorkspace: Sendable {
     if !closedWindowsCache.windowIds.contains(newlyDetectedWindow.windowId) {
         return false
     }
+    AppLog.session.notice("closed-windows cache restored by window \(newlyDetectedWindow.windowId, privacy: .public): rebinding \(closedWindowsCache.windowIds.count, privacy: .public) windows across \(closedWindowsCache.workspaces.count, privacy: .public) workspaces")
     let monitors = monitors
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
 
@@ -135,3 +136,5 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
 @MainActor func resetClosedWindowsCache() {
     closedWindowsCache = FrozenWorld(workspaces: [], monitors: [])
 }
+
+@MainActor var isClosedWindowsCacheEmpty: Bool { closedWindowsCache.windowIds.isEmpty }

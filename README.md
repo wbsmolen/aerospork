@@ -253,10 +253,15 @@ enable:
 log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compact
 ```
 
-Use `com.wbs.aerospork.debug` for a debug build and add `AND category == "config"` to narrow.
-`AEROSPORK_DEBUG_LOG=1` adds a verbose per-refresh trace. It is written at `.debug` level, which
-the unified log does not persist, so run the binary directly and read its stderr. See
-*Troubleshooting and bug reports* in [the guide](docs/guide.adoc) for what to attach to a report.
+Use `com.wbs.aerospork.debug` for a debug build — that suffix names the *build*, not the log level —
+and add `AND category == "config"` to narrow. `category == "session"` records the focus changes
+AeroSpork made on its own initiative, and focus following macOS onto a workspace that was not on
+screen -- not the ordinary ones where it follows a click.
+
+`AEROSPORK_DEBUG_LOG=1` adds a verbose per-refresh trace. Those records are written at `.debug`
+level, which the unified log **does not persist**: `log stream --debug` sees them live, `log show`
+never will. Start the stream first, then reproduce. See *Troubleshooting and bug reports* in
+[the guide](docs/guide.adoc) for the full recipe and what to attach to a report.
 
 ## Development
 

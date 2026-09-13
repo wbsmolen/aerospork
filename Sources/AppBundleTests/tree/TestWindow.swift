@@ -32,6 +32,18 @@ final class TestWindow: Window, CustomStringConvertible {
 
     override var title: String { description }
 
+    /// What macOS would say about this window. `normalizeLayoutReason` is the only production path
+    /// that rebinds windows on an ordinary refresh, and it is driven entirely by this pair -- so
+    /// without a seam it cannot be exercised headlessly at all.
+    /// nil is an app that did not answer.
+    @MainActor var nativeState: (fullscreen: Bool, minimized: Bool)? = (false, false)
+
+    @MainActor override func macosNativeState() async throws -> (fullscreen: Bool, minimized: Bool) {
+        nativeState ?? nativeStateTheTreeRecords(for: self) // what `MacWindow` answers for a timed-out read
+    }
+    @MainActor var appHidden = false
+    @MainActor override var isMacosAppHidden: Bool { appHidden }
+
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
         _rect
     }

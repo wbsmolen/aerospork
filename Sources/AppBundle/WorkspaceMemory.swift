@@ -110,7 +110,14 @@ enum WorkspaceMemory {
     }
 
     static func session() -> String {
-        if let cachedSession { return cachedSession }
+        if let sessionOverrideForTests { return sessionOverrideForTests }
+        // `!isEmpty`, because `""` is a failure to look, not an answer. `if let cachedSession`
+        // alone was true for it, so one transient `sysctl` failure at startup poisoned the cache for
+        // the process lifetime -- and `write()` refuses to persist a state with an empty session, so
+        // every save after that silently did nothing, for as long as the app ran. Re-reading costs
+        // a process-table copy, but only on the machine where the first read failed and only when
+        // the tree actually changed.
+        if let cachedSession, !cachedSession.isEmpty { return cachedSession }
         let value = currentSession()
         cachedSession = value
         return value
@@ -127,6 +134,10 @@ enum WorkspaceMemory {
     /// allocations per call. It cannot meaningfully change while we run: if WindowServer restarts,
     /// every id we hold is void anyway. So it is read once.
     private static var cachedSession: String?
+    /// Written only by `forceSessionForTests`. Separate from `cachedSession` so a test can pin the
+    /// *empty* token -- which the cache above deliberately refuses to keep -- without the production
+    /// retry reading the real WindowServer out from under it.
+    private static var sessionOverrideForTests: String?
     /// Set the moment quitting begins. `makeAllWindowsVisibleAndRestoreSize` moves every window, and
     /// each AX write emits a notification that schedules a refresh -- which would call `save()`
     /// again and persist where the windows were dumped instead of where they belonged. Freezing is
@@ -321,7 +332,10 @@ enum WorkspaceMemory {
     /// Test seams for the two paths a test cannot otherwise reach: writing a state directly, and
     /// pretending the session could not be read.
     static func writeForTests(_ state: State) { write(state, waitForCompletion: false) }
-    static func forceSessionForTests(_ value: String) { cachedSession = value }
+    static func forceSessionForTests(_ value: String) { sessionOverrideForTests = value }
+    /// Plants a value in the production cache, unlike `forceSessionForTests`, which bypasses it --
+    /// the only way to check that a cached failure is retried rather than kept.
+    static func cacheSessionForTests(_ value: String) { cachedSession = value }
 
     /// A quit that was asked for and then vetoed leaves us running. Without this the memory stays
     /// frozen for the rest of the session, so a crash hours later restores the layout as it was at
@@ -345,5 +359,6 @@ enum WorkspaceMemory {
         isFrozen = false
         fileUrlOverride = nil
         cachedSession = nil
+        sessionOverrideForTests = nil
     }
 }

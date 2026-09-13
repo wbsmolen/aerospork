@@ -28,7 +28,9 @@ struct MacosNativeFullscreenCommand: Command {
             window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         } else { // Exit fullscreen
             switch window.layoutReason {
-                case .macos(let prevParentKind):
+                // `workspace`, not the recorded `prevWorkspaceName`: this is the user un-fullscreening
+                // a window they are looking at right now, so its visual workspace is where it belongs.
+                case .macos(let prevParentKind, _):
                     try await exitMacOsNativeUnconventionalState(window: window, prevParentKind: prevParentKind, workspace: workspace)
                 default:
                     try await window.relayoutWindow(on: workspace)

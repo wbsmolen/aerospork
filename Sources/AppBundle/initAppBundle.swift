@@ -21,6 +21,16 @@ import Foundation
     if !reloadConfig() {
         check(reloadConfig(forceConfigUrl: defaultConfigUrl))
     }
+    // The one record that answers "did my AEROSPORK_DEBUG_LOG take?".
+    //
+    // The verbose channel writes at `.debug`, which the unified log does not persist, so a switch
+    // that did not take produces exactly nothing -- indistinguishable from a trace that found
+    // nothing. `launchctl setenv` reaches only processes launched afterwards, which is easy to get
+    // wrong, and until now there was no way to tell. This line is `.notice`, so `log show` finds it
+    // after the fact. See https://github.com/wbsmolen/aerospork/issues/39.
+    AppLog.config.notice(
+        "AeroSpork \(aeroSporkAppVersion, privacy: .public) \(gitHash, privacy: .public) started, verbose tracing: \(isDebugLoggingEnabled ? "on" : "off", privacy: .public)",
+    )
 
     // Before anything can register a window: `MacWindow.getOrRegister` consults it on the first
     // adoption of each window, and a miss there is permanent for that window.

@@ -504,8 +504,10 @@ the bottom right or left corner.
 Switching back to the workspace (with the xref:commands.adoc#workspace[workspace] command, or `cmd + tab`) returns its windows to the visible area.
 
 On quit, all windows are returned to the visible area of the screen, each centred on the monitor it
-was on. A crash does not run that cleanup -- nothing intercepts a fatal signal -- so windows can be
-left off screen; relaunching AeroSpork brings them back.
+was on. `killall AeroSpork` runs the same cleanup, but if AeroSpork is stuck and the cleanup has not
+finished after 10 seconds, it exits without it. A crash does not run the cleanup either -- nothing
+intercepts a fatal signal. Either way windows can be left off screen; relaunching AeroSpork brings
+them back.
 
 [#workspace-memory]
 === Workspaces across a restart
@@ -992,11 +994,18 @@ aerospork config --config-path      # which file is actually loaded right now
 (`…/AeroSpork.app/Contents/Resources/default-config.toml`) then your config failed to load and
 AeroSpork fell back to the built-in defaults. `reload-config --dry-run` will then tell you why.
 
+=== An app stops responding
+
+A hung or very busy app that stops answering Accessibility requests keeps its windows where they
+are: AeroSpork does not treat them as closed, and does not move focus away from them. Until the app
+recovers, each layout pass can wait up to a second for it, so workspace switches may feel slower.
+
 === Capturing logs
 
 AeroSpork logs to the macOS unified log. Nothing is written to a file, and nothing needs to be
-turned on. The events worth diagnosing after the fact are always recorded: which config file loaded,
-why one didn't, config warnings, the CLI socket coming up, and any CLI command that exited non-zero.
+turned on. The events worth diagnosing after the fact are always recorded: which version started,
+which config file loaded, why one didn't, config warnings, focus AeroSpork moved on its own, the CLI
+socket coming up, and any CLI command that exited non-zero.
 
 To collect them for a bug report:
 
@@ -1009,16 +1018,24 @@ log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compac
 log stream --predicate 'subsystem == "com.wbs.aerospork"' --style compact
 ----
 
-Use `com.wbs.aerospork.debug` for a debug build. Records are tagged with a category, so you can
-narrow them down:
+Use `com.wbs.aerospork.debug` for a debug build. Note that the `.debug` there names the *build*, not
+the log level -- a release build always logs under `com.wbs.aerospork`, whatever level it writes at.
+Records are tagged with a category, so you can narrow them down:
 
 [source,shell]
 ----
 log show --last 1h --predicate 'subsystem == "com.wbs.aerospork" AND category == "config"'
 ----
 
-`config`:: config file loaded / rejected, config warnings, hot-reload problems
+`config`:: the startup record (version, and whether verbose tracing is on), config file loaded /
+rejected, config warnings, hot-reload problems
 `server`:: CLI socket lifecycle, and every CLI command that exited non-zero
+`session`:: focus AeroSpork moved on its own initiative: a window dying under the focused one, a
+session syncing focus back to macOS, a windows-cache restore, and (1.2.0 and later) focus following
+macOS onto a workspace that was not on screen -- an app activating itself, or the next key window
+after a close. Start here for "focus jumped on its own". Focus that follows macOS within what is
+already on screen -- you clicked a window, including one on another monitor -- is not recorded. The
+same category also carries refresh-session failures and quit-cleanup errors.
 
 Redirect to a file to attach it: `log show … > aerospork.log`.
 
@@ -1030,18 +1047,46 @@ The always-on records above are deliberately sparse. For a per-refresh, per-comm
 [source,shell]
 ----
 launchctl setenv AEROSPORK_DEBUG_LOG 1
-killall AeroSpork && open -a AeroSpork          # restart so it inherits the variable
-                                                # (debug builds: killall AeroSporkApp)
+
+# Restart so it inherits the variable. `killall` returns as soon as the signal is SENT, so waiting
+# for the process to actually go matters -- otherwise `open` just re-activates the old one, still
+# without the variable.
+killall AeroSpork; while pgrep -qx AeroSpork; do sleep 0.2; done; open -a AeroSpork
+
 log stream --debug --predicate 'subsystem == "com.wbs.aerospork"'
 ----
 
-Two things to know about it:
+For a debug build every name changes, including the one `open` needs -- `open -a AeroSpork` would
+launch the *release* app next to it:
+
+[source,shell]
+----
+killall AeroSporkApp; while pgrep -qx AeroSporkApp; do sleep 0.2; done; open .debug/AeroSpork-Debug.app
+log stream --debug --predicate 'subsystem == "com.wbs.aerospork.debug"'
+----
+
+To confirm the variable actually reached the app, look for the startup record -- it is written at
+notice level, so it survives. It was added in 1.2.0; earlier versions do not write it, so on those
+the only check is whether the stream shows anything.
+
+[source,shell]
+----
+log show --last 5m --predicate 'subsystem == "com.wbs.aerospork" AND category == "config"' --style compact
+# ... AeroSpork 1.2.0 <hash> started, verbose tracing: on
+----
+
+If it says `off`, the variable did not reach the app and the trace will be empty no matter what you
+stream.
+
+Three things to know about it:
 
 * It is off by default and gated at *runtime*, not at compile time, so enabling it costs a restart
   rather than a rebuild.
 * These records are written at debug level, which the unified log **does not persist**. They exist
   only for a `log stream` that is already running; `log show` after the fact will not find them.
   Start the stream first, then reproduce the problem.
+* The trace is under category `Debug`. Adding `AND category == "session"` to the stream filters the
+  whole trace out.
 
 Turn it back off with `launchctl unsetenv AEROSPORK_DEBUG_LOG` and restart, or the trace keeps
 running for as long as the app does.

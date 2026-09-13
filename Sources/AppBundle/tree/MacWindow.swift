@@ -22,6 +22,13 @@ final class MacWindow: Window {
         let data = try await unbindAndGetBindingDataForNewWindow(
             windowId,
             macApp,
+            // Startup consults the memory; a mid-session registration does not, and deliberately.
+            // `WorkspaceMemory`'s map is read from disk once in `load()` and never updated, so it
+            // answers "where this window was at launch" -- a window the user has moved since would
+            // be dragged back. The case it would otherwise have covered, a live window collected by
+            // mistake and then re-detected, is removed at the source by `AxUiElementMock.isDestroyed`.
+            // If it ever needs covering again, the sound key is the workspace at the moment of
+            // collection, not the one on disk.
             isStartup
                 // Where this window was before the restart, when it is provably the same window.
                 // Location is the fallback, not the first answer: at a cold start no workspace is
@@ -84,15 +91,22 @@ final class MacWindow: Window {
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
         let focus = focus
-        if let deadWindowWorkspace, deadWindowWorkspace == focus.workspace ||
-            deadWindowWorkspace == prevFocusedWorkspace && prevFocusedWorkspaceDate.distance(to: .now) < 1
-        {
+        // See `shouldRestoreFocusAfterDeath`. The old test was "the dead window was on the focused
+        // workspace", which moved the user whenever ANY window died there -- including one that only
+        // looked dead, before the `isDestroyed()` fix above.
+        if shouldRestoreFocusAfterDeath(of: windowId, on: deadWindowWorkspace), let deadWindowWorkspace {
             switch parent.cases {
                 case .tilingContainer, .workspace, .macosHiddenAppsWindowsContainer, .macosFullscreenWindowsContainer:
                     let deadWindowFocus = deadWindowWorkspace.toLiveFocus()
                     _ = setFocus(to: deadWindowFocus)
+                    let successor = deadWindowFocus.windowOrNil?.windowId ?? 0
+                    AppLog.session.notice("focus moved by window death: \(self.windowId, privacy: .public) (\(self.app.bundleId ?? "?", privacy: .public)) died on \(deadWindowWorkspace.name, privacy: .public), focus -> \(successor, privacy: .public)")
                     // Guard against "Apple Reminders popup" bug: https://github.com/wbsmolen/aerospork/issues/201
-                    if focus.windowOrNil?.app.pid != app.pid {
+                    // -- which is about focus still being on the dead window's workspace. When macOS
+                    // has already moved us to another workspace, `focus` is a window over there, often
+                    // of the SAME app (cmd-W in Chrome keys Chrome's next window), and skipping the push
+                    // on the pid alone left the keyboard on a window parked off screen.
+                    if focus.workspace != deadWindowWorkspace || focus.windowOrNil?.app.pid != app.pid {
                         // Force focus to fix macOS annoyance with focused apps without windows.
                         //   https://github.com/wbsmolen/aerospork/issues/65
                         deadWindowFocus.windowOrNil?.nativeFocus()
@@ -107,7 +121,8 @@ final class MacWindow: Window {
     @MainActor override var isMacosFullscreen: Bool { get async throws { try await macApp.isMacosNativeFullscreen(windowId) == true } }
     @MainActor override var isMacosMinimized: Bool { get async throws { try await macApp.isMacosNativeMinimized(windowId) == true } }
     @MainActor override func macosNativeState() async throws -> (fullscreen: Bool, minimized: Bool) {
-        try await macApp.macosNativeState(windowId) ?? (false, false)
+        // Unanswered is not "neither": see `nativeStateTheTreeRecords`.
+        try await macApp.macosNativeState(windowId) ?? nativeStateTheTreeRecords(for: self)
     }
 
     @MainActor
