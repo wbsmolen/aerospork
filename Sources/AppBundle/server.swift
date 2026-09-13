@@ -104,6 +104,9 @@ private func newConnection(_ socket: UnixSocketConnection) async {
         if let command {
             let _answer: Result<ServerAnswer, Error> = await Task { @MainActor in
                 try await runSession(.socketServer, token) { () throws in
+                    // Before doing the todo below: a daemon launched from a callback inherits the
+                    // AEROSPORK_WINDOW_ID of the window that fired it, so forwarding the caller's
+                    // environment would aim that daemon's later CLI calls at a window long gone.
                     let cmdResult = try await command.run(.defaultEnv, CmdStdin(request.stdin)) // todo pass AEROSPORK_ env vars from CLI instead of defaultEnv
                     return ServerAnswer(
                         exitCode: cmdResult.exitCode,

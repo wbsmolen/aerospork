@@ -102,30 +102,36 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 
     @MainActor
     var description: String {
-        let preservedNames = config.preservedWorkspaceNames.toSet()
         let description = [
             ("name", name),
             ("isVisible", String(isVisible)),
             ("isEffectivelyEmpty", String(isEffectivelyEmpty)),
-            ("doKeepAlive", String(preservedNames.contains(name))),
+            ("doKeepAlive", String(config.persistentWorkspaces.contains(name))),
         ].map { "\($0.0): '\(String(describing: $0.1))'" }.joined(separator: ", ")
         return "Workspace(\(description))"
     }
 
     @MainActor
     static func garbageCollectUnusedWorkspaces() {
-        // Workspaces are created on demand by `get(byName:)` and are pure identity when empty, so
-        // there is nothing to preserve about an empty invisible one -- switching to it recreates it
-        // indistinguishably.
+        // Declared workspaces -- `workspaces`, `persistent-workspaces`, force-assigned names -- always
+        // exist, empty or not, visible or not. The user listed them, so `list-workspaces --all`, the
+        // menu bar and `workspace next/prev` have to show them: that is upstream's
+        // `persistent-workspaces` rule, and a migrated config listing nine workspaces used to watch
+        // the empty ones vanish (#40). Created here rather than at startup or on reload because this
+        // runs at both and on every refresh, so a name removed from the config simply stops being
+        // exempt.
         //
-        // This used to force-materialize every name mentioned in any keybinding, then exempt those
-        // names from collection. With a normal i3-style keymap (alt-1..9, alt-a..z) that is ~30
-        // live objects that exist only because a shortcut mentions them: every refresh then walked
-        // all of them for layout, normalization and tray text, and the menu bar listed all of them.
-        // `preservedWorkspaceNames` still matters -- `getStubWorkspace` must not hijack a name the
-        // user has bound -- but that only needs the NAME SET, not instantiated workspaces.
+        // Every OTHER empty invisible workspace is released: it is pure identity, and switching to it
+        // recreates it indistinguishably. This used to force-materialize every name any keybinding
+        // mentions, and with an i3-style keymap (alt-1..9, alt-a..z) that is ~35 objects that exist
+        // only because a shortcut says the name, every one walked on every refresh for layout,
+        // normalization and tray text. `preservedWorkspaceNames` still matters -- `getStubWorkspace`
+        // must not hijack a bound name -- but that needs only the NAME SET.
+        let persistent = config.persistentWorkspaces
+        for name in persistent { _ = get(byName: name) }
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
-            !workspace.isEffectivelyEmpty ||
+            persistent.contains(workspace.name) ||
+                !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
                 workspace.name == focus.workspace.name
         }

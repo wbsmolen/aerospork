@@ -83,7 +83,7 @@ If a config is found in more than one location, the ambiguity is reported. A com
 
 ----
 mod = "alt"              # base modifier for the generated bindings
-workspaces = "1-9"       # a range, a list (["dev", "web"]), or both
+workspaces = "1-9"       # always exist; a range, a list (["dev", "web"]), or both
 
 [gaps]
 inner = 8
@@ -108,6 +108,10 @@ esc = ["reload-config", "mode main"]
 `mod-slash`/`mod-comma` (layout) and `mod-tab` (previous workspace).
 Each entry in `workspaces` additionally generates `mod-<key>` to switch to it and `mod-shift-<key>` to
 move the focused window there, where `<key>` is the first character of the name, lower-cased.
+Every entry also always exists, even while empty, with or without `mod`. `persistent-workspaces` declares
+workspaces the same way without generating any binding. `aerospork config --get persistent-workspaces`
+lists every declared workspace: those in `workspaces` and `persistent-workspaces`, and those pinned to
+a monitor.
 
 Anything in `[keys]` **overrides** a generated binding with the same key, so any generated default can
 be replaced. Remove `mod` and nothing is generated at all.

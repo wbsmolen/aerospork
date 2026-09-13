@@ -14,8 +14,12 @@ private func validateStillPopups() async throws {
     for node in macosPopupWindowsContainer.children {
         let popup = (node as! MacWindow)
         if try await popup.isWindowHeuristic() {
-            try await popup.relayoutWindow(on: focus.workspace)
-            try await tryOnWindowDetected(popup)
+            // The same commitment as registration: once relaid out it is no longer a popup, so this is
+            // the only run its rules get.
+            try await shieldedFromCancellation {
+                try await popup.relayoutWindow(on: focus.workspace)
+                try await tryOnWindowDetected(popup)
+            }
         }
     }
 }

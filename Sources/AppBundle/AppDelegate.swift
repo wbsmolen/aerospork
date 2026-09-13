@@ -21,6 +21,14 @@ public final class AeroSporkAppDelegate: NSObject, NSApplicationDelegate {
     /// is still moving windows.
     private var cleanupStarted = false
 
+    /// Finder, Spotlight, the Dock or `open -a` on a copy that is already running. There is no main
+    /// window to bring back, so this used to do nothing visible at all -- another way Settings "never
+    /// appeared" (#40). Settings is the window someone reaching for the app wants.
+    public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettingsWindow()
+        return false
+    }
+
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if cleanupStarted { return .terminateNow }
         cleanupStarted = true

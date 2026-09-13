@@ -2509,7 +2509,7 @@ function EventsTab({
       title: "Environment for exec commands",
       sf: "terminal"
     }),
-    footer: "`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`: check the exact values with `aerospork list-exec-env-vars`."
+    footer: "`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`, and workspace-change commands get `AEROSPORK_FOCUSED_WORKSPACE` and `AEROSPORK_PREV_WORKSPACE`. `aerospork list-exec-env-vars` shows the environment they all start from."
   }, /*#__PURE__*/React.createElement(Toggle, {
     label: "Inherit AeroSpork's environment",
     checked: inherit,
@@ -2744,7 +2744,7 @@ function GeneralTab({
       title: "Menu bar & Dock",
       sf: "menubar.rectangle"
     }),
-    footer: "AeroSpork has no window of its own, so these two icons are the only ways back into Settings without the command line. `aerospork open-settings` opens this window from anywhere."
+    footer: "AeroSpork has no window of its own, so these two icons are the quickest way back into Settings. Opening AeroSpork again, or `aerospork open-settings`, also opens this window."
   }, /*#__PURE__*/React.createElement(Toggle, {
     label: "Show icon in the menu bar",
     checked: s.menuBarIcon,
@@ -2759,7 +2759,7 @@ function GeneralTab({
       title: "Layout",
       sf: "rectangle.split.3x1"
     }),
-    footer: "Auto gives wide monitors a horizontal split and tall monitors a vertical one. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces."
+    footer: "Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces."
   }, /*#__PURE__*/React.createElement(LabeledContent, {
     label: "New workspaces use"
   }, /*#__PURE__*/React.createElement(SegmentedPicker, {
@@ -2796,7 +2796,7 @@ function GeneralTab({
       title: "Normalization",
       sf: "wand.and.stars"
     }),
-    footer: "Housekeeping applied after every layout change. Turn both off if you want the tree to stay exactly as you built it."
+    footer: "Housekeeping applied after every layout change. Turning one off leaves the tree as it is; it does not undo earlier changes. Turn both off if you want the tree to stay exactly as you built it."
   }, /*#__PURE__*/React.createElement(Toggle, {
     label: "Flatten single-child containers",
     checked: s.flatten,

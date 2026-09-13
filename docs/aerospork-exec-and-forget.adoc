@@ -46,6 +46,10 @@ about to paste into your shell.
 is a shoulder-surfing guard only and does not change what the child process receives. Use
 `--show-secrets` to see the real values.
 
+AeroSpork adds, when the command has a target, `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`; and
+for commands run by `on-focused-workspace-changed`, `AEROSPORK_FOCUSED_WORKSPACE` and
+`AEROSPORK_PREV_WORKSPACE`.
+
 Set `[exec] inherit-env-vars = false` to start from an empty environment, and `[exec] env-vars` to
 declare exactly what should be passed through.
 

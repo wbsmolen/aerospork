@@ -97,7 +97,12 @@ private func parseCasInsensitiveRegex(_ raw: TOMLValueConvertible, _ backtrace: 
 }
 
 private func parseMatcher(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> WindowDetectedCallbackMatcher {
-    parseTable(raw, WindowDetectedCallbackMatcher(), matcherParsers, backtrace, &errors)
+    // Upstream now writes `if = 'test %{app-bundle-id} == ...'`; see `upstreamStringIfMessage`.
+    if raw.string != nil {
+        errors.append(.semantic(backtrace, upstreamStringIfMessage))
+        return WindowDetectedCallbackMatcher()
+    }
+    return parseTable(raw, WindowDetectedCallbackMatcher(), matcherParsers, backtrace, &errors)
 }
 
 /// Internal, not private: `[on-window]` desugars into this exact shape, so the rules about what a

@@ -61,7 +61,7 @@ struct CallbacksTab: View {
             } header: {
                 SectionLabel("Environment for exec commands", "terminal")
             } footer: {
-                Text("`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`; check exact values with `aerospork list-exec-env-vars`.")
+                Text("`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`, and workspace-change commands get `AEROSPORK_FOCUSED_WORKSPACE` and `AEROSPORK_PREV_WORKSPACE`. `aerospork list-exec-env-vars` shows the environment they all start from.")
             }
         }
         .formStyle(.grouped)

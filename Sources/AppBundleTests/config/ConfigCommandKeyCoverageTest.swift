@@ -34,7 +34,9 @@ final class ConfigCommandKeyCoverageTest: XCTestCase {
             "indent-for-nested-containers-with-the-same-orientation",
             "non-empty-workspaces-root-containers-layout-on-startup",
         ]
-        let missing = configParserKeys.subtracting(topLevel).subtracting(inputSugarOrNoOp).sorted()
+        // Upstream-only keys are accepted so a migrated config loads; they configure nothing.
+        let missing = configParserKeys.subtracting(topLevel).subtracting(inputSugarOrNoOp)
+            .subtracting(upstreamOnlyKeyParsers.keys).sorted()
         XCTAssertEqual(missing, [], "these keys parse but `config --get` cannot read them: \(missing)")
     }
 

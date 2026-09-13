@@ -48,8 +48,9 @@ What that turned into, in this codebase:
   DisplayLink link where every write repaints a framebuffer. I have not published speedup numbers;
   `dev-docs/performance.md` says which measurements exist and why the benchmark could not settle
   the rest.
-- **The drift** is mostly workspace lifecycle. Workspaces are created on demand and released when
-  they empty, instead of being materialized for every name a keybinding mentions.
+- **The drift** is mostly workspace lifecycle. Workspaces the config declares always exist; any other
+  is created on demand and released when it empties, instead of being materialized for every name a
+  keybinding mentions.
 
 ## Tech stack
 
@@ -162,9 +163,17 @@ A fork, not a drop-in replacement. Configs and scripts need small edits.
 - `AEROSPACE_*` environment variables are gone and not aliased. A script reading
   `$AEROSPACE_FOCUSED_WORKSPACE` gets an empty string with no error. The names are
   `AEROSPORK_FOCUSED_WORKSPACE`, `AEROSPORK_PREV_WORKSPACE`, `AEROSPORK_WINDOW_ID` and
-  `AEROSPORK_WORKSPACE`.
-- `if.during-aerospace-startup` is spelled `if.during-aerospork-startup`. Unknown keys are fatal, so
-  the old spelling fails at startup and names the line.
+  `AEROSPORK_WORKSPACE`. A config line that still uses them, or runs `aerospace`, loads with a warning
+  naming the line.
+- `~/.aerospace.toml` (or `~/.config/aerospace/aerospace.toml`) is not read. With no AeroSpork config,
+  AeroSpork runs its default and says so; copy your file to `~/.aerospork.toml`.
+- `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` are reported and
+  ignored. `persistent-workspaces` works as in AeroSpace, and so does `workspaces`: listed workspaces
+  always exist.
+- `if.during-aerospace-startup` is spelled `if.during-aerospork-startup`, and `[[on-window-detected]]`
+  takes the table form of `if` (`if.app-id = '...'`), not AeroSpace's newer `if = 'test %{...}'`.
+  Both are errors that name the line, as is any other unknown key, and a rejected config falls back
+  to the default.
 - Feature parity is a non-goal. The fork carries less surface area than upstream.
 
 ## Installation
@@ -206,7 +215,7 @@ changes hot-reload, so you never need to run `reload-config` by hand.
 
 ```toml
 mod = "alt"                 # generates the i3 keymap: alt-h/j/k/l, alt-shift-h/j/k/l, ...
-workspaces = "1-9"          # alt-1..9 to switch, alt-shift-1..9 to move a window
+workspaces = "1-9"          # these nine always exist; alt-1..9 to switch, alt-shift-1..9 to move a window
 
 [gaps]
 inner = 8
@@ -224,10 +233,11 @@ alt-enter = "exec-and-forget open -na Ghostty"
 ```
 
 Run `aerospork list-monitors --format '%{monitor-fingerprint}'` to get the values to paste into
-`[monitors]`. Open the GUI from the menu bar icon, with **⌘,** while AeroSpork is frontmost, or via
-`aerospork open-settings`, which is also valid in config and so bindable. Structured panes apply live
-on a 600ms debounce; Raw TOML has an explicit Apply, because half-typed TOML is invalid most
-of the time.
+`[monitors]`. Open the GUI from the menu bar icon, with **⌘,** while AeroSpork is frontmost, by
+opening AeroSpork again while it runs, or via `aerospork open-settings`, which is also valid in config
+and so bindable. Structured panes apply live on a 600ms debounce, and a change still pending when the
+window closes is saved; Raw TOML has an explicit Apply, because half-typed TOML is invalid most of
+the time.
 
 ## CLI
 

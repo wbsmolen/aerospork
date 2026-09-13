@@ -2,10 +2,65 @@ import AppKit
 import Common
 import Foundation
 
+/// Which already-running copy this process should give way to, if any.
+///
+/// The older copy wins: earlier launch date, then lower pid when launch dates are equal or unknown.
+/// Deciding by age, not by "someone else is running", is what keeps two copies started at the same
+/// moment -- the login item and a hand launch -- from both yielding and leaving none.
+func runningCopyToYieldTo(me: (pid: pid_t, launchDate: Date?), others: [(pid: pid_t, launchDate: Date?)]) -> pid_t? {
+    func isOlder(_ a: (pid: pid_t, launchDate: Date?), than b: (pid: pid_t, launchDate: Date?)) -> Bool {
+        if let aDate = a.launchDate, let bDate = b.launchDate, aDate != bDate { return aDate < bDate }
+        return a.pid < b.pid
+    }
+    return others.filter { $0.pid != me.pid && isOlder($0, than: me) }.min { isOlder($0, than: $1) }?.pid
+}
+
+/// When the kernel started `pid`, or nil when it cannot say.
+///
+/// The one clock every copy can be compared on. LaunchServices' `launchDate` is not: this process has
+/// none yet when the check runs.
+func processStartDate(_ pid: pid_t) -> Date? {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+    let start = info.kp_proc.p_un.__p_starttime
+    return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
+}
+
+/// This process, in the terms `runningCopyToYieldTo` compares.
+///
+/// Not `NSRunningApplication.current`. `initAppBundle` runs in `App.init`, before `NSApplication` exists,
+/// and there `NSRunningApplication.current` reports pid -1 and no launch date. -1 sorts before every real
+/// pid, so each new copy would judge itself the oldest, never yield, and two window managers would run
+/// at once -- the very bug this guards.
+func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
+    let pid = ProcessInfo.processInfo.processIdentifier
+    return (pid, processStartDate(pid))
+}
+
+/// One copy per build. Starting the binary from a shell while the login item was running (#40) gave
+/// two window managers: the second took over the CLI socket -- `bind` unlinks the old one -- and both
+/// fought over every window. Debug and release builds have different bundle ids, so they still run
+/// side by side as designed.
+@MainActor private func exitIfAnotherCopyIsRunning() {
+    let others = NSRunningApplication.runningApplications(withBundleIdentifier: aeroSporkAppId)
+        .filter { !$0.isTerminated }
+        .map { (pid: $0.processIdentifier, launchDate: processStartDate($0.processIdentifier)) }
+    guard let running = runningCopyToYieldTo(me: currentCopyIdentity(), others: others) else { return }
+    let message = "\(aeroSporkAppName) is already running (pid \(running)), so this copy is exiting. Quit that one first to restart."
+    AppLog.server.notice("\(message, privacy: .public)")
+    printStderr(message)
+    exit(0)
+}
+
 @MainActor public func initAppBundle() {
     initTerminationHandler()
     isCli = false
     initServerArgs()
+    // Before anything with side effects: pausing the release server, the signal handlers, workspace
+    // memory, and above all the CLI socket, which a second copy would take over.
+    exitIfAnotherCopyIsRunning()
     if isDebug {
         sendCommandToReleaseServer(args: ["enable", "off"])
     }

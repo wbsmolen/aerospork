@@ -41,9 +41,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
             }
             Divider()
         }
-        // Workspaces are created on demand and garbage-collected when empty, so every row here is a
-        // workspace that actually holds windows or owns a monitor. No header: a list of monospaced
-        // names with a checkmark on the focused one does not need to be labelled.
+        // Workspaces are created on demand and garbage-collected when empty unless the config declares
+        // them, so every row here holds windows, owns a monitor, or is one the user listed. No header: a
+        // list of monospaced names with a checkmark on the focused one does not need to be labelled.
         if let token: RunSessionGuard = .isServerEnabled {
             ForEach(viewModel.workspaces, id: \.name) { workspace in
                 Button {
@@ -73,15 +73,13 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         // Shift-Cmd-E / Shift-Cmd-Q and plain Cmd-Q did nothing while the menu was open.
         .keyboardShortcut("e", modifiers: .command)
         Divider()
-        // `SettingsLink` rather than a Button that sends an action: it is the supported way to open
-        // a `Settings` scene, and unlike the private selector it does not quietly do nothing.
-        if #available(macOS 14, *) {
-            SettingsLink { Text("Settings…") }
-                .keyboardShortcut(",", modifiers: .command)
-        } else {
-            Button("Settings…") { openSettingsWindow() }
-                .keyboardShortcut(",", modifiers: .command)
-        }
+        // Through `openSettingsWindow`, not `SettingsLink`. The link opens the scene without making the
+        // app active, and an accessory app that is not active gets its window BEHIND every other app's
+        // -- which, under a tiling layout that covers the screen, is nowhere (#40). The function still
+        // opens the scene through the public `\.openSettings`, captured by the label below, which has
+        // necessarily rendered by the time this menu is open.
+        Button("Settings…") { openSettingsWindow() }
+            .keyboardShortcut(",", modifiers: .command)
         // Only in a build that has a feed to check. Rendering a disabled row in a debug build
         // would be a permanent dead control, which is what the deleted settings submenu was.
         if Updater.shared.isEnabled {
@@ -142,6 +140,7 @@ func settingsBridged(_ content: some View) -> some View {
     NSApplication.shared.activate(ignoringOtherApps: true)
     if let settingsOpener {
         settingsOpener()
+        bringSettingsWindowForward()
         return true
     }
     // On 14+ a nil opener means the menu bar label has not rendered yet -- `aerospork
@@ -152,4 +151,21 @@ func settingsBridged(_ content: some View) -> some View {
     if #available(macOS 14, *) { return false }
     // macOS 13 has no `\.openSettings`. The pre-Ventura selector is still the only route there.
     return NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+}
+
+/// The settings window once it exists, recorded by the view inside it that already reaches it.
+@MainActor weak var settingsWindow: NSWindow?
+
+/// Puts the settings window in front of every other app's windows.
+///
+/// `activate` only asks. Activation is cooperative from macOS 14, so it can be refused while another
+/// app is frontmost -- Terminal, when this runs for `aerospork open-settings` -- and the window then
+/// opens behind the tiled windows that cover the screen. Ordering it front works either way. A first
+/// open has no window yet at this point; `ResizableWindowEnforcer` calls this again once it lands.
+@MainActor func bringSettingsWindowForward() {
+    Task { @MainActor in
+        guard let settingsWindow else { return }
+        settingsWindow.makeKeyAndOrderFront(nil)
+        settingsWindow.orderFrontRegardless()
+    }
 }

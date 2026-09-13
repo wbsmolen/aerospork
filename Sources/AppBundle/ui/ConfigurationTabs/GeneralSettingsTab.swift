@@ -36,8 +36,8 @@ struct GeneralSettingsTab: View {
                 SectionLabel("Menu bar & Dock", "menubar.rectangle")
             } footer: {
                 Text(viewModel.appVisibility.dockIconIsForced
-                    ? "Both icons off would leave no way into Settings, so the Dock icon is kept. `aerospork open-settings` opens this window from anywhere if you would rather use a shortcut."
-                    : "AeroSpork has no window of its own, so these two icons are the only ways back into Settings without the command line. `aerospork open-settings` opens this window from anywhere.")
+                    ? "Both icons off would leave nothing visible that leads into Settings, so the Dock icon is kept. Opening AeroSpork again, or `aerospork open-settings`, also opens this window."
+                    : "AeroSpork has no window of its own, so these two icons are the quickest way back into Settings. Opening AeroSpork again, or `aerospork open-settings`, also opens this window.")
             }
 
             Section {
@@ -58,7 +58,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Layout", "rectangle.split.3x1")
             } footer: {
-                Text("Auto gives wide monitors a horizontal split and tall monitors a vertical one. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
+                Text("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
             }
 
             Section {
@@ -67,7 +67,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Normalization", "wand.and.stars")
             } footer: {
-                Text("Housekeeping applied after every layout change. Turn both off if you want the tree to stay exactly as you built it.")
+                Text("Housekeeping applied after every layout change. Turning one off leaves the tree as it is; it does not undo earlier changes. Turn both off if you want the tree to stay exactly as you built it.")
             }
 
             Section {

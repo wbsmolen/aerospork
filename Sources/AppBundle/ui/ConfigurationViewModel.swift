@@ -346,11 +346,24 @@ final class ConfigurationViewModel: ObservableObject {
 
     private var autoSaveTask: Task<Void, Never>?
 
-    /// Called when the settings window goes away. Without this a pending autosave outlives the
-    /// window and writes the config up to 600ms after it was dismissed.
+    /// Drops a pending autosave without writing it.
     func cancelPendingAutoSave() {
         autoSaveTask?.cancel()
         autoSaveTask = nil
+    }
+
+    /// Called when the settings window goes away: a pending edit is written now, not dropped.
+    ///
+    /// It used to be cancelled, so a change made less than 600ms before closing the window was
+    /// discarded without a word -- the toggle had moved, the file had not. The save runs the same guards
+    /// as any other, and with the window gone a refusal has nowhere to be shown, so it is logged.
+    func flushPendingAutoSave() async {
+        guard autoSaveTask != nil else { return }
+        cancelPendingAutoSave()
+        await saveConfiguration()
+        if let errorMessage {
+            AppLog.config.notice("Settings closed with an edit that could not be saved: \(errorMessage, privacy: .public)")
+        }
     }
 
     func scheduleAutoSave() {
@@ -400,7 +413,8 @@ final class ConfigurationViewModel: ObservableObject {
         let base = configBaseText()
         rawToml = base
         let table = try? TOMLTable(string: base)
-        definedWorkspaces = workspaceNames(table?["workspaces"])
+        // Both spellings declare workspaces the runtime keeps alive; see `Config.persistentWorkspaces`.
+        definedWorkspaces = workspaceNames(table?["workspaces"]) + workspaceNames(table?["persistent-workspaces"])
         modes = loadBindings(table)
         inheritedBindings = loadInheritedBindings(table)
         // `KeyMapping.preset` is fileprivate and `RawExecConfig` isn't reachable from the parsed
@@ -932,7 +946,12 @@ final class ConfigurationViewModel: ObservableObject {
 
         do {
             try ConfigurationWriter.write(rendered)
-            _ = reloadConfig()
+            // The file watcher refreshes after its reload; this save suppresses the watcher for its own
+            // write and did not, so a gap, layout or normalization change did nothing on screen until
+            // some unrelated window event. Not under XCTest, where a refresh enumerates the machine's apps.
+            if reloadConfig(), !isUnitTest {
+                runRefreshSession(.globalObserver("settingsSaved"), screenIsDefinitelyUnlocked: false)
+            }
             // A GUI save reloads the config WITHOUT running a refresh session, so the `updateTrayText`
             // hook does not fire. Without this, flipping "Show Dock icon" did nothing until the next
             // window event -- which, with the settings window in front, may be a long time.

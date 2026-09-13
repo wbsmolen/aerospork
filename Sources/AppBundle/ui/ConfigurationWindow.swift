@@ -120,7 +120,8 @@ public struct ConfigurationWindow: View {
             // A removed or corrupt stored value must never leave TabView with no selected pane.
             if SettingsPane(rawValue: selectedPaneID) == nil { selectedPaneID = SettingsPane.general.rawValue }
         }
-        .onDisappear { viewModel.cancelPendingAutoSave() }
+        // Flushed, not cancelled: closing the window inside the 600ms debounce used to drop the last edit.
+        .onDisappear { Task { await viewModel.flushPendingAutoSave() } }
     }
 
     private func paneLabel(_ pane: SettingsPane) -> some View {
@@ -143,6 +144,12 @@ private struct ResizableWindowEnforcer: NSViewRepresentable {
             super.viewDidMoveToWindow()
             guard let window else { return }
             enforce()
+            // A first open lands here after `openSettingsWindow` has already returned, so this is where
+            // a new settings window is put in front.
+            if settingsWindow !== window {
+                settingsWindow = window
+                bringSettingsWindowForward()
+            }
             // The scene re-asserts its own styleMask after this view lands in the window, so a
             // one-shot insert is silently undone. Watching window updates and re-inserting only
             // when the bit is missing wins that fight without churning the mask every pass.

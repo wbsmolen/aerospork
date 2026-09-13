@@ -201,6 +201,9 @@ extension [Command] {
         "default-root-container-layout": str(config.defaultRootContainerLayout.rawValue),
         "default-root-container-orientation": str(config.defaultRootContainerOrientation.rawValue),
         "accordion-padding": int(config.accordionPadding),
+        "persistent-workspaces": .array(
+            config.persistentWorkspaces.sorted { $0.toLogicalSegments() < $1.toLogicalSegments() }.map { str($0) },
+        ),
 
         "after-startup-command": commands(config.afterStartupCommand),
         "on-focus-changed": commands(config.onFocusChanged),
