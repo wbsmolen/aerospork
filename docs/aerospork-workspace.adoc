@@ -36,7 +36,7 @@ A workspace the config declares always exists, even while it is empty: every nam
 every name in `persistent-workspaces`, and every workspace pinned to a monitor. `aerospork
 list-workspaces --all`, the menu bar and `workspace next`/`prev` show all of them.
 
-Any other workspace -- one only a keybinding of your own mentions -- is created the first time you
+Any other workspace, such as one that only a keybinding of your own mentions, is created the first time you
 switch to it and released once it is empty and no longer visible. It costs nothing until you use it:
 switching back recreates it indistinguishably, because an empty workspace is nothing but its name.
 

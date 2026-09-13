@@ -12,13 +12,13 @@
             <sparkle:version>1.2.0</sparkle:version>
             <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<p>Fixes focus moving on its own when an app is slow to respond, and a set of problems that a config migrated from AeroSpace ran into: empty workspaces disappearing, window rules waiting for a click, and a settings window that could open out of sight. Reported in <a href="https://github.com/wbsmolen/aerospork/issues/39">#39</a> and <a href="https://github.com/wbsmolen/aerospork/issues/40">#40</a>.</p>
+            <description><![CDATA[<p>Fixes focus moving to another window when an app is slow to respond (<a href="https://github.com/wbsmolen/aerospork/issues/39">#39</a>), and several problems with configs migrated from AeroSpace (<a href="https://github.com/wbsmolen/aerospork/issues/40">#40</a>).</p>
 <h2>Upgrade notes</h2>
 <ul>
-<li><strong>Declared workspaces always exist.</strong> Every workspace named in <code>workspaces</code> (with or without <code>mod</code>), in <code>persistent-workspaces</code>, or pinned to a monitor now exists even while empty. The default config declares <code>1-9</code>, so all nine appear in <code>list-workspaces --all</code>, the menu bar and <code>workspace next</code>/<code>prev</code> from launch. A workspace you reach only through a binding of your own is still created when you switch to it and released once empty.</li>
-<li><strong>One copy at a time.</strong> Starting AeroSpork while it is already running prints &quot;AeroSpork is already running&quot; and exits. Debug and release builds can still run side by side.</li>
-<li><strong>AeroSpork no longer manages its own windows.</strong> The settings window is never tiled or moved to a workspace.</li>
-<li><strong>Four AeroSpace keys are ignored instead of fatal.</strong> <code>config-version</code>, <code>auto-reload-config</code>, <code>on-mode-changed</code> and <code>focus-follows-mouse</code> are reported and ignored. Previously any of them made AeroSpork reject the whole config and run its default.</li>
+<li>Every workspace named in <code>workspaces</code> (with or without <code>mod</code>), in <code>persistent-workspaces</code>, or pinned to a monitor now exists even while empty. The default config declares <code>1-9</code>, so all nine appear in <code>list-workspaces --all</code>, the menu bar and <code>workspace next</code>/<code>prev</code> from launch. A workspace reached only through a binding is still created when you switch to it and released once empty.</li>
+<li>Starting AeroSpork while it is already running prints &quot;AeroSpork is already running&quot; and exits. Debug and release builds can still run side by side.</li>
+<li>AeroSpork no longer manages its own windows, so the settings window is never tiled or moved to a workspace.</li>
+<li><code>config-version</code>, <code>auto-reload-config</code>, <code>on-mode-changed</code> and <code>focus-follows-mouse</code> are reported and ignored. Previously any of them made AeroSpork reject the whole config and run its default.</li>
 </ul>
 <h2>Focus and unresponsive apps</h2>
 <ul>
@@ -64,7 +64,7 @@
 brew install --cask wbsmolen/tap/aerospork
 </pre>
 <p>Or download <code>aerospork-v1.2.0.zip</code>, move <code>aerospork-v1.2.0/AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when prompted. For the CLI, symlink the installed copy: <code>ln -s /Applications/AeroSpork.app/Contents/MacOS/aerospork-cli /usr/local/bin/aerospork</code>.</p>
-<p><code>AeroSpork-1.2.0.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
+<p><code>AeroSpork-1.2.0.zip</code> is the Sparkle update archive: the same app without the CLI, man pages or licence files. It exists for the updater. Use the versioned zip for a manual install.</p>
 ]]></description>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.2.0/AeroSpork-1.2.0.zip" length="6788074" type="application/octet-stream" sparkle:edSignature="UQc2nYG5f0JqX1NmBXbas3K+d2t6bI06pldKCLQ+wJv9vwwbIWet6/VuBw5klpAtWEHfEirbXkChRg6wo14MBQ=="/>
         </item>

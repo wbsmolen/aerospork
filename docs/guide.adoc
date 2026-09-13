@@ -155,8 +155,8 @@ How the v2 pieces layer:
   and friends), and `workspaces = [ '1-9', 'A', 'chat' ]` generates two bindings per workspace —
   switch and move-node. A token is a range only when it is exactly `<char>-<char>`, so
   `my-workspace` stays a literal name.
-* Every workspace in `workspaces` also always exists, even while empty, whether or not `mod` is set
-  -- see <<persistent-workspaces>>.
+* Every workspace in `workspaces` also always exists, even while empty, whether or not `mod` is set.
+  See <<persistent-workspaces>>.
 * `[keys]` (and `[keys.<mode>]` for other modes) layers on top of the generated set; a key you
   write there wins. `[mode.*.binding]` still layers on top of both.
 * Because each workspace's binding comes from its name's first character, two workspaces sharing a
@@ -174,15 +174,15 @@ command's point of view.
 A workspace the config *declares* always exists, even while it is empty and on no monitor:
 
 * every name in `workspaces`,
-* every name in `persistent-workspaces` -- AeroSpace's spelling, a list of names or ranges such as
+* every name in `persistent-workspaces` (AeroSpace's spelling), a list of names or ranges such as
   `persistent-workspaces = ["1-9", "chat"]`, which declares without generating any binding,
 * every workspace pinned to a monitor under `[monitors]` or `workspace-to-monitor-force-assignment`.
 
 A reserved name that no command could switch to, such as `next`, is an error.
 
 So `aerospork list-workspaces --all`, the menu bar and `workspace next`/`prev` list all of them from
-the moment AeroSpork starts. Any other workspace -- one you reach only through a binding of your own,
-such as `alt-0 = 'workspace 10'` -- is created when you switch to it and released once it is empty and
+the moment AeroSpork starts. Any other workspace, such as one you reach only through a binding of your own
+like `alt-0 = 'workspace 10'`, is created when you switch to it and released once it is empty and
 not visible.
 
 A declared workspace that has never been shown belongs to the main monitor, so with several monitors
@@ -204,14 +204,14 @@ so on stderr and in the `config` log. Copy the file across, then:
 * `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` have no AeroSpork
   equivalent. They are reported and ignored rather than rejecting the file; a saved config always
   reloads by itself.
-* `persistent-workspaces` works as it does in AeroSpace, and so does `workspaces` -- see
+* `persistent-workspaces` works as it does in AeroSpace, and so does `workspaces`. See
   <<persistent-workspaces>>.
 * In `[[on-window-detected]]`, write the table form of `if` (`if.app-id = '...'`). AeroSpace's newer
   string form, `if = 'test %{...}'`, is rejected with an error that names the replacement. A rule can run only
   `layout floating`, `layout tiling` and `move-node-to-workspace`, and `if.during-aerospace-startup` is
   spelled `if.during-aerospork-startup`.
 * The first time a v1-style config (bindings under `[mode.main.binding]`) loads, AeroSpork rewrites it
-  to v2 and keeps the original as `<name>.pre-v2` -- see <<config-v2>>.
+  to v2 and keeps the original as `<name>.pre-v2`. See <<config-v2>>.
 
 [#key-notation]
 === Key notation
@@ -381,9 +381,9 @@ xref:commands.adoc#open-settings[`aerospork open-settings`] (or the menu-bar ico
 AeroSpork again while it runs) opens a native settings window with seven panes: General, Gaps,
 Keys, Monitors, Events, Window Rules and Raw TOML. The window comes to the front, and AeroSpork
 never tiles it or moves it to a workspace. Structured controls apply live, a moment after you stop
-changing them — there is no Save button, and a change still pending when you close the window is
-saved — and a save rewrites only the sections you actually edited, so your comments and
-formatting survive. A saved change takes effect on screen straight away. Raw TOML is the exception: it applies only when you click Apply, since
+changing them. There is no Save button, and a change still pending when you close the window is
+saved. A save rewrites only the sections you actually edited, so your comments and
+formatting survive, and a saved change takes effect on screen immediately. Raw TOML is the exception: it applies only when you click Apply, since
 half-typed TOML is invalid most of the time, and it is the guarantee that no config key is out of
 the GUI's reach.
 
@@ -558,7 +558,7 @@ Switching back to the workspace (with the xref:commands.adoc#workspace[workspace
 
 On quit, all windows are returned to the visible area of the screen, each centred on the monitor it
 was on. `killall AeroSpork` runs the same cleanup, but if AeroSpork is stuck and the cleanup has not
-finished after 10 seconds, it exits without it. A crash does not run the cleanup either -- nothing
+finished after 10 seconds, it exits without it. A crash does not run the cleanup either, because nothing
 intercepts a fatal signal. Either way windows can be left off screen; relaunching AeroSpork brings
 them back.
 
@@ -1067,8 +1067,8 @@ recovers, each layout pass can wait up to a second for it, so workspace switches
 
 === "AeroSpork is already running"
 
-Only one copy of AeroSpork runs at a time. Starting another -- for example the binary from a
-terminal while the login item is running -- prints `AeroSpork is already running (pid N), so this
+Only one copy of AeroSpork runs at a time. Starting another, for example the binary from a
+terminal while the login item is running, prints `AeroSpork is already running (pid N), so this
 copy is exiting` and exits. Quit the running copy first to restart it. A debug build and a release
 build are separate apps and can still run side by side.
 
@@ -1091,8 +1091,8 @@ log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compac
 log stream --predicate 'subsystem == "com.wbs.aerospork"' --style compact
 ----
 
-Use `com.wbs.aerospork.debug` for a debug build. Note that the `.debug` there names the *build*, not
-the log level -- a release build always logs under `com.wbs.aerospork`, whatever level it writes at.
+Use `com.wbs.aerospork.debug` for a debug build. The `.debug` there names the build, not
+the log level: a release build always logs under `com.wbs.aerospork`, whatever level it writes at.
 Records are tagged with a category, so you can narrow them down:
 
 [source,shell]
@@ -1107,9 +1107,9 @@ exists, and a Settings change that could not be saved when its window closed
 command that exited non-zero
 `session`:: focus AeroSpork moved on its own initiative: a window dying under the focused one, a
 session syncing focus back to macOS, a windows-cache restore, and (1.2.0 and later) focus following
-macOS onto a workspace that was not on screen -- an app activating itself, or the next key window
-after a close. Start here for "focus jumped on its own". Focus that follows macOS within what is
-already on screen -- you clicked a window, including one on another monitor -- is not recorded. The
+macOS onto a workspace that was not on screen, such as an app activating itself or the next key
+window after a close. Start here for "focus jumped on its own". Focus that follows macOS within what
+is already on screen, such as clicking a window on any monitor, is not recorded. The
 same category also carries refresh-session failures and quit-cleanup errors.
 
 Redirect to a file to attach it: `log show … > aerospork.log`.
@@ -1124,14 +1124,14 @@ The always-on records above are deliberately sparse. For a per-refresh, per-comm
 launchctl setenv AEROSPORK_DEBUG_LOG 1
 
 # Restart so it inherits the variable. `killall` returns as soon as the signal is SENT, so waiting
-# for the process to actually go matters -- otherwise `open` just re-activates the old one, still
+# for the process to exit matters. Otherwise `open` re-activates the old one, still
 # without the variable.
 killall AeroSpork; while pgrep -qx AeroSpork; do sleep 0.2; done; open -a AeroSpork
 
 log stream --debug --predicate 'subsystem == "com.wbs.aerospork"'
 ----
 
-For a debug build every name changes, including the one `open` needs -- `open -a AeroSpork` would
+For a debug build every name changes, including the one `open` needs. `open -a AeroSpork` would
 launch the *release* app next to it:
 
 [source,shell]
@@ -1140,7 +1140,7 @@ killall AeroSporkApp; while pgrep -qx AeroSporkApp; do sleep 0.2; done; open .de
 log stream --debug --predicate 'subsystem == "com.wbs.aerospork.debug"'
 ----
 
-To confirm the variable actually reached the app, look for the startup record -- it is written at
+To confirm the variable actually reached the app, look for the startup record. It is written at
 notice level, so it survives. It was added in 1.2.0; earlier versions do not write it, so on those
 the only check is whether the stream shows anything.
 

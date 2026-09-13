@@ -4,14 +4,14 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 
 ## 1.2.0 (2026-09-13)
 
-Fixes focus moving on its own when an app is slow to respond, and a set of problems that a config migrated from AeroSpace ran into: empty workspaces disappearing, window rules waiting for a click, and a settings window that could open out of sight. Reported in [#39](https://github.com/wbsmolen/aerospork/issues/39) and [#40](https://github.com/wbsmolen/aerospork/issues/40).
+Fixes focus moving to another window when an app is slow to respond ([#39](https://github.com/wbsmolen/aerospork/issues/39)), and several problems with configs migrated from AeroSpace ([#40](https://github.com/wbsmolen/aerospork/issues/40)).
 
 ### Upgrade notes
 
-- **Declared workspaces always exist.** Every workspace named in `workspaces` (with or without `mod`), in `persistent-workspaces`, or pinned to a monitor now exists even while empty. The default config declares `1-9`, so all nine appear in `list-workspaces --all`, the menu bar and `workspace next`/`prev` from launch. A workspace you reach only through a binding of your own is still created when you switch to it and released once empty.
-- **One copy at a time.** Starting AeroSpork while it is already running prints "AeroSpork is already running" and exits. Debug and release builds can still run side by side.
-- **AeroSpork no longer manages its own windows.** The settings window is never tiled or moved to a workspace.
-- **Four AeroSpace keys are ignored instead of fatal.** `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` are reported and ignored. Previously any of them made AeroSpork reject the whole config and run its default.
+- Every workspace named in `workspaces` (with or without `mod`), in `persistent-workspaces`, or pinned to a monitor now exists even while empty. The default config declares `1-9`, so all nine appear in `list-workspaces --all`, the menu bar and `workspace next`/`prev` from launch. A workspace reached only through a binding is still created when you switch to it and released once empty.
+- Starting AeroSpork while it is already running prints "AeroSpork is already running" and exits. Debug and release builds can still run side by side.
+- AeroSpork no longer manages its own windows, so the settings window is never tiled or moved to a workspace.
+- `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` are reported and ignored. Previously any of them made AeroSpork reject the whole config and run its default.
 
 ### Focus and unresponsive apps
 
