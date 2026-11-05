@@ -148,8 +148,7 @@ final class MacWindow: Window {
 
     // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
-    func hideInCorner(_ corner: OptimalHideCorner) async throws {
-        guard let nodeMonitor else { return }
+    func hideInCorner(on visibleRect: Rect, otherMonitors: [Rect]) async throws {
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent
         // `hideEmulation` calls
         if !isHiddenInCorner {
@@ -160,21 +159,11 @@ final class MacWindow: Window {
             prevUnhiddenProportionalPositionInsideWorkspaceRect =
                 CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
         }
-        let p: CGPoint
-        switch corner {
-            case .bottomLeftCorner:
-                guard let s = try await getAxSize() else { fallthrough }
-                // Zoom will jump off if you do one pixel offset https://github.com/wbsmolen/aerospork/issues/527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
-                let onePixelOffset = macApp.isZoom ? .zero : CGPoint(x: 1, y: -1)
-                p = nodeMonitor.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
-            case .bottomRightCorner:
-                // Zoom will jump off if you do one pixel offset https://github.com/wbsmolen/aerospork/issues/527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
-                let onePixelOffset = macApp.isZoom ? .zero : CGPoint(x: 1, y: 1)
-                p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
+        // Zoom will jump off if you do one pixel offset https://github.com/wbsmolen/aerospork/issues/527
+        let sliver: CGFloat = macApp.isZoom ? 0 : 1
+        macApp.hideAxWindow(windowId) { size in
+            hideSpot(for: size, on: visibleRect, otherMonitors: otherMonitors, sliver: sliver)
         }
-        setAxTopLeftCorner(p)
     }
 
     @MainActor

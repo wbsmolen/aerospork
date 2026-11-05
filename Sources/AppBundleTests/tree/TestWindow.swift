@@ -43,6 +43,8 @@ final class TestWindow: Window, CustomStringConvertible {
     }
     @MainActor var appHidden = false
     @MainActor override var isMacosAppHidden: Bool { appHidden }
+    @MainActor var transparent = false
+    @MainActor override var isTransparent: Bool { transparent }
 
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
         _rect

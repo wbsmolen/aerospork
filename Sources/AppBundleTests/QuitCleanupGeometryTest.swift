@@ -74,4 +74,26 @@ final class QuitCleanupGeometryTest: XCTestCase {
 
         assertEquals(point, CGPoint(x: 1920 + (1000 - 1400) / 2, y: (800 - 900) / 2))
     }
+
+    /// A window of a hidden workspace is parked against another monitor; at quit it must go back to
+    /// its workspace's monitor, not to the one it was parked against.
+    @MainActor
+    func testAParkedWindowGoesBackToItsWorkspacesMonitor() async throws {
+        setUpWorkspacesForTests()
+        let left = Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080)
+        let right = Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080)
+        testMonitors = [
+            MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "left", rect: left, visibleRect: left),
+            MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "right", rect: right, visibleRect: right),
+        ]
+        defer { testMonitors = [defaultTestMonitor] }
+        let workspace = Workspace.get(byName: "hidden")
+        workspace.assignMonitor(testMonitors[0])
+        // Parked at the left monitor's bottom-right corner: almost all of it, centre included, on the right one.
+        let parked = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, rect: Rect(topLeftX: 1919, topLeftY: 500, width: 800, height: 400))
+
+        assertEquals(try await monitorToRestore(parked).name, "left")
+        parked.unbindFromParent()
+        assertEquals(try await monitorToRestore(parked).name, "right") // unbound: only where it sits is left
+    }
 }

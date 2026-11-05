@@ -10,6 +10,10 @@ class Window: TreeNode, Hashable {
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
+    /// The smallest size the app was seen to accept (0 on an axis nothing was learned about). Layout
+    /// gives the window at least this, so a tile narrower than the app allows is planned around rather
+    /// than overflowed. See `noteRefusedSize`.
+    var observedMinSize: CGSize?
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -27,6 +31,21 @@ class Window: TreeNode, Hashable {
 
     @MainActor
     func closeAxWindow() { die("Not implemented") }
+
+    /// The app answered a resize to `asked` with the larger `got`: it will not go that small. Only ever
+    /// raised. Returns whether anything was learned, i.e. whether the tiles need re-splitting.
+    /// ponytail: never lowered -- a window whose minimum later shrinks keeps the old one until it closes.
+    @MainActor
+    func noteRefusedSize(asked: CGSize, got: CGSize) -> Bool {
+        let old = observedMinSize ?? .zero
+        let new = CGSize(
+            width: got.width > asked.width + 1 ? max(old.width, got.width) : old.width,
+            height: got.height > asked.height + 1 ? max(old.height, got.height) : old.height,
+        )
+        if new == old { return false }
+        observedMinSize = new
+        return true
+    }
 
     nonisolated func hash(into hasher: inout Hasher) {
         hasher.combine(windowId)
@@ -55,6 +74,9 @@ class Window: TreeNode, Hashable {
     /// call site so `normalizeLayoutReason`'s hidden-app branch is reachable from a test double.
     @MainActor
     var isMacosAppHidden: Bool { macAppUnsafe.nsApp.isHidden }
+    /// Drawn fully transparent by WindowServer; see `transparentWindowIds`. A member for the same reason.
+    @MainActor
+    var isTransparent: Bool { transparentWindowIds.contains(windowId) }
     var isHiddenInCorner: Bool { die("Not implemented") }
     @MainActor
     func nativeFocus() { die("Not implemented") }

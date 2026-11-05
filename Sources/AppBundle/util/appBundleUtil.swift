@@ -111,14 +111,21 @@ func centredOnMonitor(_ monitorVisibleRect: Rect, _ windowSize: CGSize) -> CGPoi
     )
 }
 
+/// The monitor a window goes back to at quit: its workspace's. A window of a hidden workspace is parked
+/// off screen, so where it sits says nothing -- and the next launch binds it by where it sits, so going
+/// by its centre moved it to whichever monitor it was parked against. The centre only for a window
+/// with no workspace: the cleanup may run when something went wrong and windows are unbound.
+@MainActor
+func monitorToRestore(_ window: Window) async throws -> Monitor {
+    if let monitor = window.nodeMonitor { return monitor }
+    return try await window.getCenter()?.monitorApproximation ?? mainMonitor
+}
+
 @MainActor
 private func makeAllWindowsVisibleAndRestoreSize() async throws {
     // Make all windows fullscreen before Quit
     for (_, window) in MacWindow.allWindowsMap {
-        // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)
-        // that's why it's not allowed to use `.parent` call in here
-        let monitor = try await window.getCenter()?.monitorApproximation ?? mainMonitor
-        let monitorVisibleRect = monitor.visibleRect
+        let monitorVisibleRect = try await monitorToRestore(window).visibleRect
         let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
         try await window.setAxFrameBlocking(centredOnMonitor(monitorVisibleRect, windowSize), windowSize)
     }

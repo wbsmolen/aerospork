@@ -1,4 +1,5 @@
 import AppKit
+import Common
 
 extension Workspace {
     @MainActor // todo can be dropped in future Swift versions?
@@ -48,7 +49,10 @@ extension TreeNode {
                         window.layoutFullscreen(context)
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
-                        window.setAxFrame(point, CGSize(width: width, height: height))
+                        let tile = CGSize(width: width, height: height)
+                        let size = window.observedMinSize.map { CGSize(width: max(width, $0.width), height: max(height, $0.height)) } ?? tile
+                        let monitor = context.workspace.workspaceMonitor.visibleRect
+                        window.setAxFrame(size == tile ? point : keptInside(monitor, point, size), size)
                     }
                 }
             case .tilingContainer(let container):
@@ -109,6 +113,58 @@ extension Window {
     }
 }
 
+/// `point`, moved just enough that a window of `size` there stays on the monitor. Only for a window
+/// bigger than its tile: grown from its top-left it would hang off the edge -- onto the next monitor,
+/// which is another workspace's screen.
+private func keptInside(_ monitor: Rect, _ point: CGPoint, _ size: CGSize) -> CGPoint {
+    CGPoint(
+        x: max(monitor.minX, min(point.x, monitor.maxX - size.width)),
+        y: max(monitor.minY, min(point.y, monitor.maxY - size.height)),
+    )
+}
+
+/// Each child's share of `total`: its weight, except that a child whose share is under its minimum gets
+/// the minimum, and the rest give it up in proportion to their weights. When the minimums don't fit at
+/// all, the plain proportional split stands, and layout keeps each oversize window on its monitor.
+/// `weights` must already sum to `total`.
+func distribute(_ weights: [CGFloat], minimums: [CGFloat], total: CGFloat) -> [CGFloat] {
+    if zip(weights, minimums).allSatisfy({ $0 >= $1 }) || minimums.reduce(0, +) > total { return weights }
+    var pinned = Set<Int>()
+    while true {
+        let free = total - pinned.reduce(0) { $0 + minimums[$1] }
+        let unpinned = weights.indices.filter { !pinned.contains($0) }
+        let unpinnedWeight = unpinned.reduce(0) { $0 + weights[$1] }
+        let sizes = weights.indices.map { i in
+            pinned.contains(i) ? minimums[i]
+                : unpinnedWeight > 0 ? weights[i] * free / unpinnedWeight : free / CGFloat(unpinned.count)
+        }
+        let under = unpinned.filter { sizes[$0] < minimums[$0] }
+        if under.isEmpty { return sizes }
+        pinned.formUnion(under)
+    }
+}
+
+extension TreeNode {
+    /// The least this node can be drawn along `orientation`: the minimums its windows were seen to
+    /// enforce (`Window.observedMinSize`) plus the gaps between them. 0 when nothing is known.
+    @MainActor
+    fileprivate func minimumSize(_ orientation: Orientation, innerGap: CGFloat) -> CGFloat {
+        switch nodeCases {
+            case .window(let window):
+                return window.observedMinSize.map { orientation == .h ? $0.width : $0.height } ?? 0
+            case .tilingContainer(let container):
+                let mins = container.children.map { $0.minimumSize(orientation, innerGap: innerGap) }
+                if mins.allSatisfy({ $0 == 0 }) { return 0 }
+                // ponytail: accordion padding isn't counted, so a min-size window in one can still overlap by 2x padding.
+                return container.layout == .tiles && container.orientation == orientation
+                    ? mins.reduce(0, +) + innerGap * CGFloat(mins.count - 1)
+                    : mins.max() ?? 0
+            default:
+                return 0
+        }
+    }
+}
+
 extension TilingContainer {
     @MainActor // todo can be dropped in future Swift versions?
     fileprivate func layoutTiles(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
@@ -141,28 +197,38 @@ extension TilingContainer {
         // `resize`, mouse-resize and balance-sizes are all denominated in points and would each need
         // the parent's point size to convert. Do it only if the write-back itself starts costing.
 
+        let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
         let lastIndex = children.indices.last
+        // Interior gaps are split in half between the two neighbours that share them, and the
+        // container's outer edges get no gap at all (outer gaps are the monitor's job). So the
+        // first and last child each give back half a gap, and every boundary between two
+        // children ends up exactly `rawGap` wide. See LayoutRecursiveTest.testTilesHalfGapEdges.
+        let gaps = children.indices.map { i in rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0) }
+        // What is drawn, not the weights: a child the app won't shrink to its share gets its minimum
+        // and its siblings give the difference up. The weights stay the user's proportions.
+        let sizes = distribute(
+            children.map { $0.getWeight(orientation) },
+            minimums: children.indices.map { i in
+                let min = children[i].minimumSize(orientation, innerGap: rawGap)
+                return min > 0 ? min + gaps[i] : 0
+            },
+            total: size,
+        )
         for (i, child) in children.enumerated() {
-            let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
-            // Interior gaps are split in half between the two neighbours that share them, and the
-            // container's outer edges get no gap at all (outer gaps are the monitor's job). So the
-            // first and last child each give back half a gap, and every boundary between two
-            // children ends up exactly `rawGap` wide. See LayoutRecursiveTest.testTilesHalfGapEdges.
-            let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
             try await child.layoutRecursive(
                 i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
-                width: orientation == .h ? child.hWeight - gap : width,
-                height: orientation == .v ? child.vWeight - gap : height,
+                width: orientation == .h ? sizes[i] - gaps[i] : width,
+                height: orientation == .v ? sizes[i] - gaps[i] : height,
                 virtual: Rect(
                     topLeftX: virtualPoint.x,
                     topLeftY: virtualPoint.y,
-                    width: orientation == .h ? child.hWeight : width,
-                    height: orientation == .v ? child.vWeight : height,
+                    width: orientation == .h ? sizes[i] : width,
+                    height: orientation == .v ? sizes[i] : height,
                 ),
                 context,
             )
-            virtualPoint = orientation == .h ? virtualPoint.addingXOffset(child.hWeight) : virtualPoint.addingYOffset(child.vWeight)
-            point = orientation == .h ? point.addingXOffset(child.hWeight) : point.addingYOffset(child.vWeight)
+            virtualPoint = virtualPoint.addingOffset(orientation, sizes[i])
+            point = point.addingOffset(orientation, sizes[i])
         }
     }
 
