@@ -201,8 +201,7 @@ Settings through `openSettingsWindow()`, which activates the app and orders the 
 **Window rules run to the end**: a window in `MacWindow.allWindowsMap` is never "new" again, so
 `on-window-detected` (at registration and in `validateStillPopups`) runs inside `shieldedFromCancellation`;
 a refresh cancelled mid-rule used to leave the rule half-applied for good. A retry nothing else would
-trigger goes through `scheduleFollowUpRefresh`, not `RefreshDebouncer`, whose pending task every event
-cancels.
+trigger goes through `scheduleFollowUpRefresh`, whose delay no later event restarts.
 
 **Upstream's name lives in one file**: `config/upstreamMigration.swift` holds every string that has to
 spell the upstream product -- its config path, `AEROSPACE_*`, its CLI, its keys -- and `BrandingTest`
@@ -250,7 +249,7 @@ for the rebuild steps.
 - `script/clean-project.sh` to clean when things go wrong
 
 ### Performance & Smoothness
-- Layout is synchronous and simple; a fixed 50ms debounce (`RefreshDebouncer`) coalesces bursts of accessibility events into a single refresh
+- Layout is synchronous and simple; a fixed 50ms debounce (`RefreshScheduler`) coalesces bursts of accessibility events into a single refresh. At most one refresh runs and one waits, with their flags merged; an event never cancels a running refresh, a session does. Sessions run one at a time through `sessionGate`, and none may await another
 - `MacApp.setFrame` skips redundant AX writes when a window is already at its target frame. This avoids unnecessary framebuffer churn, which matters over DisplayLink/USB
 - Screen-configuration changes (`GlobalObserver`) are debounced and rebalanced on monitor-set change, handling DisplayLink's multi-stage connect/flap
 

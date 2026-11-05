@@ -91,11 +91,6 @@ struct LayoutCommand: Command {
             parent.layout = targetLayout
             parent.changeOrientation(targetOrientation)
 
-            // Trigger immediate refresh to apply layout changes
-            Task { @MainActor in
-                runRefreshSession(.hotkeyBinding, screenIsDefinitelyUnlocked: true, debounce: false)
-            }
-
             debugLog("COMMAND: Layout change successful")
             return true
         case .workspace, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,

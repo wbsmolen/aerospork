@@ -6,7 +6,8 @@ private var resizeWithMouseTask: Task<(), any Error>? = nil
 
 func resizedObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: UnsafeMutableRawPointer?) {
     let notif = notif as String
-    let windowId = ax.containingWindowId()
+    // Almost all of these are our own frame writes. Only a drag needs to know which window resized.
+    let windowId = isLeftMouseButtonDown ? ax.containingWindowId() : nil
     runDetached("resizeWithMouse") {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {

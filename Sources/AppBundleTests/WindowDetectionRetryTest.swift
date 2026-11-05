@@ -21,7 +21,7 @@ final class WindowDetectionRetryTest: XCTestCase {
 
     func testAWindowThatArrivesLookingLikeAPopupIsLookedAtAgain() throws {
         let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift", length: 3600)
-        XCTAssertTrue(body.contains("if case .macosPopupWindowsContainer = window.parent?.cases {"))
+        XCTAssertTrue(body.contains("if window.isPopup {"))
         XCTAssertTrue(body.contains(#"scheduleFollowUpRefresh(after: 1, "popupRecheck")"#))
     }
 

@@ -339,7 +339,7 @@ private func windowOrNil(_ any: Any?) -> WindowIdAndAxUiElementMock? {
 
 extension AXUIElement: AxUiElementMock {
     func get<Attr: ReadableAttr>(_ attr: Attr) -> Attr.T? {
-        let state = signposter.beginInterval(#function, "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
         var raw: AnyObject?
         return AXUIElementCopyAttributeValue(self, attr.key as CFString, &raw) == .success
@@ -348,21 +348,21 @@ extension AXUIElement: AxUiElementMock {
     }
 
     @discardableResult func set<Attr: WritableAttr>(_ attr: Attr, _ value: Attr.T) -> Bool {
-        let state = signposter.beginInterval(#function, "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
         guard let value = attr.setter(value) else { return false }
         return AXUIElementSetAttributeValue(self, attr.key as CFString, value) == .success
     }
 
     func containingWindowId() -> CGWindowID? {
-        let state = signposter.beginInterval(#function, "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
         var cgWindowId = CGWindowID()
         return _AXUIElementGetWindow(self, &cgWindowId) == .success ? cgWindowId : nil
     }
 
     func isDestroyed() -> Bool {
-        let state = signposter.beginInterval(#function, "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
         var cgWindowId = CGWindowID()
         return axErrorMeansDestroyed(_AXUIElementGetWindow(self, &cgWindowId))

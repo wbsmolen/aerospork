@@ -103,7 +103,8 @@ broke anyone scripting the CLI.
 
 7. **`layout/refresh.swift`.** `aliveWindowIds` is a `Set`, not an `Array`. Was O(W²).
 
-8. **`util/RefreshDebouncer.swift`.** a 250 ms max-wait ceiling was added and then **REVERTED**.
+8. **`util/RefreshDebouncer.swift`** (since replaced by `RefreshScheduler`, where an event no longer
+   cancels a running refresh). A 250 ms max-wait ceiling was added and then **REVERTED**.
 
    The intent was to stop a sustained event stream from starving the refresh. What it actually did,
    measured by porting the logic into a harness and driving it:
@@ -227,9 +228,9 @@ AEROSPORK_DEBUG_LOG=1 /Applications/AeroSpork.app/Contents/MacOS/AeroSpork 2>&1 
   A `@MainActor` cache cascades isolation into `MonitorEx.monitorId`, `MonitorResolution` and their
   callers (all currently non-isolated); a `nonisolated(unsafe)` cache would be an unsound data
   race. No measurement shows this path is hot, so neither price is justified yet. Profile first.
-- **`layout/refresh.swift`.** `activeRefreshTask?.cancel()` discards in-flight refresh work when a
-  new session starts. This is also the reason the max-wait ceiling above cannot simply be re-added:
-  fix the unconditional cancel first.
+- **`util/RefreshScheduler.swift`.** A session still discards in-flight refresh work when it starts,
+  on purpose. Events no longer do, so the reason the max-wait ceiling above could not be re-added is
+  gone; add it only with a measurement showing starvation actually happens.
 - **Batching AX attribute reads.** `AXUIElementCopyMultipleAttributeValues` is the right primitive
   and is not used. A previous attempt (`AxBatchFetcher`) was deleted rather than wired in: it was
   broken (`as? CGPoint` on an `AXValue` is always nil) and its `.stopOnError` mode would have been a

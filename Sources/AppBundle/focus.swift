@@ -181,10 +181,8 @@ extension Workspace {
         onWorkspaceChanged(_prevFocusedWorkspaceName, frozenFocus.workspaceName)
     }
 
-    // One session for all of them. Each callback used to spawn its own `Task { runSession }`, and
-    // runSession starts with `activeRefreshTask?.cancel()` followed by a fresh non-debounced
-    // refresh -- so a workspace switch (which sets both hasFocusChanged and
-    // hasFocusedWorkspaceChanged) had callback #2 cancel the refresh callback #1 had just started.
+    // One session for all of them, rather than a `Task { runSession }` per callback: a workspace switch
+    // sets both hasFocusChanged and hasFocusedWorkspaceChanged, and each session is a full layout.
     var callbacks: [(RefreshSessionEvent, [any Command])] = []
     if hasFocusChanged, !config.onFocusChanged.isEmpty {
         callbacks.append((.onFocusChanged, config.onFocusChanged))

@@ -7,12 +7,15 @@ func normalizeLayoutReason() async throws {
     if updateTransparentWindowIds(zeroAlpha: zeroAlpha, now: Date()) {
         scheduleFollowUpRefresh(after: 1.1, "transparencyRecheck") // nothing else re-checks once the grace is up
     }
+    let states = try await prefetchNativeStates(
+        Workspace.all.flatMap(\.allLeafWindowsRecursive) + macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self),
+    )
     for workspace in Workspace.all {
         try checkCancellation()
         let windows: [Window] = workspace.allLeafWindowsRecursive
-        try await _normalizeLayoutReason(workspace: workspace, windows: windows)
+        try await _normalizeLayoutReason(workspace: workspace, windows: windows, states: states)
     }
-    try await _normalizeLayoutReason(workspace: focus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
+    try await _normalizeLayoutReason(workspace: focus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self), states: states)
     try await validateStillPopups()
 }
 
@@ -20,6 +23,7 @@ func normalizeLayoutReason() async throws {
 private func validateStillPopups() async throws {
     for node in macosPopupWindowsContainer.children {
         let popup = (node as! MacWindow)
+        if !shouldRecheckPopup(registeredAt: popup.registeredAt, now: Date()) { continue }
         if try await popup.isWindowHeuristic() {
             // The same commitment as registration: once relaid out it is no longer a popup, so this is
             // the only run its rules get.
@@ -31,42 +35,50 @@ private func validateStillPopups() async throws {
     }
 }
 
+/// A window that is still a popup this long after it appeared is one: re-reading its heuristic on every
+/// refresh, forever, is several AX reads per popup. Generous, because an app still drawing its first window
+/// looks like a popup too, and on a busy machine that can take a while.
+func shouldRecheckPopup(registeredAt: Date, now: Date) -> Bool {
+    now.timeIntervalSince(registeredAt) < 30
+}
+
+/// Both AX reads for every window concurrently, in one task group. These used to be two sequential
+/// `await`s inside the mutation loop, i.e. 2 serialized MainActor<->app-thread round trips per window per
+/// refresh, over every window of every workspace -- the dominant cost of a refresh. Same fan-out pattern
+/// as MacApp.refreshAllAndGetAliveWindowIds.
 @MainActor
-private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throws {
-    // Prefetch both AX reads for every window concurrently. These used to be two sequential
-    // `await`s inside the mutation loop, i.e. 2 serialized MainActor<->app-thread round trips per
-    // window per refresh, over every window of every workspace -- the dominant cost of a refresh,
-    // and enough on its own to exceed the 50ms debounce and cause refresh cancellation thrash.
-    // Same fan-out pattern as MacApp.refreshAllAndGetAliveWindowIds. The loop below stays serial
-    // because it rebinds tree nodes.
-    let states: [(full: Bool, mini: Bool)] = try await withThrowingTaskGroup(of: (Int, Bool, Bool).self) { group in
-        for (i, window) in windows.enumerated() {
+private func prefetchNativeStates(_ windows: [Window]) async throws -> [UInt32: (full: Bool, mini: Bool)] {
+    try await withThrowingTaskGroup(of: (UInt32, Bool, Bool).self) { group in
+        for window in windows {
             group.addTask { @Sendable @MainActor in
                 // One hop per window, not two. `macosNativeState` reads both flags inside a single
                 // `runInLoop` and keeps the same short-circuit (a fullscreen window is never asked
                 // whether it is minimized).
                 let state = try await window.macosNativeState()
-                return (i, state.fullscreen, state.minimized)
+                return (window.windowId, state.fullscreen, state.minimized)
             }
         }
-        var result = [(full: Bool, mini: Bool)](repeating: (false, false), count: windows.count)
-        for try await (i, full, mini) in group { result[i] = (full, mini) }
+        var result: [UInt32: (full: Bool, mini: Bool)] = [:]
+        for try await (id, full, mini) in group { result[id] = (full, mini) }
         return result
     }
+}
 
-    for (i, window) in windows.enumerated() {
+@MainActor
+private func _normalizeLayoutReason(workspace: Workspace, windows: [Window], states: [UInt32: (full: Bool, mini: Bool)]) async throws {
+    for window in windows {
         // The `.standard` branch below is entirely synchronous, so without this a cancelled
         // refresh rebound the whole tree instead of stopping at the first window.
         try checkCancellation()
         // An earlier iteration's await may have let a concurrent session garbage collect this
         // window; binding it below would resurrect a dead node.
-        guard window.parent != nil else { continue }
+        guard window.parent != nil, let state = states[window.windowId] else { continue }
 
         // Does the prefetched snapshot say we are about to move this window? Everything else is a
         // no-op, and in steady state that is essentially every window -- which is what keeps the
         // re-read below off the hot path. `||` short-circuits, so the app is still only asked
         // whether it is hidden when the window is neither fullscreen nor minimized, same as before.
-        let snapshotIsUnconventional = states[i].full || states[i].mini ||
+        let snapshotIsUnconventional = state.full || state.mini ||
             (!config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden) || window.isTransparent
         let willMutate = switch window.layoutReason {
             case .standard: snapshotIsUnconventional

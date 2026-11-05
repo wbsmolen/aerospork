@@ -2,43 +2,26 @@ import AppKit
 import Common
 
 @MainActor
-var activeRefreshTask: Task<(), any Error>? = nil // Made internal for RefreshDebouncer access
-
-@MainActor
-let refreshDebouncer = RefreshDebouncer()
-
-@MainActor
-func runRefreshSessionDebounced(
-    _ event: RefreshSessionEvent,
-    screenIsDefinitelyUnlocked: Bool,
-    optimisticallyPreLayoutWorkspaces: Bool = false,
-) {
-    refreshDebouncer.debounce(
-        event: event,
-        screenIsDefinitelyUnlocked: screenIsDefinitelyUnlocked,
-        optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces,
-    )
+let refreshScheduler = RefreshScheduler { request in
+    if request.screenIsDefinitelyUnlocked { resetClosedWindowsCache() }
+    // Dropped, not logged: the only thing a refresh throws is its own cancellation.
+    try? await runRefreshSessionBlocking(request.event, optimisticallyPreLayoutWorkspaces: request.optimisticallyPreLayoutWorkspaces)
 }
+
+@MainActor
+let sessionGate = FifoGate()
 
 @MainActor
 func runRefreshSession(
     _ event: RefreshSessionEvent,
     screenIsDefinitelyUnlocked: Bool, // todo rename
     optimisticallyPreLayoutWorkspaces: Bool = false,
-    debounce: Bool = true, // New parameter to control debouncing
 ) {
-    if debounce {
-        // Use debounced refresh for most cases
-        runRefreshSessionDebounced(event, screenIsDefinitelyUnlocked: screenIsDefinitelyUnlocked, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
-    } else {
-        // Immediate refresh for critical operations
-        if screenIsDefinitelyUnlocked { resetClosedWindowsCache() }
-        activeRefreshTask?.cancel()
-        activeRefreshTask = Task { @MainActor in
-            try checkCancellation()
-            try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
-        }
-    }
+    refreshScheduler.request(RefreshRequest(
+        event: event,
+        screenIsDefinitelyUnlocked: screenIsDefinitelyUnlocked,
+        optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces,
+    ))
 }
 
 @MainActor
@@ -50,7 +33,7 @@ func runRefreshSessionBlocking(
     let startTime = Date()
     debugLog("REFRESH: Starting blocking refresh for event: \(event)")
 
-    let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+    let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer {
         signposter.endInterval(#function, state)
         let elapsed = Date().timeIntervalSince(startTime) * 1000
@@ -88,14 +71,17 @@ func runSession<T>(
     let startTime = Date()
     debugLog("SESSION: Starting session for event: \(event)")
 
-    let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+    let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer {
         signposter.endInterval(#function, state)
         let elapsed = Date().timeIntervalSince(startTime) * 1000
         debugLog("SESSION: Completed in \(String(format: "%.1f", elapsed))ms")
     }
-    activeRefreshTask?.cancel() // Give priority to runSession
-    activeRefreshTask = nil
+    refreshScheduler.sessionWillStart() // Give priority to runSession
+    defer { refreshScheduler.sessionDidEnd() }
+    let ticket = await sessionGate.enter()
+    defer { sessionGate.leave(ticket) }
+    try checkCancellation() // superseded while queued, e.g. by the next step of a mouse drag
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             resetClosedWindowsCache()
@@ -113,10 +99,10 @@ func runSession<T>(
             let result = try await body()
             refreshModel()
 
-            let focusAfter = focus.windowOrNil
-
             updateTrayText()
             try await layoutWorkspaces()
+            // After layout, which awaits: this is what gets pushed to macOS, so it must be the latest.
+            let focusAfter = focus.windowOrNil
             // By window id, not by identity. `TreeNode.==` is `===`, so a window garbage collected
             // and re-registered during the session is a different object with the same id, and that
             // alone used to fire a focus request.
@@ -132,7 +118,7 @@ func runSession<T>(
                 }
                 focusAfter?.nativeFocus() // syncFocusToMacOs
             }
-            runRefreshSession(event, screenIsDefinitelyUnlocked: false, debounce: false) // Don't debounce within critical sessions
+            runRefreshSession(event, screenIsDefinitelyUnlocked: false)
             return result
         }
     }
@@ -203,13 +189,16 @@ func refreshObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: Unsaf
 
 /// A refresh some time from now that nothing else would trigger, and that no later event cancels.
 ///
-/// Not `RefreshDebouncer`: every new event cancels its pending task, so a retry queued there is
-/// replaced by a refresh that fires too early to help and never comes back. Each call is its own
-/// one-shot, so callers bound how many they make.
-@MainActor func scheduleFollowUpRefresh(after delay: TimeInterval, _ reason: String) {
+/// Each call is its own one-shot, so callers bound how many they make. `stillNeeded` is asked when the
+/// delay is up, so a retry that has become pointless costs no refresh.
+@MainActor func scheduleFollowUpRefresh(
+    after delay: TimeInterval,
+    _ reason: String,
+    if stillNeeded: @escaping @MainActor () -> Bool = { true },
+) {
     Task { @MainActor in
         try? await Task.sleep(for: .seconds(delay))
-        if !TrayMenuModel.shared.isEnabled { return }
+        if !TrayMenuModel.shared.isEnabled || !stillNeeded() { return }
         runRefreshSession(.globalObserver(reason), screenIsDefinitelyUnlocked: false)
     }
 }
@@ -217,7 +206,7 @@ func refreshObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: Unsaf
 /// Runs `body` where the caller's cancellation cannot reach it.
 ///
 /// For work that must not stop halfway. An `on-window-detected` rule is a sequence of commands, none
-/// of them idempotent, and a refresh is cancelled whenever a newer event arrives. Cancelled between
+/// of them idempotent, and a refresh is cancelled whenever a session starts. Cancelled between
 /// `layout tiling` and `move-node-to-workspace`, the window was left tiled on the wrong workspace --
 /// and never retried, because by then it was registered. The caller still sees its own cancellation
 /// at its next check.
@@ -279,7 +268,9 @@ private func layoutWorkspaces() async throws {
     for workspace in Workspace.all where !workspace.isVisible {
         let monitor = workspace.workspaceMonitor
         let others = monitors.map(\.rect).filter { $0.topLeftCorner != monitor.rect.topLeftCorner }
-        for window in workspace.allLeafWindowsRecursive {
+        // Not a native fullscreen window: macOS ignores the move, so its frame never matches and it
+        // would be rewritten on every refresh, for as long as it stays fullscreen.
+        for window in workspace.allLeafWindowsRecursive where !(window.parent is MacosFullscreenWindowsContainer) {
             try await (window as? MacWindow)?.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
         }
     }

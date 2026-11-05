@@ -5,11 +5,13 @@ class GlobalObserver {
     private static func onNotif(_ notification: Notification) {
         // Third line of defence against lock screen window. See: closedWindowsCache
         // Second and third lines of defence are technically needed only to avoid potential flickering
-        if (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier == lockScreenAppBundleId {
+        let nsApp = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        if nsApp?.bundleIdentifier == lockScreenAppBundleId {
             return
         }
         let notifName = notification.name.rawValue
         Task { @MainActor in
+            if let nsApp { MacApp.noteAppChanged(nsApp) }
             if !TrayMenuModel.shared.isEnabled { return }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
                 runRefreshSession(.globalObserver(notifName), screenIsDefinitelyUnlocked: false, optimisticallyPreLayoutWorkspaces: true)
@@ -45,6 +47,8 @@ class GlobalObserver {
 
     @MainActor
     static func initObserver() {
+        // Otherwise the first wake reads as a changed monitor set, and rebalances workspaces.
+        lastMonitorSignature = monitorSetSignature()
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif)
@@ -115,6 +119,7 @@ class GlobalObserver {
         if config.autoMoveWorkspacesOnMonitorConnect && signature != lastMonitorSignature {
             runDetached("screenParametersChanged") {
                 try await runSession(.globalObserver("autoMoveWorkspaces"), token) {
+                    gcMonitors() // the refresh that would do it is only requested so far
                     autoMoveWorkspacesToAssignedMonitors()
                 }
             }
