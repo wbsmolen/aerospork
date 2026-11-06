@@ -208,6 +208,24 @@ final class WorkspaceMemoryTest: XCTestCase {
         XCTAssertTrue(Double(parts[2]) != nil, "start time is not a number: \(parts[2])")
     }
 
+    /// The name proves nothing: any process can call itself WindowServer, and a token built from one
+    /// that outlives the real WindowServer can never reject a stale file. Only the real one runs as
+    /// `_windowserver`. That is its *effective* uid; its real uid is 0.
+    func testOnlyUid88CountsAsTheWindowServer() {
+        func proc(pid: Int32, uid: uid_t, comm: String) -> kinfo_proc {
+            var proc = kinfo_proc()
+            proc.kp_proc.p_pid = pid
+            proc.kp_eproc.e_ucred.cr_uid = uid
+            withUnsafeMutableBytes(of: &proc.kp_proc.p_comm) { $0.copyBytes(from: Array(comm.utf8)) }
+            return proc
+        }
+        let impostor = proc(pid: 100, uid: getuid(), comm: "WindowServer")
+        let real = proc(pid: 200, uid: 88, comm: "WindowServer")
+        assertEquals(WorkspaceMemory.windowServerSession(in: [impostor, real]), "ws:200:0.0")
+        assertEquals(WorkspaceMemory.windowServerSession(in: [impostor]), "")
+        assertEquals(WorkspaceMemory.windowServerSession(in: [proc(pid: 300, uid: 88, comm: "other")]), "")
+    }
+
     /// Two calls in the same session must agree, or every load would discard a valid file.
     func testTheSessionTokenIsStable() {
         assertEquals(WorkspaceMemory.currentSession(), WorkspaceMemory.currentSession())

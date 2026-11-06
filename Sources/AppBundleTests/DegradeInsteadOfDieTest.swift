@@ -35,6 +35,19 @@ final class DegradeInsteadOfDieTest: XCTestCase {
         XCTAssertFalse(stale == fresh)
     }
 
+    /// `/tmp` is world-writable and sticky, so another account can create our socket path first, and
+    /// then we can neither remove it nor bind it. That used to be `die`: any local account could stop
+    /// the window manager from starting. A non-empty directory fails `unlink` and `bind` the same way.
+    func testACliSocketPathWeCannotBindDoesNotTakeTheAppDown() async throws {
+        let squatted = "/tmp/aerospork-test-\(getpid())-\(UInt32.random(in: 0 ... .max))"
+        try FileManager.default.createDirectory(atPath: squatted + "/occupied", withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: squatted) }
+
+        startUnixSocketServer(socketFile: squatted)
+        try await Task.sleep(for: .milliseconds(300))
+        // Reaching this line is the assertion.
+    }
+
     /// The app mirror image, decided the other way: `MacApp` equality is identity, because each one
     /// owns its own thread and AX connection. pid reuse (which `MacApp.failedPids` already tracks
     /// `launchDate` for) means two live objects can share a pid, and asserting they cannot was fatal.

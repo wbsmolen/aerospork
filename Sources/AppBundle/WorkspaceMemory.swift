@@ -93,12 +93,24 @@ enum WorkspaceMemory {
     /// reboot too, so it strictly dominates `kern.boottime`.
     static func currentSession() -> String {
         var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
-        var len = 0
-        guard sysctl(&name, 4, nil, &len, nil, 0) == 0, len > 0 else { return "" }
-        let capacity = len / MemoryLayout<kinfo_proc>.stride
-        var procs = [kinfo_proc](repeating: kinfo_proc(), count: capacity)
-        guard sysctl(&name, 4, &procs, &len, nil, 0) == 0 else { return "" }
-        for var proc in procs[0 ..< min(capacity, len / MemoryLayout<kinfo_proc>.stride)] {
+        // Retried because the table can outgrow the size just read, which fails with ENOMEM. A burst
+        // of launches at login is exactly when that happens, and an empty token costs the restore.
+        for _ in 0 ..< 3 {
+            var len = 0
+            guard sysctl(&name, 4, nil, &len, nil, 0) == 0, len > 0 else { return "" }
+            var procs = [kinfo_proc](repeating: kinfo_proc(), count: len / MemoryLayout<kinfo_proc>.stride)
+            if sysctl(&name, 4, &procs, &len, nil, 0) == 0 {
+                return windowServerSession(in: Array(procs.prefix(len / MemoryLayout<kinfo_proc>.stride)))
+            }
+            guard errno == ENOMEM else { return "" }
+        }
+        return ""
+    }
+
+    /// By uid as well as by name, because any process can call itself WindowServer. The real one runs
+    /// as `_windowserver`, uid 88. That is its effective uid: its real uid is 0.
+    static func windowServerSession(in procs: [kinfo_proc]) -> String {
+        for var proc in procs where proc.kp_eproc.e_ucred.cr_uid == 88 {
             let comm = withUnsafeBytes(of: &proc.kp_proc.p_comm) { raw in
                 String(cString: raw.baseAddress!.assumingMemoryBound(to: CChar.self))
             }

@@ -36,9 +36,11 @@ if test -f "$zip_uri"; then
     zip_file=$zip_uri
     zip_uri="file://$(realpath "$zip_file")"
 elif grep -q '^http' <<< "$zip_uri"; then
-    zip_file=/tmp/AeroSpork-tmp.zip
-    rm -rf $zip_file
-    curl -L "$zip_uri" -o $zip_file
+    # mktemp, because another account can have got to a fixed name in /tmp first. -f, because without
+    # it a 404 page is saved as the zip and its sha256 published in the cask.
+    zip_file="$(mktemp)"
+    trap 'rm -f "$zip_file"' EXIT
+    curl -fL "$zip_uri" -o "$zip_file"
 else
     echo "$zip_uri doesn't exist" > /dev/stderr; exit 1
 fi
@@ -144,6 +146,7 @@ $manpages
     "~/.config/aerospork",
     "~/Library/Caches/com.wbs.aerospork",
     "~/Library/HTTPStorages/com.wbs.aerospork",
+    "~/Library/Logs/com.wbs.aerospork",
     "~/Library/Preferences/com.wbs.aerospork.plist",
     "~/Library/Saved Application State/com.wbs.aerospork.savedState",
   ]

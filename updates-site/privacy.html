@@ -50,13 +50,17 @@ anywhere, stored beyond what is described below, or shared with anyone.</p>
       identifier of its application and an identifier for the monitor the workspace was on, so a
       restart does not scatter your layout. It holds no window titles and no document contents.
       Deleting it costs you one restart's worth of window placement.</li>
+  <li>If AeroSpork hits an internal error, a report in
+      <code>~/Library/Logs/com.wbs.aerospork/</code>, with the error, a stack trace and the app and
+      macOS versions. It is opened for you to read and is never sent.</li>
 </ul>
 <p>All of it stays on your Mac. Uninstalling the app leaves these files behind; delete them if you
 want them gone.</p>
 
 <h2>The update check</h2>
-<p>Automatic update checks are <strong>off</strong> when you install AeroSpork. Nothing is requested
-until you either allow them or choose <strong>Check for Updates…</strong> yourself.</p>
+<p>Automatic update checks are <strong>off</strong> when you install AeroSpork. It asks about them
+once, on its second launch, and nothing is requested until you either allow them or choose
+<strong>Check for Updates…</strong> yourself.</p>
 <p>When a check does run, it is an ordinary HTTPS request to <code>aerospork.app</code> for a small
 file listing the current version. Like any web request, it necessarily tells this server your IP
 address, the time, and a user-agent string naming the app and its version. That is the whole of it:

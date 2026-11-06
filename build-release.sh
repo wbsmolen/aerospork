@@ -323,6 +323,16 @@ for su_key in SUFeedURL SUPublicEDKey; do
         exit 1
     fi
 done
+# Fails soft the other way too. Any value here stops Sparkle asking, and `false` then means no update
+# is ever offered unless someone goes looking for one: see project.yml.
+if /usr/libexec/PlistBuddy -c "Print :SUEnableAutomaticChecks" .release/AeroSpork.app/Contents/Info.plist > /dev/null 2>&1; then
+    echo "!!! SUEnableAutomaticChecks is set in Info.plist: Sparkle will never ask to check for updates !!!"
+    exit 1
+fi
+if test "$(/usr/libexec/PlistBuddy -c "Print :SUVerifyUpdateBeforeExtraction" .release/AeroSpork.app/Contents/Info.plist 2> /dev/null)" != true; then
+    echo "!!! SUVerifyUpdateBeforeExtraction is not on in Info.plist: updates get unpacked before they are verified !!!"
+    exit 1
+fi
 
 check-universal-binary .release/AeroSpork.app/Contents/MacOS/AeroSpork
 check-universal-binary .release/aerospork

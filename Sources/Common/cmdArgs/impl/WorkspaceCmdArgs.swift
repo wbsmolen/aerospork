@@ -38,7 +38,7 @@ public enum WorkspaceTarget: Equatable, Sendable {
     case relative(NextPrev)
     case direct(WorkspaceName)
 
-    var isRelatve: Bool {
+    public var isRelatve: Bool {
         switch self {
             case .relative: true
             default: false

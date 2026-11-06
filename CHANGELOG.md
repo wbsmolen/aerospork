@@ -53,6 +53,18 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - Saving without a change no longer rewrites a file that mixes line endings. Editing such a file in the panes is refused, because it would change every line.
 - A Raw TOML apply that was refused no longer takes effect on the next change in another pane.
 
+### Security and updates
+
+- AeroSpork now asks once whether to check for updates automatically: on the first launch after this update, or the second launch of a new install. A setting told the update framework never to check and never to ask, so you only got an update by choosing **Check for Updates…**.
+- Updates are verified before they are unpacked, not after. This starts with the update after the one that brings it.
+- The CLI reads stdin only for `workspace next`/`prev` and `move-node-to-workspace next`/`prev`. Every other command used to read it too, which swallowed the input of a `while read` loop.
+- CLI clients that connect and stall can no longer hold up the rest of the app. Each request and each reply has 30 seconds to finish.
+- If another account already holds the CLI socket's path, AeroSpork logs it and runs without the CLI, instead of refusing to start.
+- The CLI and the app each hang up if the other end of the socket is running as a different user.
+- Error dialogs no longer fail to appear when the message contains a backslash, and a message can no longer run as a script.
+- Runtime error reports are written to `~/Library/Logs/com.wbs.aerospork/`, not to a directory in `/tmp` shared with other accounts.
+- Remembering windows across a restart no longer mistakes another process named WindowServer for the real one, or gives up if the process list grows while it reads it.
+
 ## 1.2.0 (2026-09-13)
 
 Fixes focus moving to another window when an app is slow to respond ([#39](https://github.com/wbsmolen/aerospork/issues/39)), and several problems with configs migrated from AeroSpace ([#40](https://github.com/wbsmolen/aerospork/issues/40)).

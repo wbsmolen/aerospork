@@ -1,23 +1,24 @@
 import AppKit
 import Common
 
-/// The CLI does exactly one request/response and closes, so nothing legitimate sits idle on the
-/// socket. Anything that does is a stuck or hostile client holding a task hostage.
-private let clientReadTimeoutSec = 30
+/// The CLI reads stdin before it connects, then does exactly one request/response and closes, so
+/// nothing legitimate is ever slow on the socket. Anything that is, is a stuck or hostile client
+/// holding a thread hostage. Applies to each frame, in each direction.
+private let clientFrameTimeoutSec = 30
 
-func startUnixSocketServer() {
+func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock") {
     DispatchQueue.global().async {
-        let socketFile = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock"
         guard let listener = UnixSocketListener.bind(to: socketFile) else {
-            // Logged before dying: `die` shows a GUI dialog and exits, so without this the unified
-            // log holds no record of the one failure that makes the whole CLI unusable.
-            AppLog.server.fault("Can't bind CLI socket \(socketFile, privacy: .public) -- the AeroSpork CLI will not work")
-            die("Can't listen to socket \(socketFile)")
+            // Not `die`. /tmp is world-writable and sticky, so another account can create this path
+            // before us, and then we can neither remove it nor bind it. Dying here would let it stop
+            // the window manager from starting, and everything but the CLI works without the socket.
+            AppLog.server.fault("Can't bind CLI socket \(socketFile, privacy: .public) -- running without the AeroSpork CLI")
+            return
         }
         AppLog.server.notice("CLI socket listening on \(socketFile, privacy: .public)")
         while true {
             guard let connection = listener.accept() else { continue }
-            connection.setReadTimeout(seconds: clientReadTimeoutSec)
+            connection.setFrameTimeout(seconds: clientFrameTimeoutSec)
             Task { await newConnection(connection) }
         }
     }
@@ -56,9 +57,26 @@ func nonRunningAnswer(command: (any Command)?, help: String?, err: String?) -> S
     return nil
 }
 
-private func newConnection(_ socket: UnixSocketConnection) async {
-    func answerToClient(_ ans: ServerAnswer) {
-        if let data = try? JSONEncoder().encode(ans) { socket.sendMessage(data) }
+/// Runs a blocking socket call on `queue` and suspends until it returns.
+///
+/// Called directly it would block a thread of the cooperative pool, which is only as wide as the core
+/// count and shared by every async task in the app: that many stuck clients stop all of them. A
+/// private serial queue gets a thread of its own while it blocks; `DispatchQueue.global()` is another
+/// limited pool.
+private func blockingSocketCall<T: Sendable>(on queue: DispatchQueue, _ body: @escaping @Sendable () -> T) async -> T {
+    await withCheckedContinuation { continuation in
+        queue.async { continuation.resume(returning: body()) }
+    }
+}
+
+/// Holds nothing while it waits on the client. The main actor is only taken to run the command, and
+/// the reply is written after `runSession` has returned and left `sessionGate`, so a client that
+/// stops reading delays itself and not the session queued behind it.
+func newConnection(_ socket: UnixSocketConnection) async {
+    let ioQueue = DispatchQueue(label: "\(aeroSporkAppId).cli-connection")
+    func answerToClient(_ ans: ServerAnswer) async {
+        guard let data = try? JSONEncoder().encode(ans) else { return }
+        _ = await blockingSocketCall(on: ioQueue) { socket.sendMessage(data) }
     }
     defer {
         socket.close()
@@ -66,20 +84,21 @@ private func newConnection(_ socket: UnixSocketConnection) async {
     while true {
         let rawRequest: Data
         do {
-            guard let received = try socket.recvMessage() else { return } // peer closed, or read timed out
+            let result = await blockingSocketCall(on: ioQueue) { Result { try socket.recvMessage() } }
+            guard let received = try result.get() else { return } // peer closed, or the frame timed out
             rawRequest = received
         } catch {
             // Framing is desynchronized after a rejected header, so answer once and hang up.
-            answerToClient(serverAnswer(ExitCode.badArgs, stderr: "Rejected request: \(error)"))
+            await answerToClient(serverAnswer(ExitCode.badArgs, stderr: "Rejected request: \(error)"))
             return
         }
         if rawRequest.isEmpty {
-            answerToClient(serverAnswer(ExitCode.badArgs, stderr: "Empty request"))
+            await answerToClient(serverAnswer(ExitCode.badArgs, stderr: "Empty request"))
             return
         }
         let _request = ClientRequest.decodeJson(rawRequest)
         guard let request: ClientRequest = _request.getOrNil() else {
-            answerToClient(serverAnswer(
+            await answerToClient(serverAnswer(
                 ExitCode.badArgs,
                 stderr: """
                     Can't parse request '\(String(describing: String(data: rawRequest, encoding: .utf8)).singleQuoted)'.
@@ -90,7 +109,7 @@ private func newConnection(_ socket: UnixSocketConnection) async {
         }
         let (command, help, err) = parseCommand(request.args).unwrap()
         guard let token: RunSessionGuard = await .isServerEnabled(orIsEnableCommand: command) else {
-            answerToClient(serverAnswer(
+            await answerToClient(serverAnswer(
                 ExitCode.failure,
                 stderr: "\(aeroSporkAppName) server is disabled and doesn't accept commands. " +
                     "Run 'aerospork enable on' to enable it",
@@ -98,7 +117,7 @@ private func newConnection(_ socket: UnixSocketConnection) async {
             continue
         }
         if let ans = nonRunningAnswer(command: command, help: help, err: err) {
-            answerToClient(ans)
+            await answerToClient(ans)
             continue
         }
         if let command {
@@ -125,7 +144,7 @@ private func newConnection(_ socket: UnixSocketConnection) async {
                     "'\(request.args.joined(separator: " "), privacy: .public)' exited \(answer.exitCode): \(answer.stderr, privacy: .public)",
                 )
             }
-            answerToClient(answer)
+            await answerToClient(answer)
             continue
         }
         die("Unreachable")

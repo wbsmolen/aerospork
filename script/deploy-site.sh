@@ -41,5 +41,6 @@ if test -z "$deployment_token"; then
     exit 1
 fi
 
-swa deploy "$staging" --deployment-token "$deployment_token" --env production
+# In the environment, not on the command line: any account on the Mac can read argv with `ps`.
+SWA_CLI_DEPLOYMENT_TOKEN="$deployment_token" swa deploy "$staging" --env production
 rm -rf "$staging"

@@ -77,7 +77,18 @@ final class CliSurfaceTest: XCTestCase {
 
     /// The args are forwarded verbatim -- the client does not rewrite what the user typed.
     func testValidSubcommandIsSent() {
-        assertEquals(plan(args: ["focus", "left"]), .send(["focus", "left"]))
+        assertEquals(plan(args: ["focus", "left"]), .send(["focus", "left"], readsStdin: false))
+    }
+
+    /// Only `next`/`prev` take a list from stdin. Anything else reading it swallows the input of the
+    /// `while read` loop it runs in, and hangs if the pipe never closes.
+    func testOnlyNextAndPrevReadStdin() {
+        for args in [["workspace", "next"], ["workspace", "prev"], ["move-node-to-workspace", "next"], ["move-node-to-workspace", "prev"]] {
+            assertEquals(plan(args: args), .send(args, readsStdin: true))
+        }
+        for args in [["workspace", "1"], ["move-node-to-workspace", "1"], ["list-windows", "--all"]] {
+            assertEquals(plan(args: args), .send(args, readsStdin: false))
+        }
     }
 
     func testSubcommandHelpIsPrintedLocally() {
