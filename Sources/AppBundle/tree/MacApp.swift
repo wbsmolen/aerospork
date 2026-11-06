@@ -278,6 +278,17 @@ final class MacApp: AbstractApp {
             disableAnimations(app: axApp.threadGuarded) {
                 setFrame(window, topLeft, size)
             }
+            // An app clamps a size below its minimum and grows the window from its top-left: past its
+            // tile, over its neighbours, off the monitor. Read back what it settled on so layout can
+            // plan around it -- and so the frame it asks for next time is one the app can satisfy,
+            // instead of re-writing an impossible one on every refresh.
+            if let size, let got = window.get(Ax.sizeAttr), got.width > size.width + 1 || got.height > size.height + 1 {
+                Task { @MainActor in
+                    if MacWindow.allWindowsMap[windowId]?.noteRefusedSize(asked: size, got: got) == true {
+                        scheduleFollowUpRefresh(after: 0, "minimumSizeLearned") // re-split the tiles around it
+                    }
+                }
+            }
         }
     }
 
@@ -305,9 +316,23 @@ final class MacApp: AbstractApp {
     func setAxTopLeftCorner(_ windowId: UInt32, _ point: CGPoint) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
-            // Same no-op guard as setAxFrame. This one matters because hideInCorner calls it for
-            // every window of every invisible workspace on every refresh -- previously an
-            // unconditional AX position write per hidden window, forever.
+            // Same no-op guard as setAxFrame and hideAxWindow.
+            if isFrameSatisfied(window, point, nil) { return }
+            disableAnimations(app: axApp.threadGuarded) {
+                _ = window.set(Ax.topLeftCornerAttr, point)
+            }
+        }
+    }
+
+    /// Park a window at `spot(size)`. The size is read here, on the app's thread, so hiding a workspace
+    /// awaits nothing: the spot depends on it because a parked window must not reach another monitor.
+    func hideAxWindow(_ windowId: UInt32, at spot: @escaping @Sendable (CGSize) -> CGPoint) {
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
+            guard let size = window.get(Ax.sizeAttr) else { return }
+            let point = spot(size)
+            // This runs for every window of every invisible workspace on every refresh; without the
+            // guard that was an unconditional AX position write per hidden window, forever.
             if isFrameSatisfied(window, point, nil) { return }
             disableAnimations(app: axApp.threadGuarded) {
                 _ = window.set(Ax.topLeftCornerAttr, point)

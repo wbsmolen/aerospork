@@ -2,6 +2,19 @@
 
 Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for earlier releases are on the [releases page](https://github.com/wbsmolen/aerospork/releases).
 
+## Unreleased
+
+### Windows stay on their own workspace
+
+- A hidden workspace's windows no longer show up on another monitor. AeroSpork used to park them only in a bottom corner, and when both bottom corners of a monitor touched another display, they sat in plain view there. It now picks a spot for each window, by its size, that no other monitor can see, including off the right or left edge.
+- A window that an app won't shrink to fit its tile no longer spills over its neighbours or onto the next monitor. AeroSpork learns the smallest size the app accepts, gives it that, and shrinks the other tiles to make room. If the minimums can't all fit, each window is kept on its own monitor.
+- A window the system draws fully transparent no longer takes up an empty tile. It is set aside after a second and comes back to the tiling once it is visible again.
+- On quit, a window from a hidden workspace goes back to its workspace's monitor instead of the monitor it was parked against.
+
+### Reliability
+
+- AeroSpork no longer quits when a CLI command is interrupted (Ctrl-C, or a status-bar timeout) before the reply arrives.
+
 ## 1.2.0 (2026-09-13)
 
 Fixes focus moving to another window when an app is slow to respond ([#39](https://github.com/wbsmolen/aerospork/issues/39)), and several problems with configs migrated from AeroSpace ([#40](https://github.com/wbsmolen/aerospork/issues/40)).

@@ -35,7 +35,13 @@ public final class UnixSocketConnection: @unchecked Sendable {
     public static let maxFrameSize: UInt32 = 16 << 20
 
     private let fd: Int32
-    public init(fd: Int32) { self.fd = fd }
+    public init(fd: Int32) {
+        self.fd = fd
+        // A peer that hangs up before the reply (Ctrl-C, a status-bar `timeout`) must make `write` fail
+        // with EPIPE, not raise SIGPIPE, whose default action kills the window manager mid-layout.
+        var on: Int32 = 1
+        _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+    }
 
     /// Connect to a unix socket path. Returns nil on any failure.
     public static func connect(to path: String) -> UnixSocketConnection? {

@@ -60,6 +60,14 @@ final class UnixSocketTest: XCTestCase {
         assertTrue(Date().timeIntervalSince(start) < 10)
     }
 
+    func testWriteToAPeerThatHungUpFailsInsteadOfRaisingSigpipe() {
+        let (peerFd, conn) = socketPair()
+        defer { conn.close() }
+        Darwin.close(peerFd) // the CLI was Ctrl-C'd before the reply
+        // Without SO_NOSIGPIPE this write kills the whole process, test runner included.
+        assertFalse(conn.sendMessage(Data("reply".utf8)))
+    }
+
     private func assertThrowsFrameTooLarge(_ body: () throws -> Data?, file: StaticString = #filePath, line: UInt = #line) {
         do {
             _ = try body()

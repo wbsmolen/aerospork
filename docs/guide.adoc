@@ -553,7 +553,8 @@ Native macOS Spaces have several limitations:
 
 AeroSpork therefore reimplements Spaces and calls them "workspaces".
 While a workspace is not active, all of its windows sit outside the visible area of the screen, in
-the bottom right or left corner.
+the bottom right or left corner. When neither corner of a monitor is free, they hang off its right
+or left edge instead.
 Switching back to the workspace (with the xref:commands.adoc#workspace[workspace] command, or `cmd + tab`) returns its windows to the visible area.
 
 On quit, all windows are returned to the visible area of the screen, each centred on the monitor it
@@ -589,7 +590,7 @@ The intended workflow is to keep a single macOS Space (or one per monitor, if `D
 ====
 macOS does not allow a window to be placed entirely outside the visible area.
 A 1 pixel vertical line of each "hidden" window stays visible in the bottom right or left corner of
-the screen.
+the screen, or along its right or left edge.
 That line is also the recovery path: if AeroSpork crashes badly, you can drag those few pixels back
 to the center of the screen to unhide a window by hand.
 
@@ -620,22 +621,20 @@ NOTE: kbd:[cmd+opt+h] ("Hide Others") is deliberately not re-focused, only unhid
 
 === Proper monitor arrangement
 
-AeroSpork needs free space to hide windows in, so arrange your monitors such that *every monitor has
-free space in its bottom right or left corner* (`System Settings -> Displays -> Arrange...`).
+AeroSpork needs free space to hide windows in. For each hidden window it picks a spot past the edge of
+that window's monitor where no other monitor can see it: the bottom right corner, the bottom left
+corner, then the right or left edge. So arrange your monitors such that *every monitor has free
+space beside at least one of its bottom corners or one of its side edges* (`System Settings ->
+Displays -> Arrange...`). Monitors stacked one above the other are fine as long as one side is free.
 
-Otherwise you will see parts of hidden windows on the other monitors.
+When a monitor has no free space on any side, you will see parts of hidden windows on the other
+monitors.
 
-.Bad monitor arrangement. Monitor 2 doesn't have free space in either of the bottom corners
+.Bad monitor arrangement. Monitor 2 has no free space beside either bottom corner or either side
 image::./assets/monitor-arrangement-1-bad.svg[,,align="center"]
 
-.Good monitor arrangement. Every monitor has free space in either of the bottom corners
+.Good monitor arrangement. Every monitor has free space beside one of its bottom corners
 image::./assets/monitor-arrangement-1-good.svg[,,align="center"]
-
-.Bad monitor arrangement. Monitor 1 doesn't have free space in either of the bottom corners
-image::./assets/monitor-arrangement-2-bad.svg[,,align="center"]
-
-.Good monitor arrangement. Every monitor has free space in either of the bottom corners
-image::./assets/monitor-arrangement-2-good.svg[,,align="center"]
 
 [#a-note-on-mission-control]
 === A note on Mission Control

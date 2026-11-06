@@ -1,5 +1,12 @@
+import AppKit
+import Common
+
 @MainActor
 func normalizeLayoutReason() async throws {
+    let zeroAlpha = isUnitTest ? [] : windowIdsWithZeroAlpha().intersection(MacWindow.allWindowsMap.keys)
+    if updateTransparentWindowIds(zeroAlpha: zeroAlpha, now: Date()) {
+        scheduleFollowUpRefresh(after: 1.1, "transparencyRecheck") // nothing else re-checks once the grace is up
+    }
     for workspace in Workspace.all {
         try checkCancellation()
         let windows: [Window] = workspace.allLeafWindowsRecursive
@@ -60,7 +67,7 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
         // re-read below off the hot path. `||` short-circuits, so the app is still only asked
         // whether it is hidden when the window is neither fullscreen nor minimized, same as before.
         let snapshotIsUnconventional = states[i].full || states[i].mini ||
-            (!config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden)
+            (!config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden) || window.isTransparent
         let willMutate = switch window.layoutReason {
             case .standard: snapshotIsUnconventional
             case .macos: !snapshotIsUnconventional
@@ -76,6 +83,7 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
         let isMacosMinimized = fresh.minimized
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
             !config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden
+        let isTransparent = !isMacosFullscreen && !isMacosMinimized && window.isTransparent
         switch window.layoutReason {
             case .standard:
                 guard let parent = window.parent else { continue }
@@ -96,12 +104,14 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
                 } else if isMacosMinimized {
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
                     window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
-                } else if isMacosWindowOfHiddenApp {
+                } else if isMacosWindowOfHiddenApp || isTransparent {
+                    // A transparent window is parked with the hidden app's: it keeps its workspace,
+                    // and leaves the tiling as a window you cannot see should.
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
                     window.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
                 }
             case .macos(let prevParentKind, let prevWorkspaceName):
-                if !isMacosFullscreen && !isMacosMinimized && !isMacosWindowOfHiddenApp {
+                if !isMacosFullscreen && !isMacosMinimized && !isMacosWindowOfHiddenApp && !isTransparent {
                     // Back to where it was, not to `workspace`. For the workspace-scoped pass the
                     // two agree; for the minimized pass, `workspace` is `focus.workspace`, which is
                     // how un-minimizing used to move a window between workspaces.
@@ -131,6 +141,31 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
                 }
         }
     }
+}
+
+/// Managed windows WindowServer has drawn fully transparent (alpha 0) for at least a second.
+///
+/// AX has no alpha, so such a window looked like any other and was tiled: an empty tile you can neither
+/// see nor get rid of (a Chrome PDF window, measured on screen at alpha 0). The second of grace keeps a
+/// window that is fading in or out from being parked.
+@MainActor private(set) var transparentWindowIds: Set<UInt32> = []
+@MainActor private var zeroAlphaSince: [UInt32: Date] = [:]
+
+/// Returns whether a window turned transparent this time, i.e. one whose grace still has to run out.
+@MainActor func updateTransparentWindowIds(zeroAlpha: Set<UInt32>, now: Date) -> Bool {
+    let isNew = !zeroAlpha.isSubset(of: zeroAlphaSince.keys)
+    zeroAlphaSince = zeroAlpha.reduce(into: [:]) { $0[$1] = zeroAlphaSince[$1] ?? now }
+    transparentWindowIds = Set(zeroAlphaSince.filter { now.timeIntervalSince($0.value) >= 1 }.keys)
+    return isNew
+}
+
+/// One WindowServer call per refresh. The on-screen list (~0.3 ms) rather than a lookup of the managed
+/// ids (~1.6 ms): a transparent window that matters is one that is on screen.
+private func windowIdsWithZeroAlpha() -> Set<UInt32> {
+    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[CFString: Any]] ?? []
+    return Set(list.compactMap { info in
+        (info[kCGWindowAlpha] as? Double) == 0 ? (info[kCGWindowNumber] as? Int).map(UInt32.init) : nil
+    })
 }
 
 /// Puts a workspace's most-recent window back after a bookkeeping rebind moved it.

@@ -225,8 +225,38 @@ func refreshObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: Unsaf
     try await Task { @MainActor in try await body() }.value
 }
 
-enum OptimalHideCorner {
-    case bottomLeftCorner, bottomRightCorner
+/// Where to park a window of an invisible workspace: hung off an edge of its own monitor, a `sliver`
+/// left on it because macOS pulls a window that is wholly off screen back on. The bottom corners come
+/// first (a 1 pt sliver at the corner), then the right and left edges just under the menu bar (a 1 pt
+/// column).
+///
+/// The only constraint that matters is that the parked window reaches *no other monitor* -- there it is
+/// in plain view on another workspace, and clicking it switches to its workspace. Only bottom corners
+/// were tried once, so a monitor whose both bottom corners touch a display below it parked every hidden
+/// window on that display. `size` is the window's own: a corner free for a small window is not free for
+/// a tall one. When every spot reaches another monitor, the one that shows least of the window wins.
+func hideSpot(for size: CGSize, on v: Rect, otherMonitors: [Rect], sliver: CGFloat) -> CGPoint {
+    let right = v.maxX - sliver
+    let left = v.minX + sliver - size.width
+    // macOS keeps a title bar on some screen, so a window hung below a monitor with nothing under it is
+    // lifted back up -- by how much is its call. Test the corners as if lifted by up to 10% of the
+    // monitor's height, the margin the corner probes always allowed, so a neighbour beside the corner
+    // counts. The edge spots start under the menu bar and are never lifted.
+    let lift = v.height * 0.1
+    let candidates: [(spot: CGPoint, lift: CGFloat)] = [
+        (CGPoint(x: right, y: v.maxY - sliver), lift),
+        (CGPoint(x: left, y: v.maxY - sliver), lift),
+        (CGPoint(x: right, y: v.minY), 0),
+        (CGPoint(x: left, y: v.minY), 0),
+    ]
+    func overlap(_ c: (spot: CGPoint, lift: CGFloat)) -> CGFloat {
+        otherMonitors.reduce(0) { sum, m in
+            let w = min(c.spot.x + size.width, m.maxX) - max(c.spot.x, m.minX)
+            let h = min(c.spot.y + size.height, m.maxY) - max(c.spot.y - c.lift, m.minY)
+            return sum + max(w, 0) * max(h, 0)
+        }
+    }
+    return (candidates.first { overlap($0) == 0 } ?? candidates.min { overlap($0) < overlap($1) }!).spot
 }
 
 @MainActor
@@ -239,27 +269,6 @@ private func layoutWorkspaces() async throws {
         return
     }
     let monitors = monitors
-    var monitorToOptimalHideCorner: [CGPoint: OptimalHideCorner] = [:]
-    for monitor in monitors {
-        let xOff = monitor.width * 0.1
-        let yOff = monitor.height * 0.1
-        // brc = bottomRightCorner
-        let brc1 = monitor.rect.bottomRightCorner + CGPoint(x: 2, y: -yOff)
-        let brc2 = monitor.rect.bottomRightCorner + CGPoint(x: -xOff, y: 2)
-        let brc3 = monitor.rect.bottomRightCorner + CGPoint(x: 2, y: 2)
-
-        // blc = bottomLeftCorner
-        let blc1 = monitor.rect.bottomLeftCorner + CGPoint(x: -2, y: -yOff)
-        let blc2 = monitor.rect.bottomLeftCorner + CGPoint(x: xOff, y: 2)
-        let blc3 = monitor.rect.bottomLeftCorner + CGPoint(x: -2, y: 2)
-
-        let corner: OptimalHideCorner =
-            monitors.contains(where: { m in m.rect.contains(brc1) || m.rect.contains(brc2) || m.rect.contains(brc3) }) &&
-            monitors.allSatisfy { m in !m.rect.contains(blc1) && !m.rect.contains(blc2) && !m.rect.contains(blc3) }
-            ? .bottomLeftCorner
-            : .bottomRightCorner
-        monitorToOptimalHideCorner[monitor.rect.topLeftCorner] = corner
-    }
 
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
@@ -268,9 +277,10 @@ private func layoutWorkspaces() async throws {
         try await workspace.layoutWorkspace()
     }
     for workspace in Workspace.all where !workspace.isVisible {
-        let corner = monitorToOptimalHideCorner[workspace.workspaceMonitor.rect.topLeftCorner] ?? .bottomRightCorner
+        let monitor = workspace.workspaceMonitor
+        let others = monitors.map(\.rect).filter { $0.topLeftCorner != monitor.rect.topLeftCorner }
         for window in workspace.allLeafWindowsRecursive {
-            try await (window as? MacWindow)?.hideInCorner(corner)
+            try await (window as? MacWindow)?.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
         }
     }
 }
