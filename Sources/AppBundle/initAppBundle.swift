@@ -102,22 +102,11 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
         _ = Workspace.all.first?.focusWorkspace()
         try await runRefreshSessionBlocking(.startup, layoutWorkspaces: false)
         try await runSession(.startup, .checkServerIsEnabledOrDie) {
+            WorkspaceMemory.restoreVisibleWorkspaces()
             // Apply workspace-to-monitor force assignments at startup
             autoMoveWorkspacesToAssignedMonitors()
-            smartLayoutAtStartup()
             _ = try await config.afterStartupCommand.runCmdSeq(.defaultEnv, .emptyStdin)
         }
-    }
-}
-
-@MainActor
-private func smartLayoutAtStartup() {
-    let workspace = focus.workspace
-    let root = workspace.rootTilingContainer
-    if root.children.count <= 3 {
-        root.layout = .tiles
-    } else {
-        root.layout = .accordion
     }
 }
 

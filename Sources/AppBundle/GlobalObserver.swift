@@ -111,6 +111,9 @@ class GlobalObserver {
 
         let signature = monitorSetSignature()
 
+        // Not left to `gcMonitors`, which only looks at the count: two panels trading places keep it.
+        if signature != lastMonitorSignature { rearrangeWorkspacesOnMonitors() }
+
         // Run a refresh session to update monitor state
         runRefreshSession(.globalObserver("didChangeScreenParameters"), screenIsDefinitelyUnlocked: true)
 

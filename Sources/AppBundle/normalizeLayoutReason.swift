@@ -28,7 +28,8 @@ private func validateStillPopups() async throws {
             // The same commitment as registration: once relaid out it is no longer a popup, so this is
             // the only run its rules get.
             try await shieldedFromCancellation {
-                try await popup.relayoutWindow(on: focus.workspace)
+                let home = popup.workspaceNameAtRegistration.flatMap { Workspace.existing(byName: $0) }
+                try await popup.relayoutWindow(on: home ?? focus.workspace)
                 try await tryOnWindowDetected(popup)
             }
         }

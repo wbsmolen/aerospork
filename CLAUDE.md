@@ -167,6 +167,10 @@ planted in a world-writable directory decides where another user's windows go.
 > `restoredWorkspace(forWindowId:bundleId:)` is the single entry point that does both, and
 > `WorkspaceMemoryTest` fails if registration calls the name-only lookup.
 
+Every first registration asks, not only startup, so an app that answers late still gets its windows back; an
+entry is spent once used. `restoreVisibleWorkspaces` puts each monitor back on what it showed, except the
+focused monitor, which keeps what focus adopted from macOS.
+
 The key is the `CGWindowID` and nothing else. It comes from a monotonic counter owned by
 **WindowServer**, so it is stable across a restart of *this* process and meaningless afterwards. The
 generation token is therefore WindowServer's pid and start time, **not** `kern.boottime`: the counter

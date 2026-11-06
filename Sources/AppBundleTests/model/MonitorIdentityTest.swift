@@ -220,3 +220,45 @@ final class MonitorIdentityTest: XCTestCase {
         )
     }
 }
+
+/// Which old screen each monitor continues, when the arrangement changes.
+final class MatchMonitorsTest: XCTestCase {
+    private let left = CGPoint(x: 0, y: 0)
+    private let right = CGPoint(x: 1000, y: 0)
+
+    /// Two panels trade places: the workspace follows the panel, not the position.
+    func testAPanelIsFollowedByItsUuidAcrossAPositionSwap() {
+        let mapping = matchMonitors(
+            new: [(point: left, uuid: "R"), (point: right, uuid: "L")],
+            oldPoints: [left, right],
+            oldUuids: [left: "L", right: "R"],
+        )
+        assertEquals(mapping[left], right)
+        assertEquals(mapping[right], left)
+    }
+
+    /// Nearest-first in monitor order let the first monitor take the second's exact match.
+    func testAnExactPositionIsNotStolenByANearbyMonitor() {
+        let mapping = matchMonitors(
+            new: [(point: CGPoint(x: 900, y: 0), uuid: nil), (point: right, uuid: nil)],
+            oldPoints: [right, left],
+            oldUuids: [:],
+        )
+        assertEquals(mapping[right], right)
+        assertEquals(mapping[CGPoint(x: 900, y: 0)], left)
+    }
+
+    func testAMonitorWithNoCounterpartIsLeftOut() {
+        let mapping = matchMonitors(new: [(point: left, uuid: nil), (point: right, uuid: nil)], oldPoints: [left], oldUuids: [:])
+        assertEquals(mapping[left], left)
+        assertNil(mapping[right])
+    }
+
+    func testANameDoesNotOverrideTheSizeInAFingerprint() {
+        let panel = MonitorFingerprint(vendorID: nil, modelID: nil, serialNumber: nil, displayName: "ACME 32", widthPixels: 3840, heightPixels: 2160, displayUUID: nil)
+        let wide = MonitorFingerprintPatternData(displayNamePattern: "ACME", widthPixels: 5120)
+        let same = MonitorFingerprintPatternData(displayNamePattern: "ACME", widthPixels: 3840)
+        XCTAssertFalse(panel.matches(patternData: wide))
+        XCTAssertTrue(panel.matches(patternData: same))
+    }
+}

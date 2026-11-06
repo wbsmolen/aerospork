@@ -25,6 +25,20 @@ final class WindowDetectionRetryTest: XCTestCase {
         XCTAssertTrue(body.contains(#"scheduleFollowUpRefresh(after: 1, "popupRecheck")"#))
     }
 
+    /// Promoted a second or three after it appeared, by when the user may have switched away.
+    func testAPopupThatTurnsOutToBeAWindowGoesWhereItAppeared() throws {
+        let body = try sourceBody("private func validateStillPopups", in: "Sources/AppBundle/normalizeLayoutReason.swift", length: 800)
+        XCTAssertTrue(body.contains("popup.workspaceNameAtRegistration"))
+        XCTAssertFalse(body.contains("relayoutWindow(on: focus.workspace)"))
+    }
+
+    /// `close` may only raise an unsaved-changes sheet. Skipping the cache brought the window back as a
+    /// new one, on the focused workspace, with its rules run a second time.
+    func testAWindowThatSurvivesItsCloseIsPutBack() throws {
+        let body = try sourceBody("override func closeAxWindow()", in: "Sources/AppBundle/tree/MacWindow.swift", length: 600)
+        XCTAssertTrue(body.contains("garbageCollect(skipClosedWindowsCache: false)"))
+    }
+
     // MARK: - A rule, once started, runs to the end
 
     /// What every AX round trip inside a window rule does -- `checkCancellation` -- must not stop the

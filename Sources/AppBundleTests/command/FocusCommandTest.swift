@@ -23,6 +23,25 @@ import XCTest
 final class FocusCommandTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
+    /// Unbinding floating windows across awaits left the earlier ones detached when a later read threw,
+    /// and a detached window crashes on the next "already unbound".
+    func testAFailedReadLeavesFloatingWindowsWhereTheyWere() async throws {
+        let workspace = Workspace.get(byName: name)
+        TestWindow.new(id: 1, parent: workspace.rootTilingContainer, rect: Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100))
+        let readable = TestWindow.new(id: 2, parent: workspace, rect: Rect(topLeftX: 10, topLeftY: 10, width: 50, height: 50))
+        let unreadable = TestWindow.new(id: 3, parent: workspace)
+        unreadable.axRectFails = true
+        check(workspace.focusWorkspace())
+
+        do {
+            _ = try await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            XCTFail("the read should have thrown")
+        } catch is CancellationError {}
+
+        XCTAssertTrue(readable.parent === workspace)
+        XCTAssertTrue(unreadable.parent === workspace)
+    }
+
     func testParse() {
         XCTAssertTrue(parseCommand("focus --boundaries left").errorOrNil?.contains("Possible values") == true)
         var expected = FocusCmdArgs(rawArgs: [], direction: .left)

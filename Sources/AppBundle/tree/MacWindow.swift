@@ -5,6 +5,9 @@ final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
     let registeredAt = Date()
+    /// Where a window that first looks like a popup goes once it turns out not to be one: the user may
+    /// have switched away by the time the re-check notices.
+    private(set) var workspaceNameAtRegistration: String?
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -20,31 +23,24 @@ final class MacWindow: Window {
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
-        let data = try await unbindAndGetBindingDataForNewWindow(
-            windowId,
-            macApp,
-            // Startup consults the memory; a mid-session registration does not, and deliberately.
-            // `WorkspaceMemory`'s map is read from disk once in `load()` and never updated, so it
-            // answers "where this window was at launch" -- a window the user has moved since would
-            // be dragged back. The case it would otherwise have covered, a live window collected by
-            // mistake and then re-detected, is removed at the source by `AxUiElementMock.isDestroyed`.
-            // If it ever needs covering again, the sound key is the workspace at the moment of
-            // collection, not the one on disk.
-            isStartup
-                // Where this window was before the restart, when it is provably the same window.
-                // Location is the fallback, not the first answer: at a cold start no workspace is
-                // active, so that branch resolves to a stub invented from the first keybound name in
-                // sort order -- which a named workspace like `A` can never be.
-                ? WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId)
-                    ?? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
-                : focus.workspace,
-            window: nil,
-        )
+        // Where this window was before the restart, when it is provably the same window. Any first
+        // registration asks, not only startup: an app that answers AX late after a restart would otherwise
+        // land on the focused workspace. An entry is spent once used, and ids are monotonic per WindowServer
+        // session, so nothing registered later can match -- including a live window collected by mistake
+        // and re-detected, which must not be dragged back to where it was at launch.
+        //
+        // Location is the fallback, not the first answer: at a cold start no workspace is active, so that
+        // branch resolves to a stub invented from the first keybound name in sort order -- which a named
+        // workspace like `A` can never be.
+        let workspace = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId)
+            ?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace)
+        let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
+        window.workspaceNameAtRegistration = workspace.name
 
         // Committed: from here the window is registered, and no refresh looks at it as new again. So
         // the rest runs to the end even if this refresh is cancelled; see `shieldedFromCancellation`.
@@ -148,7 +144,10 @@ final class MacWindow: Window {
     }
 
     override func closeAxWindow() {
-        garbageCollect(skipClosedWindowsCache: true)
+        // Cached, unlike a quit: pressing close may only raise an unsaved-changes sheet, and the window
+        // that stays is then detected again. The cache puts it back where it was and doesn't re-run its
+        // rules; without it, it came back as a new window on the focused workspace.
+        garbageCollect(skipClosedWindowsCache: false)
         macApp.closeAndUnregisterAxWindow(windowId)
     }
 

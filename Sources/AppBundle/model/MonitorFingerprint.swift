@@ -87,6 +87,12 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
         if let patternSerial = patternData.serialNumber, serialNumber != patternSerial {
             return false
         }
+        if let patternWidth = patternData.widthPixels, widthPixels != patternWidth {
+            return false
+        }
+        if let patternHeight = patternData.heightPixels, heightPixels != patternHeight {
+            return false
+        }
         if let patternDisplayName = patternData.displayNamePattern {
             guard let displayName else {
                 return false
@@ -97,12 +103,6 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
             }
             // Then try substring contains
             return displayName.localizedCaseInsensitiveContains(patternDisplayName)
-        }
-        if let patternWidth = patternData.widthPixels, widthPixels != patternWidth {
-            return false
-        }
-        if let patternHeight = patternData.heightPixels, heightPixels != patternHeight {
-            return false
         }
         return true
     }

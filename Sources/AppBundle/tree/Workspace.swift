@@ -267,7 +267,8 @@ extension CGPoint {
         if !isValidAssignment(workspace: workspace, screen: self) {
             return false
         }
-        if let prevMonitorPoint = visibleWorkspaceToScreenPoint[workspace] {
+        let prevMonitorPoint = visibleWorkspaceToScreenPoint[workspace]
+        if let prevMonitorPoint {
             visibleWorkspaceToScreenPoint.removeValue(forKey: workspace)
             screenPointToPrevVisibleWorkspace[prevMonitorPoint] =
                 screenPointToVisibleWorkspace.removeValue(forKey: prevMonitorPoint)?.name
@@ -280,21 +281,57 @@ extension CGPoint {
         visibleWorkspaceToScreenPoint[workspace] = self
         screenPointToVisibleWorkspace[self] = workspace
         workspace.assignedMonitorPoint = self
+        // A monitor left showing nothing makes `gcMonitors` rearrange every monitor, which can shuffle
+        // workspaces that had nothing to do with this.
+        if let prevMonitorPoint, prevMonitorPoint != self, monitors.contains(where: { $0.rect.topLeftCorner == prevMonitorPoint }) {
+            _ = prevMonitorPoint.setActiveWorkspace(getStubWorkspace(forPoint: prevMonitorPoint))
+        }
         return true
     }
 }
 
-@MainActor
-private func rearrangeWorkspacesOnMonitors() {
-    var oldVisibleScreens: Set<CGPoint> = screenPointToVisibleWorkspace.keys.toSet()
+/// The stable id of the panel at each screen point, as of the last rearrange. See `matchMonitors`.
+@MainActor private var screenPointToMonitorUuid: [CGPoint: String] = [:]
 
-    let newScreens = monitors.map(\.rect.topLeftCorner)
-    var newScreenToOldScreenMapping: [CGPoint: CGPoint] = [:]
-    for newScreen in newScreens {
-        if let oldScreen = oldVisibleScreens.minBy({ ($0 - newScreen).vectorLength }) {
-            check(oldVisibleScreens.remove(oldScreen) != nil)
-            newScreenToOldScreenMapping[newScreen] = oldScreen
+/// Which old screen each new screen continues: the same panel by UUID, then the same position, then the
+/// nearest. Position alone sends every workspace to the wrong panel when two monitors trade places, and
+/// taking the nearest screen in monitor order lets one monitor steal another's exact match.
+func matchMonitors(
+    new: [(point: CGPoint, uuid: String?)],
+    oldPoints: Set<CGPoint>,
+    oldUuids: [CGPoint: String],
+) -> [CGPoint: CGPoint] {
+    var old = oldPoints
+    var result: [CGPoint: CGPoint] = [:]
+    func match(_ strategy: (CGPoint, String?) -> CGPoint?) {
+        for (point, uuid) in new where result[point] == nil {
+            if let found = strategy(point, uuid) {
+                result[point] = found
+                old.remove(found)
+            }
         }
+    }
+    match { _, uuid in uuid.flatMap { uuid in old.first { oldUuids[$0] == uuid } } }
+    match { point, _ in old.contains(point) ? point : nil }
+    match { point, _ in old.min { ($0 - point).vectorLength < ($1 - point).vectorLength } }
+    return result
+}
+
+@MainActor
+func rearrangeWorkspacesOnMonitors() {
+    let monitors = monitors
+    let newScreens = monitors.map(\.rect.topLeftCorner)
+    let newUuids = monitors.map { $0.fingerprint?.displayUUID }
+    let newScreenToOldScreenMapping = matchMonitors(
+        new: Array(zip(newScreens, newUuids)).map { (point: $0, uuid: $1) },
+        oldPoints: screenPointToVisibleWorkspace.keys.toSet(),
+        oldUuids: screenPointToMonitorUuid,
+    )
+    let oldScreenToNewScreen = Dictionary(newScreenToOldScreenMapping.map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+    screenPointToMonitorUuid = Dictionary(zip(newScreens, newUuids).compactMap { point, uuid in uuid.map { (point, $0) } }, uniquingKeysWith: { first, _ in first })
+    // Hidden workspaces follow their panel too; the visible ones get it from `setActiveWorkspace` below.
+    for workspace in Workspace.all {
+        if let moved = workspace.assignedMonitorPoint.flatMap({ oldScreenToNewScreen[$0] }) { workspace.assignedMonitorPoint = moved }
     }
 
     let oldScreenPointToVisibleWorkspace = screenPointToVisibleWorkspace
