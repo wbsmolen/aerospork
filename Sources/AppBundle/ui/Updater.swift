@@ -1,6 +1,6 @@
 import Common
+import Foundation
 import Sparkle
-import SwiftUI
 
 /// In-app updates.
 ///
@@ -13,7 +13,7 @@ import SwiftUI
 /// Info.plist (`resources/Info-Debug.plist` deliberately omits it), so Sparkle would look up
 /// nothing; `isEnabled` reflects that rather than showing a control that cannot work.
 @MainActor
-final class Updater: ObservableObject {
+final class Updater {
     static let shared = Updater()
 
     /// `startingUpdater: false` because a menu-bar agent that pops an update window over whatever
@@ -28,13 +28,8 @@ final class Updater: ObservableObject {
     /// Info.plist somehow lost the key, which is worth surfacing rather than failing silently.
     let isEnabled: Bool
 
-    @Published var automaticallyChecks: Bool {
-        didSet { controller.updater.automaticallyChecksForUpdates = automaticallyChecks }
-    }
-
     private init() {
         isEnabled = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
-        automaticallyChecks = controller.updater.automaticallyChecksForUpdates
     }
 
     func start() {

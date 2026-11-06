@@ -69,7 +69,7 @@ final class ConfigurationViewModel: ObservableObject {
     /// `rawTomlEdited` must never authorize a write on its own: an unapplied raw buffer used to
     /// hijack unrelated structured edits, so flipping a toggle on another pane would commit the
     /// half-finished raw text and silently discard the toggle.
-    @Published var rawTomlApplyRequested = false
+    var rawTomlApplyRequested = false
 
     @Published var errorMessage: String?
     private var isSaving = false

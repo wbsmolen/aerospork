@@ -86,7 +86,7 @@ private func upcast<T>(_ fun: @escaping @Sendable (TOMLValueConvertible, TomlBac
 }
 
 func parseOnWindowDetectedArray(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> [WindowDetectedCallback] {
-    guard let array = raw.expectArray(backtrace).unwrapOrCollect(&errors) else {
+    guard let array = parseTomlArray(raw, backtrace).getOrNil(appendErrorTo: &errors) else {
         return []
     }
     return array.enumerated().map { (index, raw) in parseWindowDetectedCallback(raw, backtrace + .index(index), &errors) }.filterNotNil()

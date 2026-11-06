@@ -2,13 +2,9 @@ import Common
 import TOMLKit
 
 struct Mode: ConvenienceCopyable, Equatable, Sendable {
-    /// Dead field: `parseMode` accepts only `binding`, so nothing ever sets this to non-nil, and
-    /// nothing reads it. Deleting it means touching its four construction sites (`parseConfigV2`,
-    /// `Mode.zero`, `testUtil`, `ConfigTest`) -- there is no other blocker.
-    var name: String?
     var bindings: [String: HotkeyBinding]
 
-    static let zero = Mode(name: nil, bindings: [:])
+    static let zero = Mode(bindings: [:])
 }
 
 func parseModes(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError], _ mapping: [String: Key], requireMainMode: Bool = true) -> [String: Mode] {

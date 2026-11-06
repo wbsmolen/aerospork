@@ -129,7 +129,7 @@ per-keystroke without a line-array rebuild.
 
 **`SettingsChrome.swift` owns every shared control.** `NumberField`, `SettingsHint`,
 `SettingsFooter`, `IconButton`, `PanelHeader`, `ListActionBar`, `ContentUnavailableViewCompat`,
-`SectionLabel`, `Badge`, `StatusLabel`, `Banner`, `CodeEditor`, `CopyButton`. Nothing there holds state or touches the
+`SectionLabel`, `Badge`, `StatusLabel`, `Banner`, `CopyButton`. Nothing there holds state or touches the
 config; it is presentation only.
 
 That file exists because of a specific decay pattern. The panes were written at different times, and

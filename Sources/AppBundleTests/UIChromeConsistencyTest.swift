@@ -132,6 +132,16 @@ final class UIChromeConsistencyTest: XCTestCase {
         }
     }
 
+    /// Every control in `SettingsChrome.swift` is shared. The code editor is not: only Raw TOML has one,
+    /// so it sits with that pane, and the chrome file stays small enough to be read as a catalogue.
+    func testTheCodeEditorLivesInTheRawTomlPane() throws {
+        let chrome = try String(contentsOf: projectRoot.appending(path: Self.chrome), encoding: .utf8)
+        XCTAssertFalse(chrome.contains("struct CodeEditor"))
+        let pane = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift"), encoding: .utf8)
+        XCTAssertTrue(pane.contains("struct CodeEditor"))
+        XCTAssertTrue(pane.contains("enum TomlSyntaxHighlighter"))
+    }
+
     /// Both badges are the same shape; only the wash differs. Pinning the geometry in one place is
     /// the entire point of the shared component.
     func testBadgeTonesDifferOnlyInTheirFill() throws {

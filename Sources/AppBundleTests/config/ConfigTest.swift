@@ -44,7 +44,7 @@ final class ConfigTest: XCTestCase {
         let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
         assertEquals(
             config.modes[mainModeId],
-            Mode(name: nil, bindings: [binding.descriptionWithKeyCode: binding]),
+            Mode(bindings: [binding.descriptionWithKeyCode: binding]),
         )
     }
 
@@ -81,7 +81,7 @@ final class ConfigTest: XCTestCase {
         /*let binding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
          assertEquals(
              config.modes[mainModeId],
-             Mode(name: nil, bindings: [binding.descriptionWithKeyCode: binding]),
+             Mode(bindings: [binding.descriptionWithKeyCode: binding]),
          )*/
     }
 
@@ -994,6 +994,28 @@ final class ConfigTest: XCTestCase {
         assertEquals(KeyNotation.pretty("alt-shift-h"), "⌥⇧h")
         assertEquals(KeyNotation.pretty("cmd-enter"), "⌘enter")
         assertEquals(KeyNotation.pretty("h"), "h")
+    }
+
+    /// The notation is written into configs, so renaming a key's raw value breaks every config using
+    /// it. This list is exactly what the hand-written qwerty map accepted before the raw values
+    /// replaced it, and the keys below it are the ones it left out on purpose.
+    func testKeyNotationsAreStable() {
+        let notations = """
+            0 1 2 3 4 5 6 7 8 9 a b c d e f g h i j k l m n o p q r s t u v w x y z
+            minus equal leftSquareBracket rightSquareBracket backslash sectionSign semicolon quote
+            comma period slash backtick space enter esc backspace tab left down up right
+            pageUp pageDown home end forwardDelete
+            f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+            keypad0 keypad1 keypad2 keypad3 keypad4 keypad5 keypad6 keypad7 keypad8 keypad9
+            keypadClear keypadDecimalMark keypadDivide keypadEnter keypadEqual keypadMinus keypadMultiply keypadPlus
+            """.split(whereSeparator: \.isWhitespace).map(String.init)
+        assertEquals(keyNotationToKeyCode.keys.sorted(), notations.sorted())
+        assertEquals(keyNotationToKeyCode["esc"], .escape)
+        assertEquals(keyNotationToKeyCode["1"], .one)
+        assertEquals(keyNotationToKeyCode["leftSquareBracket"], .leftBracket)
+        for unbindable in ["cmd", "alt", "ctrl", "shift", "rCmd", "capsLock", "function", "help", "mute", "volumeUp"] {
+            assertNil(keyNotationToKeyCode[unbindable])
+        }
     }
 
     func testParseKeyMapping() {

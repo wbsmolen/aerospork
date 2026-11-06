@@ -45,7 +45,8 @@ func parseExecConfig(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ 
 }
 
 private func parseEnvVariables(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError]) -> [String: String] {
-    guard let table = raw.expectTable(backtrace).unwrapOrCollect(&errors) else {
+    guard let table = raw.table else {
+        errors.append(expectedActualTypeError(expected: .table, actual: raw.type, backtrace))
         return [:]
     }
     let mutated = table.keys
@@ -55,7 +56,7 @@ private func parseEnvVariables(_ raw: TOMLValueConvertible, _ backtrace: TomlBac
     for (key, value) in table {
         let backtrace = backtrace + .key(key)
         if key == "PWD" { errors.append(.semantic(backtrace, "Changing 'PWD' is not allowed")) }
-        guard let rawStr = value.expectString(backtrace).unwrapOrCollect(&errors) else { continue }
+        guard let rawStr = parseString(value, backtrace).getOrNil(appendErrorTo: &errors) else { continue }
         var env = baseEnv
         if let add: String = fullEnv[key] {
             env[key] = add

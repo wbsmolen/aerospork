@@ -142,8 +142,9 @@ from the GUI.
 
 > **Shared chrome invariant.** `SettingsChrome.swift` holds every shared settings control and is
 > the only copy of each: `NumberField`, `SettingsHint`, `SettingsFooter`, `IconButton`, `PanelHeader`, `ListActionBar`, `WorkspaceChip`,
-> `ContentUnavailableViewCompat`, `SectionLabel`, `Badge`, `StatusLabel`, `Banner`, `CodeEditor`,
-> `CopyButton`, `SettingsField`. A pane uses what is there rather than growing its own. Status symbols and tints come
+> `ContentUnavailableViewCompat`, `SectionLabel`, `Badge`, `StatusLabel`, `Banner`,
+> `CopyButton`, `SettingsField`. A pane uses what is there rather than growing its own. `CodeEditor` is
+> not shared: only Raw TOML has one, so it lives in `RawTomlTab.swift`. Status symbols and tints come
 > from `StatusLabel.Kind` / `Banner.Kind`, never string literals in a pane.
 > `UIChromeConsistencyTest` enforces both rules. `dev-docs/architecture.md` explains why they exist.
 

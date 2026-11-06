@@ -133,8 +133,8 @@ struct HotkeyBinding: Equatable, Sendable {
         self.keyCode = keyCode
         self.commands = commands
         self.descriptionWithKeyCode = modifiers.isEmpty
-            ? keyCode.toString()
-            : modifiers.toString() + "-" + keyCode.toString()
+            ? keyCode.rawValue
+            : modifiers.toString() + "-" + keyCode.rawValue
         self.descriptionWithKeyNotation = descriptionWithKeyNotation
     }
 
