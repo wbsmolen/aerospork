@@ -163,6 +163,17 @@ final class RefreshSchedulerTest: XCTestCase {
         XCTAssertFalse(body.contains("runningApplications"))
     }
 
+    /// Its comment promised one comparison, and it was a round trip to LaunchServices on every refresh.
+    func testARefreshDoesNotAskLaunchServicesAboutItself() throws {
+        let body = try sourceBody("@MainActor func syncAppVisibility()", in: "Sources/AppBundle/ui/TrayMenuModel.swift", length: 500)
+        XCTAssertFalse(body.contains("NSApp.activationPolicy()"))
+    }
+
+    func testAnAppsNameIsKeptNotAskedFor() throws {
+        let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/tree/MacApp.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains("var name: String? { nsApp.localizedName }"))
+    }
+
     func testOneWindowListAnswersForEveryWindowItNames() throws {
         let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
         let shortcut = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key) { return true }"))

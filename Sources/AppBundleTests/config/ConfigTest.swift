@@ -451,6 +451,37 @@ final class ConfigTest: XCTestCase {
         )
     }
 
+    /// Editing a gap expanded `inner = 0` into six lines for good, even after changing it back.
+    func testChangingAGapAndChangingItBackLeavesTheFileAsItWas() {
+        let base = "accordion-padding = 30\n\n[gaps]\ninner = 0\nouter = 0\n\n[keys]\nalt-h = 'focus left'\n"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: base)
+        vm.markLoaded()
+
+        vm.settings.gaps.innerHorizontal = 8
+        vm.settings.gaps.innerVertical = 8
+        let edited = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertTrue(edited.contains("[gaps]\ninner = 8\nouter = 0\n"), edited)
+        vm.didWrite(edited)
+
+        vm.settings.gaps.innerHorizontal = 0
+        vm.settings.gaps.innerVertical = 0
+        assertEquals(ConfigurationWriter.render(baseText: edited, from: vm), base)
+    }
+
+    func testGapsThatDifferKeepTheLongSpelling() {
+        let vm = ConfigurationViewModel()
+        vm.settings.gaps.innerHorizontal = 1
+        vm.settings.gaps.innerVertical = 2
+        vm.settings.gaps.outerTop = 3
+        var lines: [String] = []
+        ConfigurationWriter.replaceGaps(&lines, vm)
+        let toml = lines.joined(separator: "\n")
+        XCTAssertTrue(toml.contains("inner.horizontal = 1"), toml)
+        XCTAssertTrue(toml.contains("outer.top = 3"), toml)
+        assertEquals(parseConfigForTest(toml).1, [])
+    }
+
     /// A config exercising every shape the settings UI cannot model: per-monitor gap arrays,
     /// a monitor fingerprint, a multi-monitor fallback list, and a multi-command binding.
     private static let lossyConfigSample = """

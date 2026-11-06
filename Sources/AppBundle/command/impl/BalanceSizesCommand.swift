@@ -22,5 +22,6 @@ private func balance(_ parent: TilingContainer) {
         if let child = child as? TilingContainer {
             balance(child)
         }
+        (child as? Window)?.observedMinSize = nil
     }
 }

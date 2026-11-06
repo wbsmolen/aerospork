@@ -32,9 +32,12 @@ class Window: TreeNode, Hashable {
     @MainActor
     func closeAxWindow() { die("Not implemented") }
 
-    /// The app answered a resize to `asked` with the larger `got`: it will not go that small. Only ever
-    /// raised. Returns whether anything was learned, i.e. whether the tiles need re-splitting.
-    /// ponytail: never lowered -- a window whose minimum later shrinks keeps the old one until it closes.
+    /// The app answered a resize to `asked` with the larger `got`: it will not go that small. Returns
+    /// whether anything was learned, i.e. whether the tiles need re-splitting. Comes back down through
+    /// `noteCurrentSize`, or by `balance-sizes` or `flatten-workspace-tree` forgetting it: a minimum still
+    /// true is learned again on the next layout.
+    /// ponytail: otherwise never lowered, because probing below it on a timer would make a window with a
+    /// real minimum flinch.
     @MainActor
     func noteRefusedSize(asked: CGSize, got: CGSize) -> Bool {
         let old = observedMinSize ?? .zero
@@ -45,6 +48,13 @@ class Window: TreeNode, Hashable {
         if new == old { return false }
         observedMinSize = new
         return true
+    }
+
+    /// The window is this size right now, so nothing larger can be its minimum. A drag can take it there.
+    @MainActor
+    func noteCurrentSize(_ size: CGSize) {
+        guard let min = observedMinSize else { return }
+        observedMinSize = CGSize(width: Swift.min(min.width, size.width), height: Swift.min(min.height, size.height))
     }
 
     nonisolated func hash(into hasher: inout Hasher) {

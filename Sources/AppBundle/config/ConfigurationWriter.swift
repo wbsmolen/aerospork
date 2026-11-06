@@ -514,15 +514,21 @@ enum ConfigurationWriter {
         let at = lines.firstIndex { sectionHeaderName($0).map(isGaps) ?? false }
         removeBlocks(&lines, where: isGaps)
         let gaps = vm.settings.gaps
-        let block = [
-            "[gaps]",
-            "inner.horizontal = \(gaps.innerHorizontal)",
-            "inner.vertical = \(gaps.innerVertical)",
-            "outer.top = \(gaps.outerTop)",
-            "outer.bottom = \(gaps.outerBottom)",
-            "outer.left = \(gaps.outerLeft)",
-            "outer.right = \(gaps.outerRight)",
-        ]
+        // The short spelling while it can say it, so changing a gap and changing it back leaves the file
+        // as it was instead of six lines longer.
+        let sameInner = gaps.innerHorizontal == gaps.innerVertical
+        let sameOuter = gaps.outerTop == gaps.outerBottom && gaps.outerTop == gaps.outerLeft && gaps.outerTop == gaps.outerRight
+        let block = ["[gaps]"]
+            + (sameInner ? ["inner = \(gaps.innerHorizontal)"] : [
+                "inner.horizontal = \(gaps.innerHorizontal)",
+                "inner.vertical = \(gaps.innerVertical)",
+            ])
+            + (sameOuter ? ["outer = \(gaps.outerTop)"] : [
+                "outer.top = \(gaps.outerTop)",
+                "outer.bottom = \(gaps.outerBottom)",
+                "outer.left = \(gaps.outerLeft)",
+                "outer.right = \(gaps.outerRight)",
+            ])
         if let at {
             lines.insert(contentsOf: block, at: at)
         } else {

@@ -35,18 +35,19 @@ public final class AeroSporkAppDelegate: NSObject, NSApplicationDelegate {
         // `.terminateLater` rather than doing this synchronously: the cleanup is a batch of
         // Accessibility writes across every hidden window, and blocking the main thread through it
         // is what makes a logout appear to hang.
+        let wasEnabled = TrayMenuModel.shared.isEnabled
         Task {
-            defer { sender.reply(toApplicationShouldTerminate: true) }
-            // If something else vetoes the logout, this process keeps running -- and would keep
-            // running with the memory frozen, so nothing would be saved again for the rest of the
-            // session. Cheap to make recoverable; `cleanupStarted` is deliberately not reset,
-            // because the window-restoring half of the cleanup is idempotent but not free.
-            defer { WorkspaceMemory.unfreezeAfterCancelledQuit() }
             do {
                 try await terminationHandler.beforeTermination()
             } catch {
                 AppLog.session.error("Cleanup before quit failed: \(error.localizedDescription, privacy: .public)")
             }
+            sender.reply(toApplicationShouldTerminate: true)
+            // Still here: something else vetoed the logout, and this process would keep running with the
+            // memory frozen and refreshes off for the rest of the session. `cleanupStarted` is deliberately
+            // not reset, because the window-restoring half of the cleanup is idempotent but not free.
+            WorkspaceMemory.unfreezeAfterCancelledQuit()
+            TrayMenuModel.shared.isEnabled = wasEnabled
         }
         return .terminateLater
     }

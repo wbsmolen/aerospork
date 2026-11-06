@@ -9,6 +9,7 @@ struct FlattenWorkspaceTreeCommand: Command {
         let workspace = target.workspace
         let windows = workspace.rootTilingContainer.allLeafWindowsRecursive
         for window in windows {
+            window.observedMinSize = nil
             window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         }
         return true

@@ -2,6 +2,20 @@
 
 Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for earlier releases are on the [releases page](https://github.com/wbsmolen/aerospork/releases).
 
+## 1.3.1 (2026-11-06)
+
+Fixes a crash when removing a window rule in Settings, and brings back window order and sizes after a restart.
+
+### Fixes
+
+- Removing a window rule in Settings could quit AeroSpork, leaving hidden workspaces' windows off screen until it was opened again. A text field still being edited could also write into the rule below the one removed.
+- A restart keeps the order of the windows on each workspace, the sizes you dragged them to, and which ones were floating. Nested containers and a workspace's own layout still start fresh.
+- On quit, a window from a hidden workspace could be parked off screen again after it had been restored, and an app that failed to answer left every window after it off screen.
+- A learned minimum window size can now come down. Dragging a window smaller than the minimum on record lowers it, and `balance-sizes` and `flatten-workspace-tree` forget it. A minimum that is still real is learned again on the next layout.
+- Settings no longer writes the config, reloads it and takes a backup when nothing changed. Merely opening it could do that, and each one pushed a real backup out of the five kept.
+- Changing a gap and changing it back leaves your config as it was. Gaps keep the short `inner = 0` spelling when the values match, instead of expanding to six lines.
+- A refresh no longer asks LaunchServices for AeroSpork's own activation policy or for each app's name.
+
 ## 1.3.0 (2026-11-05)
 
 Fixes windows showing up on the wrong workspace or monitor, an invisible window holding an empty tile, and a restart scrambling your arrangement. Also makes each refresh cheaper, and makes Settings safer with your config file.

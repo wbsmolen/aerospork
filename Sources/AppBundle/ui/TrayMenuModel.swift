@@ -50,7 +50,9 @@ struct AppVisibility: Equatable {
 ///
 /// Called from `updateTrayText()` (so every refresh — which covers `reload-config`, hot-reload and
 /// startup) and from the settings window's own save, which reloads the config without running a
-/// refresh session. Both are guarded assignments, so the steady state costs one comparison.
+/// refresh session. Both are guarded assignments, so the steady state costs one comparison. The policy
+/// is compared with what was last applied, not read back: `NSApp.activationPolicy()` is a LaunchServices
+/// round trip, and nothing else changes it.
 ///
 /// TRADEOFF: `runRefreshSessionBlocking` returns early while tiling is paused, so an edit made in an
 /// external editor during a pause only lands when tiling resumes or any command runs (`runSession`
@@ -58,13 +60,16 @@ struct AppVisibility: Equatable {
 ///
 /// Skipped under XCTest: `setActivationPolicy` mutates the *test runner's* process, and there is
 /// nothing to assert about it from a headless bundle. `AppVisibility` is the testable part.
+@MainActor private var appliedActivationPolicy: NSApplication.ActivationPolicy?
+
 @MainActor func syncAppVisibility() {
     guard !isUnitTest else { return }
     let visibility = AppVisibility(showMenuBarIcon: config.showMenuBarIcon, showDockIcon: config.showDockIcon)
     setIfChanged(\.showsMenuBarIcon, visibility.showsMenuBarIcon)
     let policy: NSApplication.ActivationPolicy = visibility.showsDockIcon ? .regular : .accessory
-    if NSApp.activationPolicy() != policy {
+    if appliedActivationPolicy != policy {
         NSApp.setActivationPolicy(policy)
+        appliedActivationPolicy = policy
     }
 }
 

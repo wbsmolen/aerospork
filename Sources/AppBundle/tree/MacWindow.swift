@@ -32,12 +32,14 @@ final class MacWindow: Window {
         // Location is the fallback, not the first answer: at a cold start no workspace is active, so that
         // branch resolves to a stub invented from the first keybound name in sort order -- which a named
         // workspace like `A` can never be.
-        let workspace = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId)
+        let remembered = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId)
+        let workspace = remembered
             ?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace)
-        let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)
+        var data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
+        if remembered != nil { data = WorkspaceMemory.restoredBinding(of: windowId, on: workspace, default: data) }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
         window.workspaceNameAtRegistration = workspace.name

@@ -57,6 +57,21 @@ enum WorkspaceMemory {
         /// Checked against the live window's app, so an id reused within one WindowServer session by
         /// a different application is a no-op rather than a misplacement.
         let bundleId: String?
+        /// Position among the workspace's tiled windows, left to right. All three of these are nil in a
+        /// file written by an older version.
+        var index: Int? = nil
+        /// Its share of a workspace's top-level split, in points. Nil inside a nested container, because
+        /// nesting isn't rebuilt and that number means nothing at the top level.
+        /// ponytail: a flat restore. Rebuild nested containers and their layouts if anyone misses them.
+        var weight: CGFloat? = nil
+        var isFloating: Bool? = nil
+
+        /// Layout re-splits weights on every pass and they wobble in their last bits, so a plain comparison
+        /// would rewrite the file on every refresh. See `layoutTiles`.
+        static func == (a: WindowEntry, b: WindowEntry) -> Bool {
+            a.workspace == b.workspace && a.bundleId == b.bundleId && a.index == b.index && a.isFloating == b.isFloating
+                && abs((a.weight ?? 0) - (b.weight ?? 0)) < 1
+        }
     }
 
     struct State: Codable, Equatable, Sendable {
@@ -138,6 +153,9 @@ enum WorkspaceMemory {
     }
 
     private static var restored: State?
+    /// Every entry as it was loaded. `restored` spends an entry when its window comes back, but the windows
+    /// still to come need to know where the ones already back belong.
+    private static var placements: [String: WindowEntry] = [:]
     /// `save()` before `load()` would persist an empty tree over a good file. That window is
     /// milliseconds wide -- a signal between `initTerminationHandler` and `load` -- but it costs one
     /// Bool to close.
@@ -163,6 +181,7 @@ enum WorkspaceMemory {
     /// be registered.
     static func load() {
         restored = nil
+        placements = [:]
         lastWritten = nil
         isLoaded = true
         guard let data = try? Data(contentsOf: fileUrl),
@@ -181,6 +200,7 @@ enum WorkspaceMemory {
             return
         }
         restored = state
+        placements = state.windows
         debugLog("WorkspaceMemory: restored \(state.windows.count) windows")
     }
 
@@ -203,6 +223,21 @@ enum WorkspaceMemory {
         let workspace = Workspace.get(byName: name)
         restoreMonitor(of: workspace)
         return workspace
+    }
+
+    /// Where a remembered window goes on its workspace: in front of the first window already back that
+    /// stood after it, so the order comes out right whichever app answers first. `default` for a window
+    /// that isn't an ordinary one, like a popup, whatever it was before.
+    static func restoredBinding(of id: UInt32, on workspace: Workspace, default data: BindingData) -> BindingData {
+        guard let entry = placements[String(id)], data.parent is TilingContainer else { return data }
+        if entry.isFloating == true { return BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST) }
+        guard let own = entry.index else { return data }
+        let root = workspace.rootTilingContainer
+        let next = root.children.firstIndex { child in
+            guard let window = child as? Window, let other = placements[String(window.windowId)]?.index else { return false }
+            return other > own
+        }
+        return BindingData(parent: root, adaptiveWeight: entry.weight ?? WEIGHT_AUTO, index: next ?? INDEX_BIND_LAST)
     }
 
     /// Puts every monitor back on the workspace it showed, and the rest back on their monitors.
@@ -270,9 +305,22 @@ enum WorkspaceMemory {
     private static func cheapKey() -> CheapKey {
         var windows: [String: WindowEntry] = [:]
         var workspaceScreens: [String: Int] = [:]
+        var tileOrder: [UInt32: Int] = [:]
+        for workspace in Workspace.all {
+            for (index, window) in workspace.rootTilingContainer.allLeafWindowsRecursive.enumerated() {
+                tileOrder[window.windowId] = index
+            }
+        }
         for window in MacWindow.allWindows {
             guard let name = rememberedWorkspaceName(of: window) else { continue }
-            windows[String(window.windowId)] = WindowEntry(workspace: name, bundleId: window.macApp.bundleId)
+            let root = window.nodeWorkspace?.rootTilingContainer
+            windows[String(window.windowId)] = WindowEntry(
+                workspace: name,
+                bundleId: window.macApp.bundleId,
+                index: tileOrder[window.windowId],
+                weight: root.flatMap { window.parent === $0 ? window.getWeight($0.orientation) : nil },
+                isFloating: window.isFloating ? true : nil,
+            )
             if workspaceScreens[name] == nil, let workspace = Workspace.existing(byName: name) {
                 workspaceScreens[name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
             }
@@ -400,6 +448,7 @@ enum WorkspaceMemory {
     /// lifecycle and wrong for a suite that runs many cases in one process.
     static func resetForTests() {
         restored = nil
+        placements = [:]
         lastWritten = nil
         isLoaded = false
         isFrozen = false

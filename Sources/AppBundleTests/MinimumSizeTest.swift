@@ -1,5 +1,6 @@
 @testable import AppBundle
 import AppKit
+import Common
 import XCTest
 
 /// Tiles narrower than an app allows. The app clamps the size and grows the window from its top-left,
@@ -57,5 +58,36 @@ final class MinimumSizeTest: XCTestCase {
         XCTAssertFalse(window.noteRefusedSize(asked: CGSize(width: 300, height: 900), got: tall)) // nothing new: no re-split
         XCTAssertFalse(window.noteRefusedSize(asked: CGSize(width: 200, height: 900), got: CGSize(width: 450, height: 900)))
         assertEquals(window.observedMinSize, CGSize(width: 500, height: 0))
+    }
+
+    func testADragBelowTheMinimumLowersIt() {
+        let window = LayoutTestWindow.new(id: 0, parent: focus.workspace.rootTilingContainer)
+        _ = window.noteRefusedSize(asked: CGSize(width: 300, height: 900), got: CGSize(width: 2000, height: 900))
+
+        window.noteCurrentSize(CGSize(width: 800, height: 900))
+        assertEquals(window.observedMinSize, CGSize(width: 800, height: 0))
+
+        window.noteCurrentSize(CGSize(width: 1500, height: 900)) // larger says nothing
+        assertEquals(window.observedMinSize, CGSize(width: 800, height: 0))
+    }
+
+    func testAWindowWithNoMinimumLearnsNothingFromItsSize() {
+        let window = LayoutTestWindow.new(id: 0, parent: focus.workspace.rootTilingContainer)
+        window.noteCurrentSize(CGSize(width: 800, height: 900))
+        assertNil(window.observedMinSize)
+    }
+
+    func testTheCommandsThatResetALayoutForgetMinimums() async throws {
+        let workspace = focus.workspace
+        let window = LayoutTestWindow.new(id: 0, parent: workspace.rootTilingContainer)
+        let refused = (asked: CGSize(width: 300, height: 900), got: CGSize(width: 2000, height: 900))
+
+        _ = window.noteRefusedSize(asked: refused.asked, got: refused.got)
+        _ = try await BalanceSizesCommand(args: BalanceSizesCmdArgs(rawArgs: [])).run(.defaultEnv, .emptyStdin)
+        assertNil(window.observedMinSize)
+
+        _ = window.noteRefusedSize(asked: refused.asked, got: refused.got)
+        _ = try await FlattenWorkspaceTreeCommand(args: FlattenWorkspaceTreeCmdArgs(rawArgs: [])).run(.defaultEnv, .emptyStdin)
+        assertNil(window.observedMinSize)
     }
 }

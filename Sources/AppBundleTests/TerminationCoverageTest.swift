@@ -74,4 +74,20 @@ final class TerminationCoverageTest: XCTestCase {
             "The delegate must actually run the cleanup, not merely exist.",
         )
     }
+
+    /// Each window the cleanup moves sends a notification, and a refresh parks hidden workspaces' windows
+    /// again -- so one restored early in the loop was left off screen at exit.
+    func testNoRefreshCanRunDuringTheCleanup() throws {
+        let body = try sourceBody("func beforeTermination()", in: "Sources/AppBundle/util/appBundleUtil.swift", length: 800)
+        let off = try XCTUnwrap(body.range(of: "TrayMenuModel.shared.isEnabled = false"))
+        let cleanup = try XCTUnwrap(body.range(of: "makeAllWindowsVisibleAndRestoreSize()"))
+        XCTAssertLessThan(off.lowerBound, cleanup.lowerBound)
+    }
+
+    func testOneWindowFailingDoesNotStrandTheRest() throws {
+        let body = try sourceBody("private func makeAllWindowsVisibleAndRestoreSize()", in: "Sources/AppBundle/util/appBundleUtil.swift", length: 800)
+        let loop = try XCTUnwrap(body.range(of: "for (_, window) in MacWindow.allWindowsMap"))
+        let attempt = try XCTUnwrap(body.range(of: "do {"))
+        XCTAssertLessThan(loop.lowerBound, attempt.lowerBound)
+    }
 }

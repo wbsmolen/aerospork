@@ -39,7 +39,7 @@ final class MacApp: AbstractApp {
     /// again at once.
     @MainActor static var timedOutThisPass: Set<pid_t> = []
 
-    /*conforms*/ var name: String? { nsApp.localizedName }
+    /*conforms*/ let name: String? // Kept: reading `localizedName` asks LaunchServices, and the menu bar lists every window's app per refresh.
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
     /*conforms*/ var bundlePath: String? { nsApp.bundleURL?.path }
 
@@ -116,6 +116,7 @@ final class MacApp: AbstractApp {
         self.isZoom = nsApp.bundleIdentifier == "us.zoom.xos"
         self.pid = nsApp.processIdentifier
         self.bundleId = nsApp.bundleIdentifier
+        self.name = nsApp.localizedName
         self.axObserver = .init(axObserver)
         self.appAxSubscription = .init(axSubscription)
         self.thread = thread
