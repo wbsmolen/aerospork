@@ -6,6 +6,85 @@
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>1.3.0</title>
+            <pubDate>Thu, 05 Nov 2026 20:14:17 -0600</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:version>1.3.0</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>Fixes windows showing up on the wrong workspace or monitor, an invisible window holding an empty tile, and a restart scrambling your arrangement. Also makes each refresh cheaper, and makes Settings safer with your config file.</p>
+<h3>Upgrade notes</h3>
+<ul>
+<li>AeroSpork now asks once whether to check for updates automatically: on the first launch after this update, or the second launch of a new install. A setting told the update framework never to check and never to ask, so you only got an update by choosing <strong>Check for Updates…</strong>.</li>
+<li>Startup no longer switches the first workspace to accordion when it holds more than three windows. <code>default-root-container-layout</code> decides.</li>
+<li><code>%{monitor-fingerprint}</code> now prints a table you can paste into <code>[monitors]</code>, as the docs always said it could. Anything parsing the old <code>vendor:… name:…</code> output needs updating.</li>
+<li><code>mode &lt;name&gt;</code> fails when the config has no such mode, instead of leaving no hotkeys registered. A reload that removes the mode you are in goes back to <code>main</code>.</li>
+<li>Runtime error reports are written to <code>~/Library/Logs/com.wbs.aerospork/</code>, not to a directory in <code>/tmp</code> shared with other accounts.</li>
+</ul>
+<h3>Windows stay on their own workspace</h3>
+<ul>
+<li>A hidden workspace&#x27;s windows no longer show up on another monitor. AeroSpork used to park them only in a bottom corner, and when both bottom corners of a monitor touched another display, they sat in plain view there. It now picks a spot for each window, by its size, that no other monitor can see, including off the right or left edge.</li>
+<li>A window that an app won&#x27;t shrink to fit its tile no longer spills over its neighbours or onto the next monitor. AeroSpork learns the smallest size the app accepts, gives it that, and shrinks the other tiles to make room. If the minimums can&#x27;t all fit, each window is kept on its own monitor.</li>
+<li>A window the system draws fully transparent no longer takes up an empty tile. It is set aside after a second and comes back to the tiling once it is visible again.</li>
+<li>On quit, a window from a hidden workspace goes back to its workspace&#x27;s monitor instead of the monitor it was parked against.</li>
+<li>A restart keeps your arrangement. Each monitor comes back showing the workspace it showed, not just the focused one, and an app that answers slowly after a restart gets its windows back on the right workspace instead of the focused one. Minimized windows are remembered too.</li>
+<li>When two monitors trade places, each workspace stays with its physical monitor.</li>
+<li><code>summon-workspace</code> from another monitor trades the two workspaces, and no longer leaves that monitor empty, which could shuffle every monitor.</li>
+<li><code>move-workspace-to-monitor</code> on a hidden workspace no longer replaces what its old monitor is showing.</li>
+<li>A window that first looked like a popup goes to the workspace it appeared on, even if you have switched away by the time it is recognized.</li>
+<li><code>close</code> on a window that asks about unsaved changes no longer turns it into a new window on the focused workspace with its rules run again.</li>
+</ul>
+<h3>Responsiveness</h3>
+<ul>
+<li>Lower CPU use. A refresh no longer asks the system about every running process, which took most of the time in each one.</li>
+<li>Fewer refreshes. A command used to be followed at once by a second full pass; now it is one, coalesced with whatever else happened.</li>
+<li>A steady stream of window events can no longer keep restarting a refresh so that none ever finishes.</li>
+<li>Two fast hotkeys now run strictly in order, so the first can no longer push a stale focus after the second.</li>
+<li>Reading window state takes fewer round trips to each app, and moving or resizing windows ourselves no longer costs an extra read per notification.</li>
+</ul>
+<h3>Reliability</h3>
+<ul>
+<li>AeroSpork no longer quits when a CLI command is interrupted (Ctrl-C, or a status-bar timeout) before the reply arrives.</li>
+<li>Un-fullscreening or un-minimizing a window can no longer be cancelled by the layout pass that follows it.</li>
+<li>The first wake after launch no longer rebalances workspaces across monitors as if the displays had changed.</li>
+<li><code>move --window-id N --boundaries all-monitors-outer-frame</code> moves window N, not the focused window.</li>
+<li>A monitor fingerprint that names a display no longer skips its <code>width</code> and <code>height</code>, so two panels with the same name can be told apart by size.</li>
+<li><code>focus</code> can no longer leave floating windows detached, which could crash the app later, if a window stops answering partway through.</li>
+</ul>
+<h3>Config and Settings</h3>
+<ul>
+<li>A binding added or removed in Raw TOML is no longer undone by the next change in another pane, and the other panes show what Raw TOML applied.</li>
+<li>A window rule still waiting for its command no longer loses other rule edits made alongside it. They are all written once that rule has a command.</li>
+<li>Converting a config from v1 to v2 happens once at startup. <code>reload-config --dry-run</code> and Settings saves no longer rewrite the file that way.</li>
+<li>Settings keeps one backup each time it is opened, plus one per Raw TOML apply. Autosave used to rotate all five backups out within seconds.</li>
+<li>A hotkey that can&#x27;t be registered, usually because another app owns it, is recorded in the log.</li>
+<li><code>start-at-login</code> only asks macOS to change something when it needs changing, instead of on every reload.</li>
+<li>A Settings change that can&#x27;t be made to how the file is written is refused with a message. Some, such as a binding in an inline table, used to report success and write nothing.</li>
+<li>A multi-line value, a quoted key or an inline table no longer locks the whole file out of the Settings panes. Only an edit that touches that spelling is refused.</li>
+<li>Changing a monitor pin, an environment variable, the key mapping preset or <code>inherit-env-vars</code> now changes that one line. Comments stay and other rows are not re-spelled.</li>
+<li>Editing gaps keeps <code>[gaps]</code> where it is in the file, instead of moving it to the top.</li>
+<li>Settings writes new sections as <code>[keys]</code>, <code>[monitors]</code> and <code>[on-window]</code>, including in an older config. Sections that already exist are edited where they are.</li>
+<li>A window rule whose matcher is its own <code>[on-window-detected.if]</code> table can be edited in Settings.</li>
+<li>Saving without a change no longer rewrites a file that mixes line endings. Editing such a file in the panes is refused, because it would change every line.</li>
+<li>A Raw TOML apply that was refused no longer takes effect on the next change in another pane.</li>
+<li>A window rule with no command says so in the pane, since rule changes aren&#x27;t saved until every rule has one.</li>
+</ul>
+<h3>Security and updates</h3>
+<ul>
+<li>Updates are verified before they are unpacked, not after. This starts with the update after the one that brings it.</li>
+<li>The CLI reads stdin only for <code>workspace next</code>/<code>prev</code> and <code>move-node-to-workspace next</code>/<code>prev</code>. Every other command used to read it too, which swallowed the input of a <code>while read</code> loop.</li>
+<li>CLI clients that connect and stall can no longer hold up the rest of the app. Each request and each reply has 30 seconds to finish.</li>
+<li>If another account already holds the CLI socket&#x27;s path, AeroSpork logs it and runs without the CLI, instead of refusing to start.</li>
+<li>The CLI and the app each hang up if the other end of the socket is running as a different user.</li>
+<li>Error dialogs no longer fail to appear when the message contains a backslash, and a message can no longer run as a script.</li>
+<li>A scheduled update alert comes to the front instead of opening unseen behind your windows.</li>
+<li>Commands run by AeroSpork no longer get a trailing <code>:</code> on <code>PATH</code>, which means the current directory, when it starts with no <code>PATH</code> set.</li>
+<li>Remembering windows across a restart no longer mistakes another process named WindowServer for the real one, or gives up if the process list grows while it reads it.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.0/AeroSpork-1.3.0.zip" length="6844567" type="application/octet-stream" sparkle:edSignature="TPd3a01cN7HX6AuaVQV0TueapDLwfHtv/P5UOa0qa8PNoIlU9xNKdeE3rXhlUq3Aq9lTDnGjyntZC9FMzcpTCw=="/>
+        </item>
+        <item>
             <title>1.2.0</title>
             <pubDate>Sun, 13 Sep 2026 17:32:28 -0500</pubDate>
             <link>https://github.com/wbsmolen/aerospork</link>
@@ -97,28 +176,6 @@ brew install --cask wbsmolen/tap/aerospork
 </ul>
 ]]></description>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.8/AeroSpork-1.1.8.zip" length="6721062" type="application/octet-stream" sparkle:edSignature="3bjx8nGP1oYcfavdhou6yUEWNjohtBs6WzyCJ0doNOQQQMTuyUPKk9zE9ZeLUE6CM0MUt74dPxW7NkAgRXLcCA=="/>
-        </item>
-        <item>
-            <title>1.1.7</title>
-            <pubDate>Thu, 30 Jul 2026 19:20:19 -0500</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.1.7</sparkle:version>
-            <sparkle:shortVersionString>1.1.7</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<p>Fixes the settings window slowly growing your config file.</p>
-<h2>Saving from Settings no longer adds blank lines</h2>
-<p>Every save through the settings window added a blank line before the section it rewrote, and dropped the newline at the end of the file. One save was invisible. But settings apply on a short delay, so a minute of adjusting things is several saves — and the file grew a line each time, leaving a widening gap in the middle and <code>\ No newline at end of file</code> at the bottom of every diff.</p>
-<p>If your config lives in a dotfiles repository, this is the change that stops it showing up as noise there.</p>
-<p>Nothing you wrote is touched. Blank lines you put in yourself stay exactly as they are — the fix only suppresses the ones the editor was adding.</p>
-<p>Universal (arm64 + x86_64), signed with a Developer ID, notarized and stapled.</p>
-<h2>Install</h2>
-<pre>
-brew install --cask wbsmolen/tap/aerospork
-</pre>
-<p>Or download <code>aerospork-v1.1.7.zip</code>, move <code>aerospork-v1.1.7/AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when prompted. Optionally put <code>aerospork-v1.1.7/bin/aerospork</code> on your <code>PATH</code> for the CLI.</p>
-<p><code>AeroSpork-1.1.7.zip</code> is the Sparkle update archive — the same app without the CLI, man pages or licence files. It exists for the updater; prefer the versioned zip for a manual install.</p>
-]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.1.7/AeroSpork-1.1.7.zip" length="6311356" type="application/octet-stream" sparkle:edSignature="j8DnGsc71nFqOKD/w4xEjLwB5CDmJCVt9wwgJV8OqNtPeL+VK2SzQ9vVxK0FeBd6fnnUoldsuWZt2jw329kxDg=="/>
         </item>
     </channel>
 </rss>
