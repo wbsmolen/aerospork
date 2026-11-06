@@ -192,10 +192,11 @@ Both the tap and this repository are public, so either route works without a Git
 What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 Installed copies check for updates themselves through [Sparkle](https://sparkle-project.org),
-against a signed appcast served from
+against an appcast served from
 [`aerospork.app/appcast.xml`](https://aerospork.app/appcast.xml). Updates are verified against an
 EdDSA public key in the app's Info.plist, so a build refuses anything it cannot verify. Automatic
-checking is off until you allow it; **Check for Updates…** in the menu bar checks on demand. There
+checking is off until you allow it, which AeroSpork asks about once, on its second launch;
+**Check for Updates…** in the menu bar checks on demand. There
 is no App Store update path to inherit, because the Accessibility APIs this app is built on do not
 work in a sandbox.
 

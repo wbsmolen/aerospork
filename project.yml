@@ -117,9 +117,24 @@ targets:
         # those copies keep updating. Retiring the Static Web App would strand them.
         SUFeedURL: https://aerospork.app/appcast.xml
         SUPublicEDKey: +/aLciv0lm3XT3X1XqxDZs2U6d0jbvL65PsPBCxGObA=
-        # Checking is opt-in on first launch: Sparkle asks once rather than phoning home before
-        # the user has agreed to it.
-        SUEnableAutomaticChecks: false
+        # SUEnableAutomaticChecks is deliberately absent, because absent is what makes Sparkle ask,
+        # once, on the second launch, and check nothing until it has an answer. Set to `false` it means
+        # "never, and don't ask": this was set, and nobody got an update they did not go looking for.
+        # build-release.sh fails if it comes back.
+        #
+        # Check the archive's EdDSA signature before unpacking it, not after. Every enclosure
+        # generate_appcast writes is signed. It is the installed build that enforces this, so it
+        # starts with the update after the first build that has it.
+        SUVerifyUpdateBeforeExtraction: true
+        # SURequireSignedFeed is deliberately NOT set. The feed is unsigned today, and a build that
+        # has this key refuses any feed without a valid signature: for 20 days it reports an error
+        # and offers nothing, and after that only a degraded mode. generate_appcast only signs once an
+        # archive in the feed has the key or the feed is already signed, and silently writes it
+        # unsigned if it has no private key. So the first signed feed would ship in the same release
+        # as the first client that demands one, unverified: publish-release.sh checks the enclosure's
+        # signature, not the feed's. Editing updates-site/appcast.xml afterwards, as 1.2.0 did, breaks
+        # the signature too. To turn it on: `sign_update` the current feed, deploy it, verify what is
+        # served with `sign_update --verify`, make publish-release.sh do the same, and only then set it.
     entitlements:
       path: resources/aerospork.entitlements
       properties:

@@ -79,6 +79,25 @@ for artifact in "$dist_zip" "$sparkle_zip"; do
     test -f "$artifact" || { echo "Missing build artifact: $artifact" > /dev/stderr; exit 1; }
 done
 
+# build-release.sh skips notarization on purpose when it has no Developer ID certificate or notary
+# profile, so that a local build still works: it warns and exits 0. So nothing stopped a release
+# Gatekeeper blocks on every other Mac. Everything after this block is outward-facing.
+#
+# Both archives, unpacked as they will be downloaded: the ticket that counts is the one that survived
+# zipping, not the one on .release/AeroSpork.app. /usr/sbin/spctl in full because setup.sh's PATH has
+# no /usr/sbin.
+notary_check_dir="$(mktemp -d)"
+ditto -x -k "$dist_zip" "$notary_check_dir/dist"
+ditto -x -k "$sparkle_zip" "$notary_check_dir/sparkle"
+for app in "$notary_check_dir/dist/aerospork-v$build_version/AeroSpork.app" "$notary_check_dir/sparkle/AeroSpork.app"; do
+    if ! xcrun stapler validate "$app" || ! /usr/sbin/spctl --assess --type execute --verbose "$app"; then
+        echo "!!! This build is not notarized. Nothing has been tagged or published. !!!" > /dev/stderr
+        echo "It needs a Developer ID Application certificate and AEROSPORK_NOTARY_PROFILE; see build-release.sh." > /dev/stderr
+        exit 1
+    fi
+done
+rm -rf "$notary_check_dir"
+
 git tag -a "v$build_version" -m "v$build_version"
 git push origin "v$build_version"
 
