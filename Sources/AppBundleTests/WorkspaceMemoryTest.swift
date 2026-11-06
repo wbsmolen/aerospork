@@ -504,8 +504,9 @@ final class WorkspaceMemoryTest: XCTestCase {
         let normalised = source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         XCTAssertTrue(
             normalised.contains(
-                "? WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId) "
-                    + "?? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace",
+                "let workspace = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId) "
+                    + "?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace) "
+                    + "let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)",
             ),
             """
             the remembered workspace is not the value bound to the window -- location is being used
@@ -563,5 +564,97 @@ final class WorkspaceMemoryTest: XCTestCase {
         let save = try XCTUnwrap(source.range(of: "WorkspaceMemory.freezeAndSave()")?.lowerBound)
         let cleanup = try XCTUnwrap(source.range(of: "makeAllWindowsVisibleAndRestoreSize()")?.lowerBound)
         XCTAssertLessThan(save, cleanup, "the snapshot must be taken before the windows are moved")
+    }
+
+    // MARK: - A restart keeps the whole arrangement
+
+    /// Late answerers are restored whenever they turn up, but an entry is good for one registration: a
+    /// live window collected by mistake and re-detected must not be dragged back to where it was at launch.
+    func testAnEntryIsSpentByTheRegistrationThatUsesIt() {
+        write(state(session: WorkspaceMemory.session(), windows: ["42": .init(workspace: "A", bundleId: "com.apple.finder")]))
+        WorkspaceMemory.load()
+
+        assertEquals(WorkspaceMemory.restoredWorkspace(forWindowId: 42, bundleId: "com.apple.finder")?.name, "A")
+        assertNil(WorkspaceMemory.restoredWorkspace(forWindowId: 42, bundleId: "com.apple.finder"))
+    }
+
+    /// `setUpWorkspacesForTests` assumes the one monitor the rest of the suite runs on.
+    private func setUpWorkspacesOnTheseMonitors() {
+        let these = testMonitors
+        testMonitors = [defaultTestMonitor]
+        setUpWorkspacesForTests()
+        testMonitors = these
+    }
+
+    func testEachMonitorComesBackShowingWhatItShowed() {
+        setUpWorkspacesOnTheseMonitors()
+        let session = WorkspaceMemory.session()
+        var saved = state(session: session, windows: [:], monitors: [
+            "x": fingerprint(uuid: rightUuid), "y": fingerprint(uuid: rightUuid), "hidden": fingerprint(uuid: leftUuid),
+        ])
+        saved.visibleWorkspaces = ["x"]
+        write(saved)
+        WorkspaceMemory.load()
+        // What a cold start leaves: a stub on the right monitor, and another remembered workspace as that stub.
+        check(testMonitors[1].setActiveWorkspace(Workspace.get(byName: "hidden")))
+
+        WorkspaceMemory.restoreVisibleWorkspaces()
+
+        assertEquals(testMonitors[1].activeWorkspace.name, "x")
+        // The stand-in went hidden on the monitor it stood in on; the memory puts it back on its own.
+        assertEquals(Workspace.get(byName: "hidden").workspaceMonitor.rect.topLeftX, 0)
+    }
+
+    func testAStartupSaveKeepsWhatWasOnScreenBeforeTheRestart() throws {
+        var saved = state(session: WorkspaceMemory.session(), windows: [:])
+        saved.visibleWorkspaces = ["x"]
+        write(saved)
+        WorkspaceMemory.load()
+
+        withStartup {
+            WorkspaceMemory.save()
+            WorkspaceMemory.waitForWrites()
+        }
+
+        let written = try JSONDecoder().decode(WorkspaceMemory.State.self, from: Data(contentsOf: WorkspaceMemory.fileUrl))
+        assertEquals(written.visibleWorkspaces, ["x"])
+    }
+
+    func testTheFocusedMonitorKeepsWhatFocusAdopted() {
+        setUpWorkspacesOnTheseMonitors()
+        let session = WorkspaceMemory.session()
+        var saved = state(session: session, windows: [:], monitors: ["x": fingerprint(uuid: leftUuid)])
+        saved.visibleWorkspaces = ["x"]
+        write(saved)
+        WorkspaceMemory.load()
+        let focused = focus.workspace
+        assertEquals(focused.workspaceMonitor.rect.topLeftX, 0)
+
+        WorkspaceMemory.restoreVisibleWorkspaces()
+
+        assertEquals(testMonitors[0].activeWorkspace.name, focused.name)
+    }
+
+    /// A file from before this was added has no list, and must still load.
+    func testAFileWithoutVisibleWorkspacesStillLoads() throws {
+        let json = #"{"session":"\#(WorkspaceMemory.session())","windows":{"42":{"workspace":"A","bundleId":"b"}},"workspaceMonitors":{}}"#
+        try Data(json.utf8).write(to: WorkspaceMemory.fileUrl)
+        WorkspaceMemory.load()
+        assertEquals(WorkspaceMemory.workspace(forWindowId: 42, bundleId: "b"), "A")
+        WorkspaceMemory.restoreVisibleWorkspaces() // nothing to restore, nothing to trip over
+    }
+
+    func testAMinimizedWindowIsRememberedByTheWorkspaceItCameFrom() {
+        setUpWorkspacesOnTheseMonitors()
+        let window = TestWindow.new(id: 77, parent: macosMinimizedWindowsContainer)
+        assertNil(WorkspaceMemory.rememberedWorkspaceName(of: window))
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: "A")
+        assertEquals(WorkspaceMemory.rememberedWorkspaceName(of: window), "A")
+        window.unbindFromParent()
+    }
+
+    func testStartupDoesNotOverrideTheConfiguredLayout() throws {
+        let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/initAppBundle.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains(".layout = "), "startup is deciding a workspace's layout again, over `default-root-container-layout`")
     }
 }

@@ -61,10 +61,12 @@ enum WorkspaceMemory {
 
     struct State: Codable, Equatable, Sendable {
         let session: String
-        let windows: [String: WindowEntry]
+        var windows: [String: WindowEntry]
         /// Workspace name to the monitor it was on. Without this the restore is worse than useless
         /// on a multi-monitor setup; see the note above.
         let workspaceMonitors: [String: MonitorFingerprint]
+        /// The workspaces on screen. Optional because a file written by an older version has none.
+        var visibleWorkspaces: [String]? = nil
     }
 
     /// Overridable so tests do not read or delete the real file. The default sits beside the CLI
@@ -185,9 +187,37 @@ enum WorkspaceMemory {
     /// forced the first version of this to be reverted. Both halves, or neither.
     static func restoredWorkspace(forWindowId id: UInt32, bundleId: String?) -> Workspace? {
         guard let name = workspace(forWindowId: id, bundleId: bundleId) else { return nil }
+        restored?.windows.removeValue(forKey: String(id)) // see `MacWindow.getOrRegister`
         let workspace = Workspace.get(byName: name)
         restoreMonitor(of: workspace)
         return workspace
+    }
+
+    /// Puts every monitor back on the workspace it showed, and the rest back on their monitors.
+    ///
+    /// Only what focus adopted from macOS came back right before: a cold start fills the other monitors
+    /// with whichever names come first, so one showed `3` when it had been showing `A`. The focused
+    /// monitor keeps what focus adopted, because the window the user is on outranks the file.
+    static func restoreVisibleWorkspaces() {
+        guard let restored else { return }
+        for name in restored.visibleWorkspaces ?? [] {
+            guard let monitor = monitor(forWorkspace: name),
+                  monitor.rect.topLeftCorner != focus.workspace.workspaceMonitor.rect.topLeftCorner
+            else { continue }
+            _ = monitor.setActiveWorkspace(Workspace.get(byName: name))
+        }
+        // The stubs that stood in have now been pinned to wherever they stood in.
+        for name in restored.workspaceMonitors.keys {
+            if let workspace = Workspace.existing(byName: name), !workspace.isVisible { restoreMonitor(of: workspace) }
+        }
+    }
+
+    /// The workspace to remember a window under. A minimized one hangs off a global container, not a
+    /// workspace, so it only has the name recorded on its way in.
+    static func rememberedWorkspaceName(of window: Window) -> String? {
+        if let workspace = window.nodeWorkspace { return workspace.name }
+        if case .macos(_, let name) = window.layoutReason { return name }
+        return nil
     }
 
     /// The monitor `workspace` was on, if it is still attached.
@@ -222,22 +252,24 @@ enum WorkspaceMemory {
     private struct CheapKey: Equatable {
         let windows: [String: WindowEntry]
         let workspaceScreens: [String: Int]
+        let visibleWorkspaces: [String]
     }
 
     private static func cheapKey() -> CheapKey {
         var windows: [String: WindowEntry] = [:]
         var workspaceScreens: [String: Int] = [:]
         for window in MacWindow.allWindows {
-            guard let workspace = window.nodeWorkspace else { continue }
-            windows[String(window.windowId)] = WindowEntry(
-                workspace: workspace.name,
-                bundleId: window.macApp.bundleId,
-            )
-            if workspaceScreens[workspace.name] == nil {
-                workspaceScreens[workspace.name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
+            guard let name = rememberedWorkspaceName(of: window) else { continue }
+            windows[String(window.windowId)] = WindowEntry(workspace: name, bundleId: window.macApp.bundleId)
+            if workspaceScreens[name] == nil, let workspace = Workspace.existing(byName: name) {
+                workspaceScreens[name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
             }
         }
-        return CheapKey(windows: windows, workspaceScreens: workspaceScreens)
+        let visible = Workspace.all.filter(\.isVisible)
+        for workspace in visible where workspaceScreens[workspace.name] == nil {
+            workspaceScreens[workspace.name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
+        }
+        return CheapKey(windows: windows, workspaceScreens: workspaceScreens, visibleWorkspaces: visible.map(\.name))
     }
 
     /// The full state. `MonitorFingerprint.fromScreen` is four CoreGraphics round trips per monitor
@@ -255,7 +287,7 @@ enum WorkspaceMemory {
                 }
             }
         }
-        return State(session: session(), windows: key.windows, workspaceMonitors: monitors)
+        return State(session: session(), windows: key.windows, workspaceMonitors: monitors, visibleWorkspaces: key.visibleWorkspaces)
     }
 
     /// The fingerprint of each named workspace's monitor.
@@ -311,6 +343,8 @@ enum WorkspaceMemory {
             key = CheapKey(
                 windows: remembered.windows.merging(key.windows) { _, new in new },
                 workspaceScreens: key.workspaceScreens,
+                // What a cold start shows until `restoreVisibleWorkspaces` runs is not worth remembering.
+                visibleWorkspaces: remembered.visibleWorkspaces ?? key.visibleWorkspaces,
             )
         }
         guard key != lastWritten else { return }

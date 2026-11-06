@@ -15,12 +15,7 @@ struct MoveWorkspaceToMonitorCommand: Command {
                     return true
                 }
                 if targetMonitor.setActiveWorkspace(focusedWorkspace) {
-                    let stubWorkspace = getStubWorkspace(for: prevMonitor)
-                    check(
-                        prevMonitor.setActiveWorkspace(stubWorkspace),
-                        "getStubWorkspace generated incompatible stub workspace (\(stubWorkspace)) for the monitor (\(prevMonitor)",
-                    )
-                    return true
+                    return true // the monitor it was visible on, if any, got its stub in there
                 } else {
                     return io.err(
                         "Can't move workspace '\(focusedWorkspace.name)' to monitor '\(targetMonitor.name)'. workspace-to-monitor-force-assignment doesn't allow it",

@@ -117,7 +117,10 @@ struct FocusCommand: Command {
     defer {
         mruBefore?.markAsMostRecentChild()
     }
-    var _floatingWindows: [FloatingWindowData] = []
+    // Everything that awaits comes first, and the tree is only touched after it. Unbinding along the way
+    // left the earlier windows detached when a later read threw, and a detached window crashes later on
+    // "already unbound".
+    var _targets: [(window: Window, center: CGPoint, parent: TilingContainer, index: Int)] = []
     for window in workspace.floatingWindows {
         let center = try await window.getCenter() // todo bug: we shouldn't access ax api here. What if the window was moved but it wasn't committed to ax yet?
         guard let center else { continue }
@@ -129,15 +132,15 @@ struct FocusCommand: Command {
         let index = center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
             ? target.ownIndex.orDie() + 1
             : target.ownIndex.orDie()
-        let data = window.unbindFromParent()
-        _floatingWindows.append(FloatingWindowData(window: window, center: center, parent: tilingParent, adaptiveWeight: data.adaptiveWeight, index: index))
+        _targets.append((window, center, tilingParent, index))
     }
-    let floatingWindows: [FloatingWindowData] = _floatingWindows.sortedBy { $0.center.getProjection($0.parent.orientation) }.reversed()
 
-    for floating in floatingWindows { // Make floating windows be seen as tiling
-        floating.window.bind(to: floating.parent, adaptiveWeight: 1, index: floating.index)
+    // Make floating windows be seen as tiling
+    return _targets.sortedBy { $0.center.getProjection($0.parent.orientation) }.reversed().map { target in
+        let data = target.window.unbindFromParent()
+        target.window.bind(to: target.parent, adaptiveWeight: 1, index: target.index)
+        return FloatingWindowData(window: target.window, center: target.center, parent: target.parent, adaptiveWeight: data.adaptiveWeight, index: target.index)
     }
-    return floatingWindows
 }
 
 @MainActor private func restoreFloatingWindows(floatingWindows: [FloatingWindowData], workspace: Workspace) {

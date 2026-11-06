@@ -10,7 +10,12 @@ struct SummonWorkspaceCommand: Command {
         if monitor.activeWorkspace == workspace {
             return handleNoop("Workspace '\(workspace.name)' is already visible on the focused monitor.", failIfNoop: args.failIfNoop, io: io)
         }
+        let displaced = monitor.activeWorkspace
+        let vacated = workspace.isVisible ? workspace.workspaceMonitor : nil
         if monitor.setActiveWorkspace(workspace) {
+            // The two trade monitors, so nothing that was on screen disappears. A force-assigned
+            // `displaced` can't go there; the stub `setActiveWorkspace` put there then stays.
+            if let vacated { _ = vacated.setActiveWorkspace(displaced) }
             return workspace.focusWorkspace()
         } else {
             return io.err("Can't move workspace '\(workspace.name)' to monitor '\(monitor.name)'. workspace-to-monitor-force-assignment doesn't allow it")

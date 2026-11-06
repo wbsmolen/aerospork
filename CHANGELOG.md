@@ -10,6 +10,13 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - A window that an app won't shrink to fit its tile no longer spills over its neighbours or onto the next monitor. AeroSpork learns the smallest size the app accepts, gives it that, and shrinks the other tiles to make room. If the minimums can't all fit, each window is kept on its own monitor.
 - A window the system draws fully transparent no longer takes up an empty tile. It is set aside after a second and comes back to the tiling once it is visible again.
 - On quit, a window from a hidden workspace goes back to its workspace's monitor instead of the monitor it was parked against.
+- A restart keeps your arrangement. Each monitor comes back showing the workspace it showed, not just the focused one, and an app that answers slowly after a restart gets its windows back on the right workspace instead of the focused one. Minimized windows are remembered too.
+- Startup no longer switches the first workspace to accordion when it holds more than three windows. `default-root-container-layout` decides.
+- When two monitors trade places, each workspace stays with its physical monitor.
+- `summon-workspace` from another monitor trades the two workspaces, and no longer leaves that monitor empty, which could shuffle every monitor.
+- `move-workspace-to-monitor` on a hidden workspace no longer replaces what its old monitor is showing.
+- A window that first looked like a popup goes to the workspace it appeared on, even if you have switched away by the time it is recognized.
+- `close` on a window that asks about unsaved changes no longer turns it into a new window on the focused workspace with its rules run again.
 
 ### Responsiveness
 
@@ -24,6 +31,9 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - AeroSpork no longer quits when a CLI command is interrupted (Ctrl-C, or a status-bar timeout) before the reply arrives.
 - Un-fullscreening or un-minimizing a window can no longer be cancelled by the layout pass that follows it.
 - The first wake after launch no longer rebalances workspaces across monitors as if the displays had changed.
+- `move --window-id N --boundaries all-monitors-outer-frame` moves window N, not the focused window.
+- A monitor fingerprint that names a display no longer skips its `width` and `height`, so two panels with the same name can be told apart by size.
+- `focus` can no longer leave floating windows detached, which could crash the app later, if a window stops answering partway through.
 
 ## 1.2.0 (2026-09-13)
 

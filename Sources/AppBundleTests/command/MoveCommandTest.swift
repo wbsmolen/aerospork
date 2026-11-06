@@ -6,6 +6,29 @@ import XCTest
 final class MoveCommandTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
+    /// `--window-id` was dropped on the way to `move-node-to-monitor`, so the focused window moved instead.
+    func testMoveAcrossMonitorsMovesTheWindowItWasToldTo() async throws {
+        let left = Rect(topLeftX: 0, topLeftY: 0, width: 1000, height: 1000)
+        let right = Rect(topLeftX: 1000, topLeftY: 0, width: 1000, height: 1000)
+        testMonitors = [
+            MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "left", rect: left, visibleRect: left),
+            MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "right", rect: right, visibleRect: right),
+        ]
+        defer { testMonitors = [defaultTestMonitor] }
+        let (a, b) = (Workspace.get(byName: "a"), Workspace.get(byName: "b"))
+        check(testMonitors[0].setActiveWorkspace(a))
+        check(testMonitors[1].setActiveWorkspace(b))
+        let focused = TestWindow.new(id: 1, parent: a.rootTilingContainer)
+        let other = TestWindow.new(id: 2, parent: a.rootTilingContainer)
+        assertEquals(focused.focusWindow(), true)
+
+        let result = try await parseCommand("move --window-id 2 --boundaries all-monitors-outer-frame right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        assertEquals(other.nodeWorkspace?.name, "b")
+        assertEquals(focused.nodeWorkspace?.name, "a")
+    }
+
     func testMove_swapWindows() async throws {
         let root = Workspace.get(byName: name).rootTilingContainer.apply {
             assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)

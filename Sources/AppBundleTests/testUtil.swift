@@ -49,6 +49,7 @@ func setUpWorkspacesForTests() {
         }
     }
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
+    gcMonitors() // a multi-monitor test leaves its workspaces visible on monitors that are gone by now
     Workspace.garbageCollectUnusedWorkspaces()
     check(focus.workspace.isEffectivelyEmpty)
     check(focus.workspace === Workspace.all.singleOrNil(), Workspace.all.map(\.description).joined(separator: ", "))
