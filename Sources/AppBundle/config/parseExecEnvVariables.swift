@@ -12,7 +12,8 @@ private let rawExecConfigParser: [String: any ParserProtocol<RawExecConfig>] = [
     "env-vars": Parser(\.overriddenVars, parseEnvVariables),
 ]
 
-let defaultOverriddenEnvVars = ["PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:\(env["PATH"] ?? "")"]
+/// Never with a trailing `:` for an unset PATH: an empty element means the current directory.
+let defaultOverriddenEnvVars = ["PATH": ["/opt/homebrew/bin", "/opt/homebrew/sbin", env["PATH"] ?? ""].filter { !$0.isEmpty }.joined(separator: ":")]
 
 struct ExecConfig: Equatable {
     var envVariables: [String: String] = env + defaultOverriddenEnvVars

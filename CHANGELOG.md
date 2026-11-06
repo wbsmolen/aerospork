@@ -53,6 +53,9 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - Saving without a change no longer rewrites a file that mixes line endings. Editing such a file in the panes is refused, because it would change every line.
 - A Raw TOML apply that was refused no longer takes effect on the next change in another pane.
 
+- A window rule with no command says so in the pane, since rule changes aren't saved until every rule has one.
+- `%{monitor-fingerprint}` now prints a table you can paste into `[monitors]`, as the docs always said it could. Anything parsing the old `vendor:… name:…` output needs updating.
+
 ### Security and updates
 
 - AeroSpork now asks once whether to check for updates automatically: on the first launch after this update, or the second launch of a new install. A setting told the update framework never to check and never to ask, so you only got an update by choosing **Check for Updates…**.
@@ -63,6 +66,8 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - The CLI and the app each hang up if the other end of the socket is running as a different user.
 - Error dialogs no longer fail to appear when the message contains a backslash, and a message can no longer run as a script.
 - Runtime error reports are written to `~/Library/Logs/com.wbs.aerospork/`, not to a directory in `/tmp` shared with other accounts.
+- A scheduled update alert comes to the front instead of opening unseen behind your windows.
+- Commands run by AeroSpork no longer get a trailing `:` on `PATH`, which means the current directory, when it starts with no `PATH` set.
 - Remembering windows across a restart no longer mistakes another process named WindowServer for the real one, or gives up if the process list grows while it reads it.
 
 ## 1.2.0 (2026-09-13)

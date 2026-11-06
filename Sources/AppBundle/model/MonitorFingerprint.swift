@@ -107,27 +107,17 @@ struct MonitorFingerprint: Equatable, Hashable, Codable {
         return true
     }
 
+    /// Pastes straight into `[monitors]`, as `1 = <this>`.
     var description: String {
+        func quoted(_ s: String) -> String { "\"" + s.replacing("\\", with: "\\\\").replacing("\"", with: "\\\"") + "\"" }
         var parts: [String] = []
-        if let vendorID {
-            parts.append("vendor:\(String(format: "0x%04X", vendorID))")
-        }
-        if let modelID {
-            parts.append("model:\(String(format: "0x%04X", modelID))")
-        }
-        if let serialNumber, !serialNumber.isEmpty {
-            parts.append("serial:\(serialNumber)")
-        }
-        if let displayName {
-            parts.append("name:\(displayName)")
-        }
-        if let widthPixels, let heightPixels {
-            parts.append("resolution:\(widthPixels)x\(heightPixels)")
-        }
-        if let displayUUID {
-            parts.append("uuid:\(displayUUID)")
-        }
-        return parts.joined(separator: " ")
+        if let vendorID { parts.append("vendor_id = \(quoted(String(format: "0x%04X", vendorID)))") }
+        if let modelID { parts.append("model_id = \(quoted(String(format: "0x%04X", modelID)))") }
+        if let serialNumber, !serialNumber.isEmpty { parts.append("serial_number = \(quoted(serialNumber))") }
+        if let displayName { parts.append("display_name = \(quoted(displayName))") }
+        if let widthPixels, let heightPixels { parts.append("width_pixels = \(widthPixels), height_pixels = \(heightPixels)") }
+        if let displayUUID { parts.append("uuid = \(quoted(displayUUID))") }
+        return "{ " + parts.joined(separator: ", ") + " }"
     }
 }
 

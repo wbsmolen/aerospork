@@ -43,7 +43,7 @@ extension [AeroObj] {
                         curCellParts.append(literal)
                     case .interVar(let value):
                         switch value.expandFormatVar(obj: obj) {
-                            case .success(let expanded): curCellParts.append(expanded.toString())
+                            case .success(let expanded): curCellParts.append(expanded.scalarDescription ?? "")
                             case .failure(let error): errors.append(error)
                         }
                 }
@@ -107,36 +107,6 @@ enum FormatVar: Equatable {
     }
 }
 
-enum Primitive: Encodable {
-    case bool(Bool)
-    case int(Int)
-    case int32(Int32)
-    case uint32(UInt32)
-    case string(String)
-
-    func toString() -> String {
-        switch self {
-            case .bool(let x): x.description
-            case .int(let x): x.description
-            case .int32(let x): x.description
-            case .uint32(let x): x.description
-            case .string(let x): x
-        }
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        let value: Encodable = switch self {
-            case .bool(let x): x
-            case .int(let x): x
-            case .int32(let x): x
-            case .uint32(let x): x
-            case .string(let x): x
-        }
-        var container = encoder.singleValueContainer()
-        try container.encode(value)
-    }
-}
-
 private func getAvailableInterVars(for kind: AeroObjKind) -> [String] {
     _getAvailableInterVars(for: kind) + PlainInterVar.allCases.map(\.rawValue)
 }
@@ -162,7 +132,7 @@ private struct Cell<T> {
 
 extension String {
     @MainActor
-    func expandFormatVar(obj: AeroObj) -> Result<Primitive, String> {
+    func expandFormatVar(obj: AeroObj) -> Result<Json, String> {
         let formatVar = self.toFormatVar()
         switch (obj, formatVar) {
             case (_, .none): break
@@ -231,7 +201,7 @@ extension String {
                 return switch f {
                     case .appBundleId: .success(.string(a.bundleId ?? "NULL-APP-BUNDLE-ID"))
                     case .appName: .success(.string(a.name ?? "NULL-APP-NAME"))
-                    case .appPid: .success(.int32(a.pid))
+                    case .appPid: .success(.int(Int(a.pid)))
                     case .appExecPath: .success(.string(a.execPath ?? "NULL-APP-EXEC-PATH"))
                     case .appBundlePath: .success(.string(a.bundlePath ?? "NULL-APP-BUNDLE-PATH"))
                 }

@@ -23,7 +23,7 @@ final class ClientServerTest: XCTestCase {
         let data = try! encoder.encode(ClientRequest(args: ["args"], stdin: "stdin"))
         let str = String.init(data: data, encoding: .utf8)!
         assertEquals(str, """
-            {"args":["args"],"command":"args","stdin":"stdin"}
+            {"args":["args"],"stdin":"stdin"}
             """)
     }
 }
