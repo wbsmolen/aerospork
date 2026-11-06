@@ -4,6 +4,7 @@ import Common
 final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
+    let registeredAt = Date()
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -56,11 +57,16 @@ final class MacWindow: Window {
         // A window that arrives looking like a popup is re-checked by `validateStillPopups` -- but only
         // when something refreshes, and an app still drawing its first window (Electron) may send
         // nothing more. Two bounded looks, so it is laid out and its rules run without a click (#40).
-        if case .macosPopupWindowsContainer = window.parent?.cases {
-            scheduleFollowUpRefresh(after: 1, "popupRecheck")
-            scheduleFollowUpRefresh(after: 3, "popupRecheck")
+        if window.isPopup {
+            scheduleFollowUpRefresh(after: 1, "popupRecheck") { window.isPopup }
+            scheduleFollowUpRefresh(after: 3, "popupRecheck") { window.isPopup }
         }
         return window
+    }
+
+    @MainActor
+    private var isPopup: Bool {
+        if case .macosPopupWindowsContainer = parent?.cases { true } else { false }
     }
 
     @MainActor

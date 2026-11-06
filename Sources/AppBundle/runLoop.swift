@@ -1,5 +1,6 @@
 import Common
 import Foundation
+import os
 
 extension Thread {
     @discardableResult
@@ -56,14 +57,10 @@ private final class RunLoopAction: NSObject, Sendable {
 }
 
 final class RunLoopJob: Sendable, AeroAny {
-    // Alternative 1. In macOS 15, it's possible to use `Atomic<Bool>` from `Synchronization` module
-    // Alternative 2. https://github.com/apple/swift-atomics/tree/main but I don't want to add one more dependency just for
-    //                AtomicBool
-    private nonisolated(unsafe) var _isCancelled: Int32 = 0
-    var isCancelled: Bool { _isCancelled == 1 }
-    /// One CAS. The `while !isCancelled` loop this replaces could never spin: the only transition is
-    /// 0 -> 1, so either the CAS wins or the value was already 1, and both exit on the next test.
-    func cancel() { _ = OSAtomicCompareAndSwapInt(0, 1, &_isCancelled) }
+    // `Atomic<Bool>` from `Synchronization` needs macOS 15. An unfair lock costs the same when uncontended.
+    private let _isCancelled = OSAllocatedUnfairLock(initialState: false)
+    var isCancelled: Bool { _isCancelled.withLock { $0 } }
+    func cancel() { _isCancelled.withLock { $0 = true } }
 
     static let cancelled: RunLoopJob = RunLoopJob().also { $0.cancel() }
 

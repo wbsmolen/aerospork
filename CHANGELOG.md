@@ -11,9 +11,19 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - A window the system draws fully transparent no longer takes up an empty tile. It is set aside after a second and comes back to the tiling once it is visible again.
 - On quit, a window from a hidden workspace goes back to its workspace's monitor instead of the monitor it was parked against.
 
+### Responsiveness
+
+- Much lower idle CPU. A refresh no longer asks the system about every running process, which was most of what AeroSpork did while idle.
+- Fewer refreshes. A command used to be followed at once by a second full pass; now it is one, coalesced with whatever else happened.
+- A steady stream of window events can no longer keep restarting a refresh so that none ever finishes.
+- Two fast hotkeys now run strictly in order, so the first can no longer push a stale focus after the second.
+- Reading window state takes fewer round trips to each app, and moving or resizing windows ourselves no longer costs an extra read per notification.
+
 ### Reliability
 
 - AeroSpork no longer quits when a CLI command is interrupted (Ctrl-C, or a status-bar timeout) before the reply arrives.
+- Un-fullscreening or un-minimizing a window can no longer be cancelled by the layout pass that follows it.
+- The first wake after launch no longer rebalances workspaces across monitors as if the displays had changed.
 
 ## 1.2.0 (2026-09-13)
 

@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-/// The subscription is active as long as you keep this class in memory
+/// One element's notifications on its app's observer. Active as long as you keep this class in memory.
 class AxSubscription {
     let obs: AXObserver
     let ax: AXUIElement
@@ -14,41 +14,29 @@ class AxSubscription {
         self.ax = ax
     }
 
-    private func subscribe(_ key: String, _ job: RunLoopJob) throws -> Bool {
-        axThreadToken.checkEquals(axTaskLocalAppThreadToken)
-        if AXObserverAddNotification(obs, ax, key as CFString, nil) == .success {
-            notifKeys.insert(key)
-            return true
-        } else {
-            return false
+    /// All of `keys`, or nil. Partly subscribed, `deinit` takes back what did succeed.
+    static func subscribe(_ obs: AXObserver, _ ax: AXUIElement, _ keys: [String]) -> AxSubscription? {
+        let subscription = AxSubscription(obs: obs, ax: ax)
+        for key in keys {
+            if AXObserverAddNotification(obs, ax, key as CFString, nil) != .success { return nil }
+            subscription.notifKeys.insert(key)
         }
-    }
-
-    static func bulkSubscribe(_ nsApp: NSRunningApplication, _ ax: AXUIElement, _ job: RunLoopJob, _ handlerToNotifKeyMapping: HandlerToNotifKeyMapping) throws -> [AxSubscription] {
-        var result: [AxSubscription] = []
-        var visitedNotifKeys: Set<String> = []
-        for (handler, notifKeys) in handlerToNotifKeyMapping {
-            try job.checkCancellation()
-            guard let obs = AXObserver.new(nsApp.processIdentifier, handler) else { return [] }
-            let subscription = AxSubscription(obs: obs, ax: ax)
-            for key: String in notifKeys {
-                try job.checkCancellation()
-                assert(visitedNotifKeys.insert(key).inserted)
-                if try !subscription.subscribe(key, job) { return [] }
-            }
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(obs), .defaultMode)
-            result.append(subscription)
-        }
-        return result
+        return subscription
     }
 
     deinit {
         axThreadToken.checkEquals(axTaskLocalAppThreadToken)
-        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(obs), .defaultMode)
         for notifKey in notifKeys {
             AXObserverRemoveNotification(obs, ax, notifKey as CFString)
         }
     }
 }
 
-typealias HandlerToNotifKeyMapping = [(AXObserverCallback, [String])]
+/// The one callback of every app's one observer.
+func axNotified(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: UnsafeMutableRawPointer?) {
+    switch notif as String {
+        case kAXMovedNotification: movedObs(obs, ax: ax, notif: notif, data: data)
+        case kAXResizedNotification: resizedObs(obs, ax: ax, notif: notif, data: data)
+        default: refreshObs(obs, ax: ax, notif: notif, data: data)
+    }
+}
