@@ -35,6 +35,16 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - A monitor fingerprint that names a display no longer skips its `width` and `height`, so two panels with the same name can be told apart by size.
 - `focus` can no longer leave floating windows detached, which could crash the app later, if a window stops answering partway through.
 
+### Config and Settings
+
+- A binding added or removed in Raw TOML is no longer undone by the next change in another pane, and the other panes show what Raw TOML applied.
+- A window rule still waiting for its command no longer loses other rule edits made alongside it. They are all written once that rule has a command.
+- `mode <name>` fails when the config has no such mode, instead of leaving no hotkeys registered. A reload that removes the mode you are in goes back to `main`.
+- Converting a config from v1 to v2 happens once at startup. `reload-config --dry-run` and Settings saves no longer rewrite the file that way.
+- Settings keeps one backup each time it is opened, plus one per Raw TOML apply. Autosave used to rotate all five backups out within seconds.
+- A hotkey that can't be registered, usually because another app owns it, is recorded in the log.
+- `start-at-login` only asks macOS to change something when it needs changing, instead of on every reload.
+
 ## 1.2.0 (2026-09-13)
 
 Fixes focus moving to another window when an app is slow to respond ([#39](https://github.com/wbsmolen/aerospork/issues/39)), and several problems with configs migrated from AeroSpace ([#40](https://github.com/wbsmolen/aerospork/issues/40)).

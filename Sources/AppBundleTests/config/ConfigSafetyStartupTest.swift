@@ -1,5 +1,6 @@
 @testable import AppBundle
 import Common
+import ServiceManagement
 import XCTest
 
 /// A broken config makes the app start on the BUNDLED DEFAULT — every binding the user wrote is
@@ -50,6 +51,28 @@ final class ConfigSafetyStartupTest: XCTestCase {
         configLoadFailure = "Failed to parse ~/.aerospork.toml"
         _ = readConfig(forceConfigUrl: defaultConfigUrl)
         assertEquals(configLoadFailure, "Failed to parse ~/.aerospork.toml")
+    }
+
+    /// The migration rewrites the user's file, so it belongs to startup. Inside `readConfig` it also
+    /// ran for `reload-config --dry-run`, which promises to change nothing, and every Settings save.
+    func testTheV2MigrationRunsOnceAtStartupAndNotOnEveryRead() throws {
+        let read = try sourceBody("func readConfig(", in: "Sources/AppBundle/config/parseConfig.swift", length: 1500)
+        XCTAssertFalse(read.contains("migrateUserConfigToV2IfNeeded"))
+        let start = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift", length: 3000)
+        let migrate = try XCTUnwrap(start.range(of: "migrateUserConfigToV2IfNeeded()"))
+        let firstLoad = try XCTUnwrap(start.range(of: "reloadConfig()"))
+        XCTAssertLessThan(migrate.lowerBound, firstLoad.lowerBound)
+    }
+
+    /// A settings save reloads the config, so this runs on every save.
+    func testStartAtLoginOnlyCallsTheSystemWhenTheAnswerChanges() {
+        XCTAssertFalse(startAtLoginNeedsChange(wanted: true, status: .enabled))
+        XCTAssertFalse(startAtLoginNeedsChange(wanted: true, status: .requiresApproval), "would ask for approval again")
+        XCTAssertFalse(startAtLoginNeedsChange(wanted: false, status: .notRegistered))
+        XCTAssertFalse(startAtLoginNeedsChange(wanted: false, status: .notFound))
+        XCTAssertTrue(startAtLoginNeedsChange(wanted: true, status: .notRegistered))
+        XCTAssertTrue(startAtLoginNeedsChange(wanted: false, status: .enabled))
+        XCTAssertTrue(startAtLoginNeedsChange(wanted: false, status: .requiresApproval))
     }
 
     /// The watcher must follow the file the USER edits. Watching `configUrl` meant that after a

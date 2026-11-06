@@ -64,7 +64,7 @@ enum ConfigurationWriter {
         }
 
         let existed = FileManager.default.fileExists(atPath: target.path)
-        if existed { backUp(target) }
+        if existed { backUpOncePerSession(target) }
         ConfigFileWatcher.suppressNextSelfWrite()
         try result.write(to: target, atomically: true, encoding: .utf8)
         // The watcher bails when the file doesn't exist, and only re-arms from its own event
@@ -93,6 +93,21 @@ enum ConfigurationWriter {
     }()
 
     private static func timestamp(_ date: Date) -> String { backupTimestampFormatter.string(from: date) }
+
+    private static var sessionHasBackup = false
+
+    /// Called when Settings opens, and by a Raw TOML apply, which is a deliberate change of its own.
+    ///
+    /// Autosave writes every 600ms, so one backup per write turned five generations into the last few
+    /// seconds of one slider drag, and the config from before Settings opened was gone by the time
+    /// anyone wanted it.
+    static func startBackupSession() { sessionHasBackup = false }
+
+    static func backUpOncePerSession(_ target: URL, now: Date = Date()) {
+        guard !sessionHasBackup else { return }
+        sessionHasBackup = true
+        backUp(target, now: now)
+    }
 
     /// Copies `target` aside and prunes to `backupsToKeep`. Best-effort: a config we could not back
     /// up is not a reason to refuse the user's edit, and the pre-write validation already ran.
@@ -166,7 +181,10 @@ enum ConfigurationWriter {
         if vm.keyMappingEdited { replaceKeyMapping(&lines, vm) }
         if vm.execEdited { replaceExec(&lines, vm) }
         if vm.windowRulesEdited { replaceWindowRules(&lines, vm, isV2: isV2(base)) }
-        applyBindingDiff(&lines, vm, base: base)
+        // Guarded like every other section. It used to run on every save, so a binding the Raw TOML
+        // tab had added was missing from the view model, read as deleted, and removed by the next
+        // unrelated toggle.
+        if vm.bindingsEdited { applyBindingDiff(&lines, vm, base: base) }
 
         // Give the file back the line ending and the trailing newline it arrived with.
         //
@@ -439,16 +457,13 @@ enum ConfigurationWriter {
         //
         // Nothing is lost by waiting: the rules on disk keep working, and the edit lands as soon as
         // the command is complete.
-        guard vm.windowRules.allSatisfy({ !$0.run.trimmingCharacters(in: .whitespaces).isEmpty }) else { return }
+        guard !vm.windowRules.contains(where: \.hasNoCommand) else { return }
 
         removeArrayOfTables(&lines, named: "on-window-detected")
         // The shorthand table too. Removing only the long form left a v2 user's `[on-window]` rules
         // in the file alongside the long-form copy this writes, so every one of them applied twice.
         removeSections(&lines) { $0 == "on-window" }
-        // A rule with no `run` yet is one the user is still filling in (the natural order is
-        // matcher first, command second). It is skipped here because `run` is required by the
-        // parser -- but the row is NOT dropped from the view model, so it stays on screen.
-        let rules = vm.windowRules.filter { !$0.run.trimmingCharacters(in: .whitespaces).isEmpty }
+        let rules = vm.windowRules
 
         // Keep a config that was written in the v2 shorthand in the v2 shorthand, but only when
         // EVERY rule fits it and no app id repeats. Anything else is written long form.

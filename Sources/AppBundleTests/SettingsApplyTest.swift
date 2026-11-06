@@ -64,6 +64,58 @@ final class SettingsApplyTest: XCTestCase {
         XCTAssertFalse(parsed.enableNormalizationOppositeOrientationForNestedContainers)
     }
 
+    /// A binding added in Raw TOML is not in a view model that has not re-read the file, and the next
+    /// unrelated toggle used to read that as a deletion.
+    func testABindingAddedInRawTomlSurvivesTheNextUnrelatedToggle() {
+        let vm = ConfigurationViewModel()
+        vm.loadBindings(fromText: "[mode.main.binding]\nalt-h = 'focus left'\n")
+        vm.markLoaded()
+        vm.accordionPadding = 42
+
+        let fileAfterApply = "[mode.main.binding]\nalt-h = 'focus left'\nalt-j = 'focus down'\n"
+        XCTAssertTrue(ConfigurationWriter.render(baseText: fileAfterApply, from: vm).contains("alt-j"))
+    }
+
+    func testAnAppliedRawTomlIsReadBackByTheOtherPanes() throws {
+        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift", length: 5000)
+        XCTAssertTrue(body.contains("if rawTomlApplyRequested { reloadFromConfig() }"))
+    }
+
+    /// A refused Apply must not leave the buffer armed for the next toggle's autosave.
+    func testARefusedApplyDoesNotStayRequested() async {
+        let vm = ConfigurationViewModel()
+        vm.rawToml = "totally-unknown-key = 1\n"
+        vm.rawTomlApplyRequested = true
+        await vm.saveConfiguration()
+        XCTAssertNotNil(vm.errorMessage)
+        XCTAssertFalse(vm.rawTomlApplyRequested)
+    }
+
+    /// A half-filled rule holds every rule back, and recording that as saved lost the other edit: the
+    /// view model believed the file had it, so nothing ever wrote it.
+    func testARuleEditHeldBackByAHalfFilledRuleStaysPending() {
+        let base = "mod = 'alt'\n\n[on-window]\n\"com.apple.finder\" = 'move-node-to-workspace 3'\n"
+        let vm = ConfigurationViewModel()
+        vm.loadWindowRules(fromText: base)
+        vm.markLoaded()
+        vm.windowRules[0].run = "move-node-to-workspace 4"
+        vm.windowRules.append(.init(appId: "com.apple.mail", run: ""))
+
+        let held = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertFalse(held.contains("workspace 4"), "the writer holds the whole section back")
+        vm.markSaved(held)
+        XCTAssertTrue(vm.windowRulesEdited, "the edit was recorded as saved")
+        XCTAssertTrue(vm.hasUnsavedChanges)
+
+        vm.windowRules[1].run = "layout floating"
+        let out = ConfigurationWriter.render(baseText: held, from: vm)
+        XCTAssertTrue(out.contains("workspace 4"), out)
+        XCTAssertTrue(out.contains("layout floating"), out)
+        vm.markSaved(out)
+        XCTAssertFalse(vm.windowRulesEdited)
+        XCTAssertFalse(vm.hasUnsavedChanges)
+    }
+
     /// The pending save is attempted rather than dropped. The view model is put in a state that its
     /// guards refuse before writing anything -- this test must never touch the real config file.
     func testClosingTheWindowAttemptsAPendingSaveInsteadOfDroppingIt() async {

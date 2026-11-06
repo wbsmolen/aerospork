@@ -581,11 +581,9 @@ final class ConfigTest: XCTestCase {
                 alt-h = 'focus left'
             """
         let vm = ConfigurationViewModel()
-        vm.modes = [.init(mode: "main", bindings: [
-            .init(key: "alt-h", command: "focus left"),
-            .init(key: "alt-r", command: "flatten-workspace-tree\(ConfigurationViewModel.commandSeparator)mode main"),
-        ])]
+        vm.modes = [.init(mode: "main", bindings: [.init(key: "alt-h", command: "focus left")])]
         vm.markLoaded()
+        vm.modes[0].bindings.append(.init(key: "alt-r", command: "flatten-workspace-tree\(ConfigurationViewModel.commandSeparator)mode main"))
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("alt-r = ['flatten-workspace-tree', 'mode main']"), "expected a TOML array:\n\(out)")

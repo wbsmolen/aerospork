@@ -2,10 +2,13 @@ import AppKit
 import Common
 import ServiceManagement
 
+/// Runs on every config reload, and a settings save is a reload, so it only talks to the system when
+/// the answer changes. `.requiresApproval` already counts as registered: registering again would ask
+/// the user a second time.
 @MainActor
 func syncStartAtLogin() {
-    cleanupPlistFromPrevVersions()
     let service = SMAppService.mainApp
+    guard startAtLoginNeedsChange(wanted: config.startAtLogin, status: service.status) else { return }
     if config.startAtLogin {
         _ = try? service.register()
     } else {
@@ -13,20 +16,6 @@ func syncStartAtLogin() {
     }
 }
 
-/// Removes launch agents written by pre-`SMAppService` builds. They are not managed by
-/// `SMAppService`, so leaving one behind means the app launches at login even after the user turns
-/// `start-at-login` off.
-///
-/// Droppable once no installation that ever wrote `com.bsmolen.aerospork.plist` or
-/// `com.wbs.aerospork.plist` can still be upgraded from -- neither bundle id has been shipped since
-/// the AeroSpork rename, so this is dead weight for anyone installing today.
-private func cleanupPlistFromPrevVersions() {
-    let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser.appending(component: "Library/LaunchAgents/")
-    Result { try FileManager.default.createDirectory(at: launchAgentsDir, withIntermediateDirectories: true) }.getOrDie()
-    // Clean up old AeroSpork plist files
-    let oldUrls: [URL] = [
-        launchAgentsDir.appending(path: "com.bsmolen.aerospork.plist"),
-        launchAgentsDir.appending(path: "com.wbs.aerospork.plist"),
-    ]
-    oldUrls.forEach { try? FileManager.default.removeItem(at: $0) }
+func startAtLoginNeedsChange(wanted: Bool, status: SMAppService.Status) -> Bool {
+    wanted != (status == .enabled || status == .requiresApproval)
 }

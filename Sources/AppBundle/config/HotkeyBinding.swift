@@ -88,6 +88,9 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
 
 @MainActor var activeMode: String? = mainModeId
 @MainActor func activateMode(_ targetMode: String?) {
+    // A reload can drop the mode you are in. Staying "in" it registers no hotkeys at all, which
+    // includes the one that would get you out. nil is different: it is `enable off`, and stays.
+    let targetMode = targetMode.map { config.modes[$0] == nil ? mainModeId : $0 }
     resetHotKeys()
     installHotKeyEventHandlerIfNeeded()
     let targetBindings = targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
@@ -110,7 +113,9 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
                 notation: binding.descriptionWithKeyNotation,
             )
         } else {
-            debugLog("HOTKEY: Failed to register \(binding.descriptionWithKeyNotation) (status \(status))")
+            // Not `debugLog`: its records are not persisted, and "this one key does nothing" is what
+            // a bug report asks about after the fact. Usually another app owns the shortcut.
+            AppLog.config.error("Hotkey \(binding.descriptionWithKeyNotation, privacy: .public) not registered (status \(status, privacy: .public))")
         }
     }
     activeMode = targetMode
@@ -137,6 +142,7 @@ struct HotkeyBinding: Equatable, Sendable {
         lhs.modifiers == rhs.modifiers &&
             lhs.keyCode == rhs.keyCode &&
             lhs.descriptionWithKeyCode == rhs.descriptionWithKeyCode &&
+            lhs.commands.count == rhs.commands.count && // `zip` stops at the shorter list
             zip(lhs.commands, rhs.commands).allSatisfy { $0.equals($1) }
     }
 }

@@ -21,11 +21,9 @@ import TOMLKit
     return migrated
 }
 
-/// Converts the user's config in place, once, keeping the original as `<name>.pre-v2`.
-///
-/// Called from `readConfig` rather than a dedicated startup hook: that covers `reload-config` and
-/// the hot-reload path for free, and it is a no-op from the second call onwards because the file is
-/// v2 by then.
+/// Converts the user's config in place, once, keeping the original as `<name>.pre-v2`. Called from
+/// `initAppBundle` before the first load, so a v1 file dropped in while the app runs keeps working
+/// as v1 until the next launch.
 @MainActor func migrateUserConfigToV2IfNeeded() {
     // A test suite that rewrites the config of the machine it runs on is a bug report waiting to
     // happen -- and under `swift test` this resolves to the DEVELOPER'S own ~/.aerospork-debug.toml.

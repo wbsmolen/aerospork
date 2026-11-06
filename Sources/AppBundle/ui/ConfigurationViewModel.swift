@@ -131,12 +131,13 @@ final class ConfigurationViewModel: ObservableObject {
         var execEnvVars: [EnvVarRow] = []
         var windowRules: [WindowRuleRow] = []
         var rawToml = ""
-        var modeNames: Set<String> = []
+        var modes: [ModeBindings] = []
     }
 
     var keyMappingEdited: Bool { keyMappingPreset != loaded.keyMappingPreset }
     var execEdited: Bool { execInheritEnvVars != loaded.execInheritEnvVars || execEnvVars != loaded.execEnvVars }
     var windowRulesEdited: Bool { windowRules != loaded.windowRules }
+    var bindingsEdited: Bool { modes != loaded.modes }
     var rawTomlEdited: Bool { rawToml != loaded.rawToml }
 
     /// Callback lists that changed, as `(config key, commands)`. Empty lists are still emitted when
@@ -190,16 +191,18 @@ final class ConfigurationViewModel: ObservableObject {
         return out
     }
 
-    struct ModeBindings: Identifiable {
+    struct ModeBindings: Identifiable, Equatable {
         let id = UUID()
         var mode: String
         var bindings: [BindingRow]
+        static func == (a: ModeBindings, b: ModeBindings) -> Bool { a.mode == b.mode && a.bindings == b.bindings }
     }
 
-    struct BindingRow: Identifiable {
+    struct BindingRow: Identifiable, Equatable {
         let id = UUID()
         var key: String
         var command: String
+        static func == (a: BindingRow, b: BindingRow) -> Bool { a.key == b.key && a.command == b.command }
     }
 
     /// Where a displayed binding comes from, ordered by the layering `parseConfigV2` applies:
@@ -287,6 +290,8 @@ final class ConfigurationViewModel: ObservableObject {
         /// that fires for every window forever.
         var duringStartup: Bool?
 
+        var hasNoCommand: Bool { run.trimmingCharacters(in: .whitespaces).isEmpty }
+
         static func == (a: WindowRuleRow, b: WindowRuleRow) -> Bool {
             a.appId == b.appId && a.appNameRegex == b.appNameRegex &&
                 a.windowTitleRegex == b.windowTitleRegex && a.workspace == b.workspace &&
@@ -300,6 +305,7 @@ final class ConfigurationViewModel: ObservableObject {
     private var externalReloadObserver: NSObjectProtocol?
 
     func loadConfiguration() async {
+        ConfigurationWriter.startBackupSession()
         reloadFromConfig()
         guard externalReloadObserver == nil else { return }
         // Someone edited the config in an editor while this window is open. Our `loaded` snapshot is
@@ -468,7 +474,7 @@ final class ConfigurationViewModel: ObservableObject {
             execEnvVars: execEnvVars,
             windowRules: windowRules,
             rawToml: rawToml,
-            modeNames: Set(modes.map(\.mode)),
+            modes: modes,
         )
     }
 
@@ -809,7 +815,7 @@ final class ConfigurationViewModel: ObservableObject {
 
     /// Modes present when the config was loaded, so the writer can tell "the user deleted this mode"
     /// from "this view model never loaded any modes" -- the latter must not delete anything.
-    var loadedModeNames: Set<String> { loaded.modeNames }
+    var loadedModeNames: Set<String> { Set(loaded.modes.map(\.mode)) }
 
     // MARK: - Backups
 
@@ -918,7 +924,12 @@ final class ConfigurationViewModel: ObservableObject {
     func saveConfiguration() async {
         guard !isSaving else { return }
         isSaving = true
-        defer { isSaving = false }
+        // Whatever happens. A refused Apply left this set, so the next toggle's autosave wrote the
+        // raw buffer as if Apply had been pressed again.
+        defer {
+            isSaving = false
+            rawTomlApplyRequested = false
+        }
         errorMessage = nil
 
         let base = configBaseText()
@@ -945,6 +956,7 @@ final class ConfigurationViewModel: ObservableObject {
         }
 
         do {
+            if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
             try ConfigurationWriter.write(rendered)
             // The file watcher refreshes after its reload; this save suppresses the watcher for its own
             // write and did not, so a gap, layout or normalization change did nothing on screen until
@@ -956,16 +968,26 @@ final class ConfigurationViewModel: ObservableObject {
             // hook does not fire. Without this, flipping "Show Dock icon" did nothing until the next
             // window event -- which, with the settings window in front, may be a long time.
             syncAppVisibility()
-            rawToml = rendered
-            // Deliberately NOT reloadFromConfig() here. That rebuilds every row as a fresh struct
-            // with a new UUID, which invalidates Table selections and in-flight text-field bindings
-            // -- so a 600ms autosave would yank the row out from under someone mid-edit. The view
-            // model is already the source of this write; re-reading it gains nothing.
-            markLoaded()
-            rawTomlApplyRequested = false
-            hasUnsavedChanges = false
+            // Raw TOML replaced what every other pane is showing, so those panes read it back.
+            if rawTomlApplyRequested { reloadFromConfig() } else { markSaved(rendered) }
         } catch {
             errorMessage = "Failed to save configuration: \(error.localizedDescription)"
         }
+    }
+
+    /// A structured save reached the file.
+    ///
+    /// Deliberately NOT reloadFromConfig(). That rebuilds every row as a fresh struct with a new UUID,
+    /// which invalidates Table selections and in-flight text-field bindings -- so a 600ms autosave
+    /// would yank the row out from under someone mid-edit. The view model is already the source of
+    /// this write; re-reading it gains nothing.
+    func markSaved(_ rendered: String) {
+        rawToml = rendered
+        let rulesOnDisk = loaded.windowRules
+        markLoaded()
+        // A rule with no command yet held every rule back (see `replaceWindowRules`), so they are not
+        // saved, and calling them saved lost any other rule edit made alongside it.
+        if windowRules.contains(where: \.hasNoCommand) { loaded.windowRules = rulesOnDisk }
+        hasUnsavedChanges = windowRulesEdited
     }
 }
