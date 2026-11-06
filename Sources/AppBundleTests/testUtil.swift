@@ -39,7 +39,7 @@ func setUpWorkspacesForTests() {
     config.defaultRootContainerOrientation = .horizontal // Make default layout predictable
 
     // Don't create any bindings and workspaces for tests
-    config.modes = [mainModeId: Mode(name: nil, bindings: [:])]
+    config.modes = [mainModeId: Mode(bindings: [:])]
     config.preservedWorkspaceNames = []
     config.persistentWorkspaces = [] // the bundled default declares 1-9, which would otherwise always exist
 
@@ -113,8 +113,8 @@ extension MoveNodeToWorkspaceCmdArgs {
 extension HotkeyBinding {
     init(_ modifiers: NSEvent.ModifierFlags, _ keyCode: Key, _ commands: [any Command]) {
         let descriptionWithKeyNotation = modifiers.isEmpty
-            ? keyCode.toString()
-            : modifiers.toString() + "-" + keyCode.toString()
+            ? keyCode.rawValue
+            : modifiers.toString() + "-" + keyCode.rawValue
         self.init(modifiers, keyCode, commands, descriptionWithKeyNotation: descriptionWithKeyNotation)
     }
 }

@@ -62,6 +62,29 @@ final class ConfigSafetyBackupTest: XCTestCase {
         assertEquals(ConfigurationWriter.backups(of: config).compactMap { read($0) }, ["good"])
     }
 
+    /// Autosave writes every 600ms. A backup per write rotated all five generations out within
+    /// seconds, so the config from before Settings opened was gone by the time anyone wanted it.
+    func testASettingsSessionKeepsOneBackupHoweverOftenItSaves() throws {
+        try write("before settings opened")
+        ConfigurationWriter.startBackupSession()
+        for i in 0 ..< (ConfigurationWriter.backupsToKeep + 3) {
+            ConfigurationWriter.backUpOncePerSession(config, now: at(i))
+            try write("autosave \(i)")
+        }
+        assertEquals(ConfigurationWriter.backups(of: config).compactMap { read($0) }, ["before settings opened"])
+    }
+
+    /// Reopening Settings, or an explicit Raw TOML apply, is a new generation.
+    func testANewSessionGetsItsOwnBackup() throws {
+        try write("first")
+        ConfigurationWriter.startBackupSession()
+        ConfigurationWriter.backUpOncePerSession(config, now: at(0))
+        try write("second")
+        ConfigurationWriter.startBackupSession()
+        ConfigurationWriter.backUpOncePerSession(config, now: at(1))
+        assertEquals(ConfigurationWriter.backups(of: config).compactMap { read($0) }, ["second", "first"])
+    }
+
     /// Backups must not be mistaken for configs, or `findCustomConfigUrl` starts reporting the
     /// config directory as ambiguous and the app refuses to write at all.
     func testBackupNamesAreNotTomlFiles() throws {

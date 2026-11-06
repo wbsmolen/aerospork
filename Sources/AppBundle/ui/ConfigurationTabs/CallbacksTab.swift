@@ -14,49 +14,47 @@ struct CallbacksTab: View {
                 // The help used to be a grey row *inside* the box, indistinguishable from a
                 // command. Section footers are where macOS puts this, and they stay out of the way.
                 help: "Runs once, after AeroSpork finishes launching. Multiple commands run in order, top to bottom.",
-                keyPath: \.afterStartupCommands,
+                keyPath: \.settings.callbacks.afterStartup,
             )
             commandSection(
                 "Focused workspace changed",
                 icon: "rectangle.on.rectangle",
                 help: "Every workspace switch, including switches within one monitor. `move-mouse window-lazy-center` here is what makes the pointer follow you.",
-                keyPath: \.onFocusedWorkspaceChanged,
+                keyPath: \.settings.callbacks.onFocusedWorkspaceChanged,
             )
             commandSection(
                 "Focused monitor changed",
                 icon: "display.2",
                 help: "Only when focus moves to a different monitor.",
                 placeholder: "move-mouse monitor-lazy-center",
-                keyPath: \.onFocusedMonitorChanged,
+                keyPath: \.settings.callbacks.onFocusedMonitorChanged,
             )
             commandSection(
                 "Focus changed",
                 icon: "scope",
                 help: "Any focus change at all: window, workspace or monitor. Fires the most often — keep it cheap.",
                 placeholder: "move-mouse window-lazy-center",
-                keyPath: \.onFocusChanged,
+                keyPath: \.settings.callbacks.onFocusChanged,
             )
 
             Section {
-                Toggle("Inherit AeroSpork's environment", isOn: viewModel.binding(\.execInheritEnvVars))
-                if viewModel.execInheritEnvVars {
+                Toggle("Inherit AeroSpork's environment", isOn: viewModel.binding(\.settings.exec.inheritEnvVars))
+                if viewModel.settings.exec.inheritEnvVars {
                     SettingsHint("Every command on this page runs with AeroSpork's full environment, including anything sensitive in it. Turn this off and list only what you need below.")
                 }
-                ForEach(viewModel.execEnvVars) { row in
+                ForEach(viewModel.settings.exec.envVars) { row in
                     HStack(spacing: 8) {
                         SettingsField("Variable name", prompt: "PATH", text: envBinding(row.id, \.name))
                             .frame(width: 150)
                         SettingsField("Variable value", prompt: "/opt/homebrew/bin:/opt/homebrew/sbin:${PATH}", text: envBinding(row.id, \.value))
                         IconButton(systemImage: "minus.circle", label: row.name.isEmpty ? "Remove variable" : "Remove “\(row.name)”", role: .destructive) {
-                            viewModel.execEnvVars.removeAll { $0.id == row.id }
-                            viewModel.markAsModified()
+                            viewModel.settings.exec.envVars.removeAll { $0.id == row.id }
                             viewModel.scheduleAutoSave()
                         }
                     }
                 }
                 addButton("Add variable") {
-                    viewModel.execEnvVars.append(.init(name: "", value: ""))
-                    viewModel.markAsModified()
+                    viewModel.settings.exec.envVars.append(.init(name: "", value: ""))
                 }
             } header: {
                 SectionLabel("Environment for exec commands", "terminal")
@@ -83,14 +81,12 @@ struct CallbacksTab: View {
                     SettingsField("Command", prompt: placeholder, text: commandBinding(keyPath, row.id))
                     IconButton(systemImage: "minus.circle", label: row.command.isEmpty ? "Remove command" : "Remove “\(row.command)”", role: .destructive) {
                         viewModel[keyPath: keyPath].removeAll { $0.id == row.id }
-                        viewModel.markAsModified()
                         viewModel.scheduleAutoSave()
                     }
                 }
             }
             addButton("Add command") {
                 viewModel[keyPath: keyPath].append(.init(command: ""))
-                viewModel.markAsModified()
             }
         } header: {
             SectionLabel(title, icon)
@@ -114,7 +110,6 @@ struct CallbacksTab: View {
             set: { newValue in
                 guard let i = viewModel[keyPath: keyPath].firstIndex(where: { $0.id == id }) else { return }
                 viewModel[keyPath: keyPath][i].command = newValue
-                viewModel.markAsModified()
                 viewModel.scheduleAutoSave()
             },
         )
@@ -125,11 +120,10 @@ struct CallbacksTab: View {
         _ field: WritableKeyPath<ConfigurationViewModel.EnvVarRow, String>,
     ) -> Binding<String> {
         Binding(
-            get: { viewModel.execEnvVars.first { $0.id == id }?[keyPath: field] ?? "" },
+            get: { viewModel.settings.exec.envVars.first { $0.id == id }?[keyPath: field] ?? "" },
             set: { newValue in
-                guard let i = viewModel.execEnvVars.firstIndex(where: { $0.id == id }) else { return }
-                viewModel.execEnvVars[i][keyPath: field] = newValue
-                viewModel.markAsModified()
+                guard let i = viewModel.settings.exec.envVars.firstIndex(where: { $0.id == id }) else { return }
+                viewModel.settings.exec.envVars[i][keyPath: field] = newValue
                 viewModel.scheduleAutoSave()
             },
         )

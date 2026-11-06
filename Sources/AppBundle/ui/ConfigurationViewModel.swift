@@ -3,9 +3,8 @@ import Common
 import SwiftUI
 import TOMLKit
 
-/// Backs the settings window. Reads current values from the live `config` (and the raw config text
-/// for key bindings, which can't be losslessly reconstructed from parsed commands), and on save
-/// hands its fields to the comment-preserving `ConfigurationWriter`, then reloads the config.
+/// Backs the settings window. The panes edit `settings`; on save `ConfigurationWriter` turns the
+/// difference from `loaded` into line edits on the file, then the config reloads.
 @MainActor
 final class ConfigurationViewModel: ObservableObject {
     /// DisplayLink docks connect in stages, and Settings can be open while they do. Without this
@@ -24,182 +23,72 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
-    // General
-    @Published var startAtLogin = false
-    @Published var automaticallyUnhideMacosHiddenApps = false
-    @Published var defaultRootContainerLayout = "tiles"
-    @Published var defaultRootContainerOrientation = "auto"
-    @Published var accordionPadding = 30
-    @Published var enableNormalizationFlattenContainers = true
-    @Published var enableNormalizationOppositeOrientation = true
-    @Published var autoMoveWorkspacesOnMonitorConnect = true
-    @Published var showMenuBarIcon = true
-    @Published var showDockIcon = false
+    /// What the panes edit. Everything a save can write lives here.
+    @Published var settings = Settings()
+
+    /// Snapshot of what was loaded, so the writer can tell a real edit from an untouched section.
+    /// `settings` is a lossy projection of the config (per-monitor gaps collapse to their default,
+    /// fingerprints to a string, monitor fallback lists to `.first`), so re-serializing an untouched
+    /// section silently destroys whatever the UI couldn't represent.
+    private(set) var loaded = Settings()
+
+    func edited<T: Equatable>(_ section: KeyPath<Settings, T>) -> Bool {
+        settings[keyPath: section] != loaded[keyPath: section]
+    }
+
+    var hasUnsavedChanges: Bool { settings != loaded }
 
     /// What the two visibility toggles will actually produce, including the forced Dock icon. The
     /// General tab shows the rule rather than letting the user find out after they close Settings.
-    var appVisibility: AppVisibility { AppVisibility(showMenuBarIcon: showMenuBarIcon, showDockIcon: showDockIcon) }
+    var appVisibility: AppVisibility {
+        AppVisibility(showMenuBarIcon: settings.general.showMenuBarIcon, showDockIcon: settings.general.showDockIcon)
+    }
 
-    // Gaps
-    @Published var innerGapsHorizontal = 8
-    @Published var innerGapsVertical = 8
-    @Published var outerGapsTop = 8
-    @Published var outerGapsBottom = 8
-    @Published var outerGapsLeft = 8
-    @Published var outerGapsRight = 8
     @Published private(set) var gapsHavePerMonitorOverrides = false
 
-    // Key bindings the writer manages: the `[mode.<name>.binding]` sections, plus anything the user
-    // adds here. This list and ONLY this list is what `ConfigurationWriter.applyBindingDiff` writes.
-    @Published var modes: [ModeBindings] = []
-
-    /// Bindings that are active but live nowhere the writer can round-trip: the ~78 that `mod` +
-    /// `workspaces` generate out of thin air, and the `[keys]` / `[keys.<mode>]` entries.
+    /// Bindings that are active but have no line in the file: the ~78 that `mod` + `workspaces`
+    /// generate out of thin air.
     ///
-    /// They are kept OUT of `modes` on purpose. Putting them there would make the very next save
-    /// write all of them back as `[mode.main.binding]` lines -- re-materializing exactly the
-    /// boilerplate config v2 exists to delete. The tab still shows them, because a Keys tab that
-    /// hides 78 live bindings is lying about what the keyboard does.
+    /// They are kept OUT of `settings.modes` on purpose. Putting them there would make the very next
+    /// save write all of them back as lines -- re-materializing exactly the boilerplate config v2
+    /// exists to delete. The tab still shows them, because a Keys tab that hides 78 live bindings is
+    /// lying about what the keyboard does.
     @Published private(set) var inheritedBindings: [InheritedBinding] = []
 
-    // Workspaces & monitors
-    @Published var assignments: [WorkspaceAssignmentRow] = []
     /// Every workspace name `workspaces` defines, ranges expanded, in config order.
     @Published var definedWorkspaces: [String] = []
     @Published var liveMonitors: [MonitorRow] = []
 
-    // Key mapping
-    @Published var keyMappingPreset = "qwerty"
-
-    // Callbacks. Read from the raw TOML rather than the parsed `config`, for the same reason as key
-    // bindings: a parsed `Command` cannot be turned back into its exact source string.
-    @Published var afterStartupCommands: [CommandRow] = []
-    @Published var onFocusChanged: [CommandRow] = []
-    @Published var onFocusedWorkspaceChanged: [CommandRow] = []
-    @Published var onFocusedMonitorChanged: [CommandRow] = []
-
-    // Exec environment
-    @Published var execInheritEnvVars = true
-    @Published var execEnvVars: [EnvVarRow] = []
-
-    // Window detection rules ([[on-window-detected]])
-    @Published var windowRules: [WindowRuleRow] = []
-
     // Raw TOML editor -- the guarantee that nothing in the config is unreachable from the GUI.
     @Published var rawToml = ""
+    private var loadedRawToml = ""
+    var rawTomlEdited: Bool { rawToml != loadedRawToml }
 
     /// Set ONLY by the Raw TOML pane's Apply button.
     ///
     /// `rawTomlEdited` must never authorize a write on its own: an unapplied raw buffer used to
     /// hijack unrelated structured edits, so flipping a toggle on another pane would commit the
     /// half-finished raw text and silently discard the toggle.
-    @Published var rawTomlApplyRequested = false
+    var rawTomlApplyRequested = false
 
-    // State
-    @Published var hasUnsavedChanges = false
     @Published var errorMessage: String?
-    @Published var isSaving = false
+    private var isSaving = false
     /// Changes only after a complete reload. Views with non-persisted presentation state use this
     /// to seed themselves once without recomputing while the user is typing.
     @Published private(set) var loadGeneration = 0
 
-    /// Snapshot of what was loaded, so the writer can tell a real edit from an untouched section.
-    /// The fields above are a lossy projection of the config (per-monitor gaps collapse to their
-    /// default, fingerprints to a string, monitor fallback lists to `.first`), so re-serializing an
-    /// untouched section silently destroys whatever the UI couldn't represent.
-    private var loaded = LoadedSnapshot()
-
-    private struct LoadedSnapshot {
-        var startAtLogin = false
-        var automaticallyUnhideMacosHiddenApps = false
-        var autoMoveWorkspacesOnMonitorConnect = true
-        var showMenuBarIcon = true
-        var showDockIcon = false
-        var enableNormalizationFlattenContainers = true
-        var enableNormalizationOppositeOrientation = true
-        var defaultRootContainerLayout = ""
-        var defaultRootContainerOrientation = ""
-        var accordionPadding = 0
-        var gaps: [Int] = []
-        var assignments: [(workspace: String, monitor: String)] = []
-        var keyMappingPreset = ""
-        var afterStartupCommands: [CommandRow] = []
-        var onFocusChanged: [CommandRow] = []
-        var onFocusedWorkspaceChanged: [CommandRow] = []
-        var onFocusedMonitorChanged: [CommandRow] = []
-        var execInheritEnvVars = true
-        var execEnvVars: [EnvVarRow] = []
-        var windowRules: [WindowRuleRow] = []
-        var rawToml = ""
-        var modeNames: Set<String> = []
-    }
-
-    var keyMappingEdited: Bool { keyMappingPreset != loaded.keyMappingPreset }
-    var execEdited: Bool { execInheritEnvVars != loaded.execInheritEnvVars || execEnvVars != loaded.execEnvVars }
-    var windowRulesEdited: Bool { windowRules != loaded.windowRules }
-    var rawTomlEdited: Bool { rawToml != loaded.rawToml }
-
-    /// Callback lists that changed, as `(config key, commands)`. Empty lists are still emitted when
-    /// they were previously non-empty, so clearing a callback in the UI actually clears it on disk.
-    func changedCallbacks() -> [(String, [String])] {
-        var out: [(String, [String])] = []
-        func add(_ key: String, _ now: [CommandRow], _ before: [CommandRow]) {
-            if now != before { out.append((key, now.map(\.command).filter { !$0.isEmpty })) }
-        }
-        add("after-startup-command", afterStartupCommands, loaded.afterStartupCommands)
-        add("on-focus-changed", onFocusChanged, loaded.onFocusChanged)
-        add("on-focused-workspace-changed", onFocusedWorkspaceChanged, loaded.onFocusedWorkspaceChanged)
-        add("on-focused-monitor-changed", onFocusedMonitorChanged, loaded.onFocusedMonitorChanged)
-        return out
-    }
-
-    private var currentGaps: [Int] {
-        [innerGapsHorizontal, innerGapsVertical, outerGapsTop, outerGapsBottom, outerGapsLeft, outerGapsRight]
-    }
-
-    var gapsEdited: Bool { currentGaps != loaded.gaps }
-
-    var assignmentsEdited: Bool {
-        let current = assignments.map { (workspace: $0.workspace, monitor: $0.monitor) }
-        guard current.count == loaded.assignments.count else { return true }
-        return zip(current, loaded.assignments).contains { $0.workspace != $1.workspace || $0.monitor != $1.monitor }
-    }
-
-    /// Top-level scalar keys whose value differs from what was loaded, as `(key, TOML literal)`.
-    func changedScalars() -> [(String, String)] {
-        var out: [(String, String)] = []
-        func addBool(_ key: String, _ now: Bool, _ before: Bool) {
-            if now != before { out.append((key, now ? "true" : "false")) }
-        }
-        addBool("start-at-login", startAtLogin, loaded.startAtLogin)
-        addBool("automatically-unhide-macos-hidden-apps", automaticallyUnhideMacosHiddenApps, loaded.automaticallyUnhideMacosHiddenApps)
-        addBool("auto-move-workspaces-on-monitor-connect", autoMoveWorkspacesOnMonitorConnect, loaded.autoMoveWorkspacesOnMonitorConnect)
-        addBool("show-menu-bar-icon", showMenuBarIcon, loaded.showMenuBarIcon)
-        addBool("show-dock-icon", showDockIcon, loaded.showDockIcon)
-        addBool("enable-normalization-flatten-containers", enableNormalizationFlattenContainers, loaded.enableNormalizationFlattenContainers)
-        addBool("enable-normalization-opposite-orientation-for-nested-containers", enableNormalizationOppositeOrientation, loaded.enableNormalizationOppositeOrientation)
-        if defaultRootContainerLayout != loaded.defaultRootContainerLayout {
-            out.append(("default-root-container-layout", "'\(defaultRootContainerLayout.replacingOccurrences(of: "'", with: ""))'"))
-        }
-        if defaultRootContainerOrientation != loaded.defaultRootContainerOrientation {
-            out.append(("default-root-container-orientation", "'\(defaultRootContainerOrientation.replacingOccurrences(of: "'", with: ""))'"))
-        }
-        if accordionPadding != loaded.accordionPadding {
-            out.append(("accordion-padding", String(accordionPadding)))
-        }
-        return out
-    }
-
-    struct ModeBindings: Identifiable {
+    struct ModeBindings: Identifiable, Equatable {
         let id = UUID()
         var mode: String
         var bindings: [BindingRow]
+        static func == (a: ModeBindings, b: ModeBindings) -> Bool { a.mode == b.mode && a.bindings == b.bindings }
     }
 
-    struct BindingRow: Identifiable {
+    struct BindingRow: Identifiable, Equatable {
         let id = UUID()
         var key: String
         var command: String
+        static func == (a: BindingRow, b: BindingRow) -> Bool { a.key == b.key && a.command == b.command }
     }
 
     /// Where a displayed binding comes from, ordered by the layering `parseConfigV2` applies:
@@ -225,7 +114,7 @@ final class ConfigurationViewModel: ObservableObject {
     }
 
     /// One row of the Keys table: the *effective* binding for a key, plus where it came from.
-    /// `rowId` is non-nil exactly when the row is editable, i.e. when it is backed by `modes`.
+    /// `rowId` is non-nil exactly when the row is editable, i.e. when it is backed by `settings.modes`.
     struct DisplayBinding: Identifiable {
         var key: String
         var command: String
@@ -234,20 +123,14 @@ final class ConfigurationViewModel: ObservableObject {
         var id: String { key }
     }
 
-    struct WorkspaceAssignmentRow: Identifiable {
+    struct WorkspaceAssignmentRow: Identifiable, Equatable {
         let id = UUID()
         var workspace: String
         var monitor: String
         var isComplex = false
-        /// What the config actually said, kept so the writer can re-emit an untouched row
-        /// faithfully. `monitor` is a lossy single token: a regex pattern and a fingerprint name
-        /// collapse to the same string, and a fallback list collapses to its first entry —
-        /// re-serializing every row from the token is how a sibling's regex silently became a
-        /// literal name that matches nothing. nil for rows created in this session.
-        var loadedDescriptions: [MonitorDescription]?
-        /// The token `loadedDescriptions` collapsed to at load. While `monitor` still equals it,
-        /// the user has not edited this row's monitor and the loaded spelling wins.
-        var loadedToken: String?
+        static func == (a: WorkspaceAssignmentRow, b: WorkspaceAssignmentRow) -> Bool {
+            a.workspace == b.workspace && a.monitor == b.monitor
+        }
     }
 
     struct MonitorRow: Identifiable {
@@ -287,6 +170,8 @@ final class ConfigurationViewModel: ObservableObject {
         /// that fires for every window forever.
         var duringStartup: Bool?
 
+        var hasNoCommand: Bool { run.trimmingCharacters(in: .whitespaces).isEmpty }
+
         static func == (a: WindowRuleRow, b: WindowRuleRow) -> Bool {
             a.appId == b.appId && a.appNameRegex == b.appNameRegex &&
                 a.windowTitleRegex == b.windowTitleRegex && a.workspace == b.workspace &&
@@ -300,6 +185,7 @@ final class ConfigurationViewModel: ObservableObject {
     private var externalReloadObserver: NSObjectProtocol?
 
     func loadConfiguration() async {
+        ConfigurationWriter.startBackupSession()
         reloadFromConfig()
         guard externalReloadObserver == nil else { return }
         // Someone edited the config in an editor while this window is open. Our `loaded` snapshot is
@@ -325,10 +211,6 @@ final class ConfigurationViewModel: ObservableObject {
         reloadFromConfig()
     }
 
-    func markAsModified() {
-        hasUnsavedChanges = true
-    }
-
     /// Binding for a structured control. macOS settings apply live rather than behind a Save
     /// button, so every edit schedules a debounced write. The debounce matters because a save
     /// reloads the whole config and triggers a refresh -- doing that per keystroke would thrash.
@@ -338,7 +220,6 @@ final class ConfigurationViewModel: ObservableObject {
             get: { self[keyPath: keyPath] },
             set: { newValue in
                 self[keyPath: keyPath] = newValue
-                self.markAsModified()
                 self.scheduleAutoSave()
             },
         )
@@ -376,25 +257,21 @@ final class ConfigurationViewModel: ObservableObject {
     }
 
     private func reloadFromConfig() {
+        liveMonitors = loadMonitors()
+        adopt(configBaseText(), config)
+    }
+
+    /// Load from config text instead of the real config file. A Raw TOML apply goes through here,
+    /// because what it wrote is what every other pane has to show now, and so does the test suite,
+    /// which must not depend on `~/.aerospork.toml`.
+    func load(fromText text: String) {
+        if case .success(let parsed) = parseConfig(text) { adopt(text, parsed) } else { adopt(text, Config()) }
+    }
+
+    private func adopt(_ text: String, _ config: Config) {
         errorMessage = nil
-
-        startAtLogin = config.startAtLogin
-        automaticallyUnhideMacosHiddenApps = config.automaticallyUnhideMacosHiddenApps
-        defaultRootContainerLayout = config.defaultRootContainerLayout.rawValue
-        defaultRootContainerOrientation = config.defaultRootContainerOrientation.rawValue
-        accordionPadding = config.accordionPadding
-        enableNormalizationFlattenContainers = config.enableNormalizationFlattenContainers
-        enableNormalizationOppositeOrientation = config.enableNormalizationOppositeOrientationForNestedContainers
-        autoMoveWorkspacesOnMonitorConnect = config.autoMoveWorkspacesOnMonitorConnect
-        showMenuBarIcon = config.showMenuBarIcon
-        showDockIcon = config.showDockIcon
-
-        innerGapsHorizontal = gapValue(config.gaps.inner.horizontal)
-        innerGapsVertical = gapValue(config.gaps.inner.vertical)
-        outerGapsTop = gapValue(config.gaps.outer.top)
-        outerGapsBottom = gapValue(config.gaps.outer.bottom)
-        outerGapsLeft = gapValue(config.gaps.outer.left)
-        outerGapsRight = gapValue(config.gaps.outer.right)
+        let table = try? TOMLTable(string: text)
+        settings = Settings(config: config, table: table)
         gapsHavePerMonitorOverrides = [
             config.gaps.inner.horizontal,
             config.gaps.inner.vertical,
@@ -405,102 +282,19 @@ final class ConfigurationViewModel: ObservableObject {
         ].contains { value in
             if case .perMonitor = value { true } else { false }
         }
-
-        assignments = assignmentRows(from: config.workspaceToMonitorForceAssignment)
-
-        liveMonitors = loadMonitors()
-
-        let base = configBaseText()
-        rawToml = base
-        let table = try? TOMLTable(string: base)
+        rawToml = text
         // Both spellings declare workspaces the runtime keeps alive; see `Config.persistentWorkspaces`.
-        definedWorkspaces = workspaceNames(table?["workspaces"]) + workspaceNames(table?["persistent-workspaces"])
-        modes = loadBindings(table)
+        definedWorkspaces = workspaceNames(table, "workspaces") + workspaceNames(table, "persistent-workspaces")
         inheritedBindings = loadInheritedBindings(table)
-        // `KeyMapping.preset` is fileprivate and `RawExecConfig` isn't reachable from the parsed
-        // `config`, so these come from the raw TOML with the parser's own defaults as fallback.
-        keyMappingPreset = table?["key-mapping"]?.table?["preset"]?.string ?? "qwerty"
-        afterStartupCommands = commandRows(table?["after-startup-command"])
-        onFocusChanged = commandRows(table?["on-focus-changed"])
-        onFocusedWorkspaceChanged = commandRows(table?["on-focused-workspace-changed"])
-        onFocusedMonitorChanged = commandRows(table?["on-focused-monitor-changed"])
-
-        let exec = table?["exec"]?.table
-        execInheritEnvVars = exec?["inherit-env-vars"]?.bool ?? true
-        var envRows: [EnvVarRow] = []
-        if let envTable = exec?["env-vars"]?.table {
-            for (name, value) in envTable {
-                envRows.append(EnvVarRow(name: name, value: value.string ?? ""))
-            }
-        }
-        execEnvVars = envRows.sorted { $0.name < $1.name }
-
-        windowRules = loadWindowRules(table)
-
         markLoaded()
-
-        hasUnsavedChanges = false
         loadGeneration &+= 1
     }
 
     /// Record the current field values as the "loaded" baseline that edit detection compares
     /// against. Called at the end of a load; also used by tests that build a view model directly.
     func markLoaded() {
-        loaded = LoadedSnapshot(
-            startAtLogin: startAtLogin,
-            automaticallyUnhideMacosHiddenApps: automaticallyUnhideMacosHiddenApps,
-            autoMoveWorkspacesOnMonitorConnect: autoMoveWorkspacesOnMonitorConnect,
-            showMenuBarIcon: showMenuBarIcon,
-            showDockIcon: showDockIcon,
-            enableNormalizationFlattenContainers: enableNormalizationFlattenContainers,
-            enableNormalizationOppositeOrientation: enableNormalizationOppositeOrientation,
-            defaultRootContainerLayout: defaultRootContainerLayout,
-            defaultRootContainerOrientation: defaultRootContainerOrientation,
-            accordionPadding: accordionPadding,
-            gaps: currentGaps,
-            assignments: assignments.map { (workspace: $0.workspace, monitor: $0.monitor) },
-            keyMappingPreset: keyMappingPreset,
-            afterStartupCommands: afterStartupCommands,
-            onFocusChanged: onFocusChanged,
-            onFocusedWorkspaceChanged: onFocusedWorkspaceChanged,
-            onFocusedMonitorChanged: onFocusedMonitorChanged,
-            execInheritEnvVars: execInheritEnvVars,
-            execEnvVars: execEnvVars,
-            windowRules: windowRules,
-            rawToml: rawToml,
-            modeNames: Set(modes.map(\.mode)),
-        )
-    }
-
-    private func gapValue(_ value: DynamicConfigValue<Int>) -> Int {
-        switch value {
-            case .constant(let v): return v
-            case .perMonitor(_, let def): return def
-        }
-    }
-
-    private func monitorToken(_ description: MonitorDescription) -> String {
-        switch description {
-            case .main: return "main"
-            case .secondary: return "secondary"
-            case .sequenceNumber(let n): return String(n)
-            case .pattern(let raw, _): return raw
-            case .fingerprint(let data): return data.displayUUID ?? data.displayNamePattern ?? "fingerprint"
-        }
-    }
-
-    private func monitorDescriptionIsComplex(_ description: MonitorDescription) -> Bool {
-        guard case .fingerprint(let data) = description else { return false }
-        // A UUID-only fingerprint maps losslessly to the picker's exact-display option, and a
-        // name-only fingerprint to its matches-by-name option — the writer's own output for a
-        // name pin is `{ fingerprint = { name = … } }`, so calling that complex would brand this
-        // editor's output "use Raw TOML". Everything richer cannot round-trip through one token.
-        let hardware = data.vendorID != nil || data.modelID != nil || data.serialNumber != nil ||
-            data.widthPixels != nil || data.heightPixels != nil
-        if hardware { return true }
-        let uuidOnly = data.displayUUID != nil && data.displayNamePattern == nil
-        let nameOnly = data.displayNamePattern != nil && data.displayUUID == nil
-        return !(uuidOnly || nameOnly)
+        loaded = settings
+        loadedRawToml = rawToml
     }
 
     private func loadMonitors() -> [MonitorRow] {
@@ -522,36 +316,6 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
-    /// Key bindings are read from the raw config text: parsed `Command` objects can't be turned back
-    /// into their exact source strings, and the raw text is what the writer round-trips against.
-    private func loadBindings(_ table: TOMLTable?) -> [ModeBindings] {
-        var byMode: [String: [String: String]] = [:] // mode -> key -> command
-        // `[keys]` FIRST, so a `[mode.*]` entry for the same key overwrites it. That is the order
-        // the parser layers them in, and the writer edits whichever section a key came from -- so
-        // showing the weaker one here would make an edit look like it did nothing.
-        if let table, isConfigV2(table) {
-            for (key, value) in table["keys"]?.table ?? TOMLTable() {
-                // A sub-table is a named mode (`[keys.service]`); anything else is main-mode.
-                if let sub = value.table {
-                    for (k, v) in sub { byMode[key, default: [:]][k] = commandString(v) }
-                } else {
-                    byMode[mainModeId, default: [:]][key] = commandString(value)
-                }
-            }
-        }
-        for (modeName, modeValue) in table?["mode"]?.table ?? TOMLTable() {
-            guard let bindingTable = modeValue.table?["binding"]?.table else { continue }
-            for (key, command) in bindingTable {
-                byMode[modeName, default: [:]][key] = commandString(command)
-            }
-        }
-        return byMode
-            .map { mode, rows in
-                ModeBindings(mode: mode, bindings: rows.map { BindingRow(key: $0.key, command: $0.value) }.sorted { $0.key < $1.key })
-            }
-            .sorted { $0.mode < $1.mode }
-    }
-
     /// Everything bound that the writer does NOT manage: the bindings `mod` + `workspaces` generate,
     /// which exist nowhere in the file and so have no lines to round-trip against. Empty for a v1
     /// config. (`[keys]` used to be listed here too, back when the writer only understood
@@ -560,18 +324,15 @@ final class ConfigurationViewModel: ObservableObject {
         guard let table, isConfigV2(table), let mod = table["mod"]?.string else { return [] }
         // Same function the parser and the migration collapser use, so the tab cannot show a set of
         // generated bindings that differs from the set actually registered.
-        return generatedBindingsV2(mod: mod, workspaces: workspaceNames(table["workspaces"]))
+        return generatedBindingsV2(mod: mod, workspaces: workspaceNames(table, "workspaces"))
             .map { InheritedBinding(mode: mainModeId, key: $0.notation, command: $0.command, origin: .generated) }
     }
 
-    /// `workspaces = "1-9"`, `["dev", "web"]`, or both. Mirrors the parser's own reading; the
-    /// parser's copy is private and returning a different list here would mean the tab and the
-    /// keyboard disagree about which workspace keys exist.
-    private func workspaceNames(_ value: TOMLValueConvertible?) -> [String] {
-        guard let value else { return [] }
-        if let array = value.array { return (0 ..< array.count).flatMap { workspaceNames(array[$0]) } }
-        guard let token = value.string ?? value.int.map(String.init) else { return [] }
-        return expandWorkspaceRange(token) ?? [token]
+    /// The parser's own reading, so the tab and the keyboard cannot disagree about which workspace keys
+    /// exist. Its errors were already reported when the config loaded.
+    private func workspaceNames(_ table: TOMLTable?, _ key: String) -> [String] {
+        var ignored: [TomlParseError] = []
+        return table?[key].map { parseWorkspaceNames($0, .rootKey(key), &ignored) } ?? []
     }
 
     /// A binding value is either a single command string or an array of them. Multi-command
@@ -580,131 +341,18 @@ final class ConfigurationViewModel: ObservableObject {
     /// single bogus command, whenever such a row was re-added.
     static let commandSeparator = " ; "
 
-    /// Also used by `ConfigurationWriter.applyBindingDiff` to decide whether a binding line changed.
-    /// It must be the same function both places: comparing against a differently-derived string
-    /// would rewrite untouched lines and break the byte-identical no-op-save invariant.
     static func commandString(_ value: TOMLValueConvertible) -> String {
         if let string = value.string { return string }
         if let array = value.array { return array.compactMap { $0.string }.joined(separator: Self.commandSeparator) }
         return ""
     }
 
-    private func commandString(_ value: TOMLValueConvertible) -> String { Self.commandString(value) }
-
-    private func commandRows(_ value: TOMLValueConvertible?) -> [CommandRow] {
-        guard let value else { return [] }
-        if let string = value.string { return [CommandRow(command: string)] }
-        if let array = value.array { return array.compactMap { $0.string }.map { CommandRow(command: $0) } }
-        return []
-    }
-
-    /// Reads BOTH spellings.
-    ///
-    /// `[on-window]` is the v2 shorthand, and the one the shipped default config documents. It
-    /// desugars to the same `onWindowDetected` list in `parseConfigV2`, so those rules are live --
-    /// but this used to read only the long form, so a v2 config showed "No window rules" while its
-    /// rules were running. Adding a rule in that state wrote a long-form copy and left the shorthand
-    /// table behind, so every original rule then applied twice.
-    ///
-    /// Long form first, then shorthand: `parseConfigV2` appends `[on-window]` after
-    /// `on-window-detected`, so this is the order the rules are actually tried in, and the list is
-    /// read top to bottom.
-    private func loadWindowRules(_ table: TOMLTable?) -> [WindowRuleRow] {
-        var rows = (table?["on-window-detected"]?.array).map(loadLongFormWindowRules) ?? []
-        if let shorthand = table?["on-window"]?.table {
-            // Sorted to match `parseOnWindow`, which walks `table.keys.sorted()`.
-            rows += shorthand.keys.sorted().map { appId in
-                WindowRuleRow(
-                    appId: appId,
-                    appNameRegex: "",
-                    windowTitleRegex: "",
-                    workspace: "",
-                    run: commandString(shorthand[appId] ?? ""),
-                    checkFurtherCallbacks: false,
-                    duringStartup: nil,
-                )
-            }
-        }
-        return rows
-    }
-
-    private func loadLongFormWindowRules(_ array: TOMLArray) -> [WindowRuleRow] {
-        array.compactMap { entry -> WindowRuleRow? in
-            guard let t = entry.table else { return nil }
-            let cond = t["if"]?.table
-            return WindowRuleRow(
-                appId: cond?["app-id"]?.string ?? "",
-                appNameRegex: cond?["app-name-regex-substring"]?.string ?? "",
-                windowTitleRegex: cond?["window-title-regex-substring"]?.string ?? "",
-                workspace: cond?["workspace"]?.string ?? "",
-                run: commandString(t["run"] ?? ""),
-                checkFurtherCallbacks: t["check-further-callbacks"]?.bool ?? false,
-                // One spelling only. The upstream-branded alias for this matcher used to be read
-                // here too, because the parser still accepted it with a deprecation warning --
-                // reading only the current name would have dropped the matcher on the first GUI
-                // edit. The parser no longer accepts it, so a config carrying it does not load and
-                // this view model never sees one: the fallback was dead code, not compatibility.
-                duringStartup: cond?["during-aerospork-startup"]?.bool,
-            )
-        }
-    }
-
-    /// Load both binding lists from config text instead of from the real config file. The only
-    /// caller besides `reloadFromConfig` is the test suite, which must not depend on `~/.aerospork.toml`.
-    func loadBindings(fromText text: String) {
-        let table = try? TOMLTable(string: text)
-        modes = loadBindings(table)
-        inheritedBindings = loadInheritedBindings(table)
-    }
-
-    /// Same, for window rules. Lets a test assert that what the writer emitted reads back as the
-    /// same rule -- which is the only way to catch a matcher key the writer and the loader spell
-    /// differently.
-    func loadWindowRules(fromText text: String) {
-        windowRules = loadWindowRules(try? TOMLTable(string: text))
-    }
-
-    /// Same, for monitor assignments. Rows built here carry `loadedDescriptions`, which is what
-    /// the writer's do-no-harm re-emission of untouched rows depends on -- so a writer test that
-    /// hand-builds rows instead of loading them would never exercise the preservation path.
-    func loadAssignments(fromText text: String) {
-        guard let table = try? TOMLTable(string: text) else {
-            assignments = []
-            return
-        }
-        var errors: [TomlParseError] = []
-        let parsed: [String: [MonitorDescription]] = if let raw = table["workspace-to-monitor-force-assignment"] {
-            parseWorkspaceToMonitorAssignment(raw, .rootKey("workspace-to-monitor-force-assignment"), &errors)
-        } else if let raw = table["monitors"] {
-            parseWorkspaceToMonitorAssignment(raw, .rootKey("monitors"), &errors)
-        } else {
-            [:]
-        }
-        assignments = assignmentRows(from: parsed)
-    }
-
-    private func assignmentRows(from parsed: [String: [MonitorDescription]]) -> [WorkspaceAssignmentRow] {
-        parsed
-            .sorted { $0.key < $1.key }
-            .compactMap { workspace, descriptions in
-                descriptions.first.map {
-                    WorkspaceAssignmentRow(
-                        workspace: workspace,
-                        monitor: monitorToken($0),
-                        isComplex: descriptions.count > 1 || monitorDescriptionIsComplex($0),
-                        loadedDescriptions: descriptions,
-                        loadedToken: monitorToken($0),
-                    )
-                }
-            }
-    }
-
     // MARK: - Displaying
 
-    /// Every mode that has bindings from any source, `main` first. The picker cannot read `modes`
-    /// alone: a v2 config's modes live in `[keys.<name>]`, which the writer never sees.
+    /// Every mode that has bindings from any source, `main` first. The picker cannot read
+    /// `settings.modes` alone: a v2 config's `main` can exist purely as generated bindings.
     var allModeNames: [String] {
-        Set(modes.map(\.mode)).union(inheritedBindings.map(\.mode))
+        Set(settings.modes.map(\.mode)).union(inheritedBindings.map(\.mode))
             .sorted { ($0 == mainModeId ? 0 : 1, $0) < ($1 == mainModeId ? 0 : 1, $1) }
     }
 
@@ -716,7 +364,7 @@ final class ConfigurationViewModel: ObservableObject {
         for b in inheritedBindings.filter({ $0.mode == mode }).sorted(by: { $0.origin < $1.origin }) {
             byKey[b.key] = DisplayBinding(key: b.key, command: b.command, origin: b.origin, rowId: nil)
         }
-        for row in modes.first(where: { $0.mode == mode })?.bindings ?? [] {
+        for row in settings.modes.first(where: { $0.mode == mode })?.bindings ?? [] {
             byKey[row.key] = DisplayBinding(key: row.key, command: row.command, origin: .explicit, rowId: row.id)
         }
         return byKey.values.sorted { $0.key < $1.key }
@@ -748,8 +396,8 @@ final class ConfigurationViewModel: ObservableObject {
     /// Returns false when the edit was refused, so the tab can say why instead of looking dead.
     @discardableResult
     func updateBinding(mode: String, id: BindingRow.ID, key: String? = nil, command: String? = nil) -> Bool {
-        guard let m = modes.firstIndex(where: { $0.mode == mode }),
-              let r = modes[m].bindings.firstIndex(where: { $0.id == id }) else { return false }
+        guard let m = settings.modes.firstIndex(where: { $0.mode == mode }),
+              let r = settings.modes[m].bindings.firstIndex(where: { $0.id == id }) else { return false }
         if let key {
             let key = key.trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { return false }
@@ -757,11 +405,10 @@ final class ConfigurationViewModel: ObservableObject {
             // emits a line for each, and duplicate keys in one TOML table do not parse -- so the
             // save that follows would leave the user with a config the app refuses to load. The
             // table would show only one of them too, making the other invisible as well as fatal.
-            guard !modes[m].bindings.contains(where: { $0.id != id && $0.key == key }) else { return false }
-            modes[m].bindings[r].key = key
+            guard !settings.modes[m].bindings.contains(where: { $0.id != id && $0.key == key }) else { return false }
+            settings.modes[m].bindings[r].key = key
         }
-        if let command { modes[m].bindings[r].command = command }
-        markAsModified()
+        if let command { settings.modes[m].bindings[r].command = command }
         return true
     }
 
@@ -774,42 +421,34 @@ final class ConfigurationViewModel: ObservableObject {
         let key = key.trimmingCharacters(in: .whitespaces)
         let command = command.trimmingCharacters(in: .whitespaces)
         guard !key.isEmpty, !command.isEmpty else { return false }
-        let i = modes.firstIndex { $0.mode == mode } ?? { addMode(mode); return modes.count - 1 }()
-        modes[i].bindings.removeAll { $0.key == key }
-        modes[i].bindings.append(BindingRow(key: key, command: command))
-        modes[i].bindings.sort { $0.key < $1.key }
-        markAsModified()
+        let i = settings.modes.firstIndex { $0.mode == mode } ?? { addMode(mode); return settings.modes.count - 1 }()
+        settings.modes[i].bindings.removeAll { $0.key == key }
+        settings.modes[i].bindings.append(BindingRow(key: key, command: command))
+        settings.modes[i].bindings.sort { $0.key < $1.key }
         return true
     }
 
     func removeBinding(mode: String, id: BindingRow.ID) {
-        guard let i = modes.firstIndex(where: { $0.mode == mode }) else { return }
-        modes[i].bindings.removeAll { $0.id == id }
-        markAsModified()
+        guard let i = settings.modes.firstIndex(where: { $0.mode == mode }) else { return }
+        settings.modes[i].bindings.removeAll { $0.id == id }
     }
 
     /// Returns false if the name is empty or already taken.
     @discardableResult
     func addMode(_ name: String) -> Bool {
         let name = name.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty, !modes.contains(where: { $0.mode == name }) else { return false }
-        modes.append(ModeBindings(mode: name, bindings: []))
-        markAsModified()
+        guard !name.isEmpty, !settings.modes.contains(where: { $0.mode == name }) else { return false }
+        settings.modes.append(ModeBindings(mode: name, bindings: []))
         return true
     }
 
     /// `main` is the mode the app starts in; deleting it would leave nothing to fall back to.
-    func canRemoveMode(_ name: String) -> Bool { name != mainModeId && modes.contains { $0.mode == name } }
+    func canRemoveMode(_ name: String) -> Bool { name != mainModeId && settings.modes.contains { $0.mode == name } }
 
     func removeMode(_ name: String) {
         guard canRemoveMode(name) else { return }
-        modes.removeAll { $0.mode == name }
-        markAsModified()
+        settings.modes.removeAll { $0.mode == name }
     }
-
-    /// Modes present when the config was loaded, so the writer can tell "the user deleted this mode"
-    /// from "this view model never loaded any modes" -- the latter must not delete anything.
-    var loadedModeNames: Set<String> { loaded.modeNames }
 
     // MARK: - Backups
 
@@ -825,37 +464,32 @@ final class ConfigurationViewModel: ObservableObject {
             return
         }
         rawToml = text
-        markAsModified()
     }
 
     /// Deliberately no autosave: an empty workspace name must not hit disk until typed.
     @discardableResult
     func addAssignment(monitorToken: String = "main") -> WorkspaceAssignmentRow.ID {
         let row = WorkspaceAssignmentRow(workspace: "", monitor: monitorToken)
-        assignments.append(row)
-        markAsModified()
+        settings.assignments.append(row)
         return row.id
     }
 
     func removeAssignment(id: WorkspaceAssignmentRow.ID) {
-        assignments.removeAll { $0.id == id }
-        markAsModified()
+        settings.assignments.removeAll { $0.id == id }
     }
 
     /// Pin `workspace` to `monitorToken`, updating the existing assignment if there is one.
     /// Returns the affected row's id so the pane can surface it in the table.
     @discardableResult
     func setAssignment(workspace: String, monitorToken: String) -> WorkspaceAssignmentRow.ID {
-        if let i = assignments.firstIndex(where: { $0.workspace == workspace }) {
-            guard assignments[i].monitor != monitorToken else { return assignments[i].id }
-            assignments[i].monitor = monitorToken
-            markAsModified()
+        if let i = settings.assignments.firstIndex(where: { $0.workspace == workspace }) {
+            guard settings.assignments[i].monitor != monitorToken else { return settings.assignments[i].id }
+            settings.assignments[i].monitor = monitorToken
             scheduleAutoSave()
-            return assignments[i].id
+            return settings.assignments[i].id
         }
         let row = WorkspaceAssignmentRow(workspace: workspace, monitor: monitorToken)
-        assignments.append(row)
-        markAsModified()
+        settings.assignments.append(row)
         scheduleAutoSave()
         return row.id
     }
@@ -863,7 +497,7 @@ final class ConfigurationViewModel: ObservableObject {
     /// Defined workspaces with no force-assignment — the pin menu's contents. Config order, deduped.
     var unpinnedDefinedWorkspaces: [String] {
         var seen = Set<String>()
-        let assigned = Set(assignments.map(\.workspace))
+        let assigned = Set(settings.assignments.map(\.workspace))
         return definedWorkspaces.filter { seen.insert($0).inserted && !assigned.contains($0) }
     }
 
@@ -890,26 +524,25 @@ final class ConfigurationViewModel: ObservableObject {
 
     /// The detail strip's chips: every assignment whose token resolves to this monitor.
     func assignments(pinnedTo row: MonitorRow) -> [WorkspaceAssignmentRow] {
-        assignments.filter { monitorRow(forToken: $0.monitor)?.id == row.id }
+        settings.assignments.filter { monitorRow(forToken: $0.monitor)?.id == row.id }
     }
 
     func setInnerGaps(_ value: Int) {
-        guard innerGapsHorizontal != value || innerGapsVertical != value else { return }
-        innerGapsHorizontal = value
-        innerGapsVertical = value
-        markAsModified()
+        guard settings.gaps.innerHorizontal != value || settings.gaps.innerVertical != value else { return }
+        settings.gaps.innerHorizontal = value
+        settings.gaps.innerVertical = value
         scheduleAutoSave()
     }
 
     func setOuterGaps(_ value: Int) {
-        guard outerGapsTop != value || outerGapsBottom != value || outerGapsLeft != value || outerGapsRight != value else {
+        let gaps = settings.gaps
+        guard gaps.outerTop != value || gaps.outerBottom != value || gaps.outerLeft != value || gaps.outerRight != value else {
             return
         }
-        outerGapsTop = value
-        outerGapsBottom = value
-        outerGapsLeft = value
-        outerGapsRight = value
-        markAsModified()
+        settings.gaps.outerTop = value
+        settings.gaps.outerBottom = value
+        settings.gaps.outerLeft = value
+        settings.gaps.outerRight = value
         scheduleAutoSave()
     }
 
@@ -918,17 +551,16 @@ final class ConfigurationViewModel: ObservableObject {
     func saveConfiguration() async {
         guard !isSaving else { return }
         isSaving = true
-        defer { isSaving = false }
+        // Whatever happens. A refused Apply left this set, so the next toggle's autosave wrote the
+        // raw buffer as if Apply had been pressed again.
+        defer {
+            isSaving = false
+            rawTomlApplyRequested = false
+        }
         errorMessage = nil
 
         let base = configBaseText()
 
-        // Refuse rather than corrupt when the file uses a TOML spelling this line-based writer
-        // cannot rewrite safely. Only applies to structured edits -- raw TOML replaces the file.
-        if !rawTomlApplyRequested, let shape = ConfigurationWriter.unsupportedShapeReason(base) {
-            errorMessage = shape
-            return
-        }
         // An unapplied raw buffer must not be silently committed by an unrelated structured edit,
         // and the structured edit must not silently overwrite what the user typed in the raw tab.
         if !rawTomlApplyRequested, rawTomlEdited {
@@ -936,15 +568,20 @@ final class ConfigurationViewModel: ObservableObject {
             return
         }
 
-        // Validate BEFORE touching the file. Previously an invalid config was written to disk and
-        // only then failed to reload, leaving a broken file plus two separate error surfaces.
+        // Checked BEFORE touching the file. Previously an invalid config was written to disk and
+        // only then failed to reload, leaving a broken file plus two separate error surfaces. Raw
+        // TOML replaces the whole file, so all it has to be is valid.
         let rendered = ConfigurationWriter.render(baseText: base, from: self)
-        if let problem = ConfigurationWriter.validate(rendered) {
-            errorMessage = problem
+        let refusal = rawTomlApplyRequested
+            ? ConfigurationWriter.validate(rendered)
+            : ConfigurationWriter.refusal(rendered: rendered, base: base, from: self)
+        if let refusal {
+            errorMessage = refusal
             return
         }
 
         do {
+            if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
             try ConfigurationWriter.write(rendered)
             // The file watcher refreshes after its reload; this save suppresses the watcher for its own
             // write and did not, so a gap, layout or normalization change did nothing on screen until
@@ -956,16 +593,301 @@ final class ConfigurationViewModel: ObservableObject {
             // hook does not fire. Without this, flipping "Show Dock icon" did nothing until the next
             // window event -- which, with the settings window in front, may be a long time.
             syncAppVisibility()
-            rawToml = rendered
-            // Deliberately NOT reloadFromConfig() here. That rebuilds every row as a fresh struct
-            // with a new UUID, which invalidates Table selections and in-flight text-field bindings
-            // -- so a 600ms autosave would yank the row out from under someone mid-edit. The view
-            // model is already the source of this write; re-reading it gains nothing.
-            markLoaded()
-            rawTomlApplyRequested = false
-            hasUnsavedChanges = false
+            didWrite(rendered)
         } catch {
             errorMessage = "Failed to save configuration: \(error.localizedDescription)"
+        }
+    }
+
+    /// `rendered` reached the file.
+    ///
+    /// A structured save deliberately does NOT reload. That rebuilds every row as a fresh struct with
+    /// a new UUID, which invalidates Table selections and in-flight text-field bindings -- so a 600ms
+    /// autosave would yank the row out from under someone mid-edit. The view model is already the
+    /// source of that write; re-reading it gains nothing. Raw TOML is the opposite: it replaced what
+    /// every other pane is showing, and panes left on the old values would write them back.
+    func didWrite(_ rendered: String) {
+        if rawTomlApplyRequested { return load(fromText: rendered) }
+        rawToml = rendered
+        let rulesOnDisk = loaded.windowRules
+        markLoaded()
+        // A rule with no command yet held every rule back (see `replaceWindowRules`), so they are not
+        // saved, and calling them saved lost any other rule edit made alongside it.
+        if settings.windowRules.contains(where: \.hasNoCommand) { loaded.windowRules = rulesOnDisk }
+    }
+}
+
+// MARK: - The snapshot
+
+extension ConfigurationViewModel {
+    /// Everything the panes edit, one struct per section. `edited(section)` is `current != loaded`, and
+    /// the writer touches a section only when that says so -- which is the writer invariant.
+    struct Settings: Equatable {
+        struct General: Equatable {
+            var startAtLogin = false
+            var automaticallyUnhideMacosHiddenApps = false
+            var defaultRootContainerLayout = "tiles"
+            var defaultRootContainerOrientation = "auto"
+            var accordionPadding = 30
+            var enableNormalizationFlattenContainers = true
+            var enableNormalizationOppositeOrientation = true
+            var autoMoveWorkspacesOnMonitorConnect = true
+            var showMenuBarIcon = true
+            var showDockIcon = false
+        }
+
+        struct Gaps: Equatable {
+            var innerHorizontal = 8
+            var innerVertical = 8
+            var outerTop = 8
+            var outerBottom = 8
+            var outerLeft = 8
+            var outerRight = 8
+        }
+
+        /// Read from the raw TOML rather than the parsed `config`, for the same reason as key bindings:
+        /// a parsed `Command` cannot be turned back into its exact source string.
+        struct Callbacks: Equatable {
+            var afterStartup: [CommandRow] = []
+            var onFocusChanged: [CommandRow] = []
+            var onFocusedWorkspaceChanged: [CommandRow] = []
+            var onFocusedMonitorChanged: [CommandRow] = []
+        }
+
+        struct Exec: Equatable {
+            var inheritEnvVars = true
+            var envVars: [EnvVarRow] = []
+        }
+
+        var general = General()
+        var gaps = Gaps()
+        var modes: [ModeBindings] = []
+        var assignments: [WorkspaceAssignmentRow] = []
+        var keyMappingPreset = "qwerty"
+        var callbacks = Callbacks()
+        var exec = Exec()
+        var windowRules: [WindowRuleRow] = []
+    }
+
+    /// One top-level key the panes edit. Load, diff and the parse-back check all read this one table;
+    /// the 14 keys used to be spelled out three times over, and adding a key meant finding all three.
+    struct ScalarKey {
+        let key: String
+        let load: @MainActor (inout Settings, Config, TOMLTable?) -> Void
+        /// The value as TOML. This is what gets compared, rather than the value, so a blank command
+        /// row someone has only just added does not count as an edit of that key.
+        let literal: @MainActor (Settings) -> String
+
+        @MainActor init<T>(_ key: String, _ path: WritableKeyPath<Settings, T>, _ read: @escaping (Config, TOMLTable?) -> T, _ literal: @escaping @MainActor (T) -> String) {
+            self.key = key
+            load = { $0[keyPath: path] = read($1, $2) }
+            self.literal = { literal($0[keyPath: path]) }
+        }
+
+        @MainActor static func bool(_ key: String, _ path: WritableKeyPath<Settings, Bool>, _ config: KeyPath<Config, Bool>) -> ScalarKey {
+            ScalarKey(key, path, { c, _ in c[keyPath: config] }, { $0 ? "true" : "false" })
+        }
+
+        private static func commandRows(_ value: TOMLValueConvertible?) -> [CommandRow] {
+            guard let value else { return [] }
+            if let string = value.string { return [CommandRow(command: string)] }
+            if let array = value.array { return array.compactMap { $0.string }.map { CommandRow(command: $0) } }
+            return []
+        }
+
+        @MainActor static func commands(_ key: String, _ path: WritableKeyPath<Settings, [CommandRow]>) -> ScalarKey {
+            ScalarKey(key, path, { _, table in commandRows(table?[key]) }) { ConfigurationWriter.tomlArray($0.map(\.command).filter { !$0.isEmpty }) }
+        }
+    }
+}
+
+extension ConfigurationViewModel.Settings {
+    @MainActor static let scalarKeys: [ConfigurationViewModel.ScalarKey] = [
+        .bool("start-at-login", \.general.startAtLogin, \.startAtLogin),
+        .bool("automatically-unhide-macos-hidden-apps", \.general.automaticallyUnhideMacosHiddenApps, \.automaticallyUnhideMacosHiddenApps),
+        .bool("auto-move-workspaces-on-monitor-connect", \.general.autoMoveWorkspacesOnMonitorConnect, \.autoMoveWorkspacesOnMonitorConnect),
+        .bool("show-menu-bar-icon", \.general.showMenuBarIcon, \.showMenuBarIcon),
+        .bool("show-dock-icon", \.general.showDockIcon, \.showDockIcon),
+        .bool("enable-normalization-flatten-containers", \.general.enableNormalizationFlattenContainers, \.enableNormalizationFlattenContainers),
+        .bool("enable-normalization-opposite-orientation-for-nested-containers", \.general.enableNormalizationOppositeOrientation, \.enableNormalizationOppositeOrientationForNestedContainers),
+        .init("default-root-container-layout", \.general.defaultRootContainerLayout, { c, _ in c.defaultRootContainerLayout.rawValue }, ConfigurationWriter.escapedLiteral),
+        .init("default-root-container-orientation", \.general.defaultRootContainerOrientation, { c, _ in c.defaultRootContainerOrientation.rawValue }, ConfigurationWriter.escapedLiteral),
+        .init("accordion-padding", \.general.accordionPadding, { c, _ in c.accordionPadding }, { String($0) }),
+        .commands("after-startup-command", \.callbacks.afterStartup),
+        .commands("on-focus-changed", \.callbacks.onFocusChanged),
+        .commands("on-focused-workspace-changed", \.callbacks.onFocusedWorkspaceChanged),
+        .commands("on-focused-monitor-changed", \.callbacks.onFocusedMonitorChanged),
+    ]
+
+    /// The one loader, used for the file the panes show and for reading a rendered save back. Key
+    /// bindings, callbacks, exec and rules come from the raw table: parsed commands can't be turned
+    /// back into their source strings, and `KeyMapping.preset` and `RawExecConfig` aren't reachable
+    /// from `config`. Missing keys fall back to the parser's own defaults.
+    @MainActor init(config: Config, table: TOMLTable?) {
+        for key in Self.scalarKeys { key.load(&self, config, table) }
+        func gap(_ value: DynamicConfigValue<Int>) -> Int {
+            switch value {
+                case .constant(let v): v
+                case .perMonitor(_, let def): def
+            }
+        }
+        gaps = Gaps(
+            innerHorizontal: gap(config.gaps.inner.horizontal),
+            innerVertical: gap(config.gaps.inner.vertical),
+            outerTop: gap(config.gaps.outer.top),
+            outerBottom: gap(config.gaps.outer.bottom),
+            outerLeft: gap(config.gaps.outer.left),
+            outerRight: gap(config.gaps.outer.right),
+        )
+        assignments = Self.assignmentRows(from: config.workspaceToMonitorForceAssignment)
+        modes = Self.loadBindings(table)
+        keyMappingPreset = table?["key-mapping"]?.table?["preset"]?.string ?? "qwerty"
+        let rawExec = table?["exec"]?.table
+        exec.inheritEnvVars = rawExec?["inherit-env-vars"]?.bool ?? true
+        exec.envVars = (rawExec?["env-vars"]?.table.map { Array($0) } ?? [])
+            .map { name, value in ConfigurationViewModel.EnvVarRow(name: name, value: value.string ?? "") }
+            .sorted { $0.name < $1.name }
+        windowRules = Self.loadWindowRules(table)
+    }
+
+    /// This state as the file reads back once written: a blank row is held back until it is typed,
+    /// surrounding whitespace is gone, and order means nothing where TOML tables are unordered or the
+    /// writer sorts. The writer diffs these, so whitespace alone is not an edit, and the parse-back
+    /// check compares them.
+    @MainActor var asWritten: Self {
+        var out = self
+        let separator = ConfigurationViewModel.commandSeparator
+        out.modes = modes.filter { !$0.bindings.isEmpty }.sorted { $0.mode < $1.mode }.map { mode in
+            let rows = mode.bindings.map {
+                ConfigurationViewModel.BindingRow(key: $0.key, command: ConfigurationWriter.splitCommands($0.command).joined(separator: separator))
+            }
+            return ConfigurationViewModel.ModeBindings(mode: mode.mode, bindings: rows.sorted { $0.key < $1.key })
+        }
+        out.assignments = assignments
+            .map { ConfigurationViewModel.WorkspaceAssignmentRow(workspace: $0.workspace.trimmingCharacters(in: .whitespaces), monitor: $0.monitor.trimmingCharacters(in: .whitespaces)) }
+            .filter { !$0.workspace.isEmpty && !$0.monitor.isEmpty }
+            .sorted { $0.workspace < $1.workspace }
+        out.exec.envVars = exec.envVars
+            .map { ConfigurationViewModel.EnvVarRow(name: $0.name.trimmingCharacters(in: .whitespaces), value: $0.value) }
+            .filter { !$0.name.isEmpty }
+            .sorted { $0.name < $1.name }
+        out.windowRules = ConfigurationWriter.ruleOrderAsWritten(windowRules).map { rule in
+            var rule = rule
+            rule.run = ConfigurationWriter.splitCommands(rule.run).joined(separator: separator)
+            return rule
+        }
+        return out
+    }
+
+    private static func monitorToken(_ description: MonitorDescription) -> String {
+        switch description {
+            case .main: return "main"
+            case .secondary: return "secondary"
+            case .sequenceNumber(let n): return String(n)
+            case .pattern(let raw, _): return raw
+            case .fingerprint(let data): return data.displayUUID ?? data.displayNamePattern ?? "fingerprint"
+        }
+    }
+
+    private static func monitorDescriptionIsComplex(_ description: MonitorDescription) -> Bool {
+        guard case .fingerprint(let data) = description else { return false }
+        // A UUID-only fingerprint maps losslessly to the picker's exact-display option, and a
+        // name-only fingerprint to its matches-by-name option — the writer's own output for a
+        // name pin is `{ fingerprint = { name = … } }`, so calling that complex would brand this
+        // editor's output "use Raw TOML". Everything richer cannot round-trip through one token.
+        let hardware = data.vendorID != nil || data.modelID != nil || data.serialNumber != nil ||
+            data.widthPixels != nil || data.heightPixels != nil
+        if hardware { return true }
+        let uuidOnly = data.displayUUID != nil && data.displayNamePattern == nil
+        let nameOnly = data.displayNamePattern != nil && data.displayUUID == nil
+        return !(uuidOnly || nameOnly)
+    }
+
+    private static func assignmentRows(from parsed: [String: [MonitorDescription]]) -> [ConfigurationViewModel.WorkspaceAssignmentRow] {
+        parsed
+            .sorted { $0.key < $1.key }
+            .compactMap { workspace, descriptions in
+                descriptions.first.map {
+                    ConfigurationViewModel.WorkspaceAssignmentRow(
+                        workspace: workspace,
+                        monitor: monitorToken($0),
+                        isComplex: descriptions.count > 1 || monitorDescriptionIsComplex($0),
+                    )
+                }
+            }
+    }
+
+    /// Key bindings are read from the raw config text: parsed `Command` objects can't be turned back
+    /// into their exact source strings, and the raw text is what the writer round-trips against.
+    @MainActor private static func loadBindings(_ table: TOMLTable?) -> [ConfigurationViewModel.ModeBindings] {
+        var byMode: [String: [String: String]] = [:] // mode -> key -> command
+        let commandString = ConfigurationViewModel.commandString
+        // `[keys]` FIRST, so a `[mode.*]` entry for the same key overwrites it. That is the order
+        // the parser layers them in, and the writer edits whichever section a key came from -- so
+        // showing the weaker one here would make an edit look like it did nothing.
+        if let table, isConfigV2(table) {
+            for (key, value) in table["keys"]?.table ?? TOMLTable() {
+                // A sub-table is a named mode (`[keys.service]`); anything else is main-mode.
+                if let sub = value.table {
+                    for (k, v) in sub { byMode[key, default: [:]][k] = commandString(v) }
+                } else {
+                    byMode[mainModeId, default: [:]][key] = commandString(value)
+                }
+            }
+        }
+        for (modeName, modeValue) in table?["mode"]?.table ?? TOMLTable() {
+            guard let bindingTable = modeValue.table?["binding"]?.table else { continue }
+            for (key, command) in bindingTable {
+                byMode[modeName, default: [:]][key] = commandString(command)
+            }
+        }
+        return byMode
+            .map { mode, rows in
+                ConfigurationViewModel.ModeBindings(mode: mode, bindings: rows.map { ConfigurationViewModel.BindingRow(key: $0.key, command: $0.value) }.sorted { $0.key < $1.key })
+            }
+            .sorted { $0.mode < $1.mode }
+    }
+
+    /// Reads BOTH spellings.
+    ///
+    /// `[on-window]` is the v2 shorthand, and the one the shipped default config documents. It
+    /// desugars to the same `onWindowDetected` list in `parseConfigV2`, so those rules are live --
+    /// but this used to read only the long form, so a v2 config showed "No window rules" while its
+    /// rules were running. Adding a rule in that state wrote a long-form copy and left the shorthand
+    /// table behind, so every original rule then applied twice.
+    ///
+    /// Long form first, then shorthand: `parseConfigV2` appends `[on-window]` after
+    /// `on-window-detected`, so this is the order the rules are actually tried in, and the list is
+    /// read top to bottom.
+    @MainActor private static func loadWindowRules(_ table: TOMLTable?) -> [ConfigurationViewModel.WindowRuleRow] {
+        var rows = (table?["on-window-detected"]?.array).map(loadLongFormWindowRules) ?? []
+        if let shorthand = table?["on-window"]?.table {
+            // Sorted to match `parseOnWindow`, which walks `table.keys.sorted()`.
+            rows += shorthand.keys.sorted().map { appId in
+                ConfigurationViewModel.WindowRuleRow(appId: appId, run: ConfigurationViewModel.commandString(shorthand[appId] ?? ""))
+            }
+        }
+        return rows
+    }
+
+    @MainActor private static func loadLongFormWindowRules(_ array: TOMLArray) -> [ConfigurationViewModel.WindowRuleRow] {
+        array.compactMap { entry -> ConfigurationViewModel.WindowRuleRow? in
+            guard let t = entry.table else { return nil }
+            let cond = t["if"]?.table
+            return ConfigurationViewModel.WindowRuleRow(
+                appId: cond?["app-id"]?.string ?? "",
+                appNameRegex: cond?["app-name-regex-substring"]?.string ?? "",
+                windowTitleRegex: cond?["window-title-regex-substring"]?.string ?? "",
+                workspace: cond?["workspace"]?.string ?? "",
+                run: ConfigurationViewModel.commandString(t["run"] ?? ""),
+                checkFurtherCallbacks: t["check-further-callbacks"]?.bool ?? false,
+                // One spelling only. The upstream-branded alias for this matcher used to be read
+                // here too, because the parser still accepted it with a deprecation warning --
+                // reading only the current name would have dropped the matcher on the first GUI
+                // edit. The parser no longer accepts it, so a config carrying it does not load and
+                // this view model never sees one: the fallback was dead code, not compatibility.
+                duringStartup: cond?["during-aerospork-startup"]?.bool,
+            )
         }
     }
 }

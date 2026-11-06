@@ -37,11 +37,13 @@ import TOMLKit
 
 /// The one and only config writer.
 ///
-/// It edits the existing config text line-by-line and only rewrites the keys the UI manages, so
-/// user comments, key order, and any sections the UI doesn't understand survive untouched. It only
-/// emits keys that the canonical `parseConfig` accepts.
+/// It edits the existing config text line-by-line and only rewrites the keys the user changed, so
+/// comments, key order, and any sections the UI doesn't understand survive untouched. What it adds
+/// is in the v2 spelling, and it only emits keys that the canonical `parseConfig` accepts.
 @MainActor
 enum ConfigurationWriter {
+    private typealias Settings = ConfigurationViewModel.Settings
+
     struct ValidationDiagnostic: Equatable {
         let message: String
         let line: Int?
@@ -64,7 +66,7 @@ enum ConfigurationWriter {
         }
 
         let existed = FileManager.default.fileExists(atPath: target.path)
-        if existed { backUp(target) }
+        if existed { backUpOncePerSession(target) }
         ConfigFileWatcher.suppressNextSelfWrite()
         try result.write(to: target, atomically: true, encoding: .utf8)
         // The watcher bails when the file doesn't exist, and only re-arms from its own event
@@ -93,6 +95,21 @@ enum ConfigurationWriter {
     }()
 
     private static func timestamp(_ date: Date) -> String { backupTimestampFormatter.string(from: date) }
+
+    private static var sessionHasBackup = false
+
+    /// Called when Settings opens, and by a Raw TOML apply, which is a deliberate change of its own.
+    ///
+    /// Autosave writes every 600ms, so one backup per write turned five generations into the last few
+    /// seconds of one slider drag, and the config from before Settings opened was gone by the time
+    /// anyone wanted it.
+    static func startBackupSession() { sessionHasBackup = false }
+
+    static func backUpOncePerSession(_ target: URL, now: Date = Date()) {
+        guard !sessionHasBackup else { return }
+        sessionHasBackup = true
+        backUp(target, now: now)
+    }
 
     /// Copies `target` aside and prunes to `backupsToKeep`. Best-effort: a config we could not back
     /// up is not a reason to refuse the user's edit, and the pre-write validation already ran.
@@ -134,39 +151,41 @@ enum ConfigurationWriter {
     /// unconditionally re-serializing a section *destroys* anything the UI can't express. Guarding
     /// on "did this actually change" is what makes an untouched save a no-op.
     ///
-    /// **That rule only holds inside the TOML subset this writer understands.** Nine legal TOML
-    /// spellings defeat line surgery, silently deleting data or producing duplicate keys.
-    /// `unsupportedShapeReason` is what keeps the promise honest: callers must consult it
-    /// first and refuse the edit, because `render` itself cannot detect that it is doing damage.
+    /// This edits lines, and it cannot tell when the line it needed was not there. Callers check the
+    /// result with `refusal` before writing it.
     static func render(baseText base: String, from vm: ConfigurationViewModel) -> String {
         // The raw TOML tab is authoritative only when Apply was actually pressed. Keying this off
         // `rawTomlEdited` meant an unapplied raw buffer hijacked unrelated structured edits.
         if vm.rawTomlApplyRequested { return vm.rawToml }
+        guard vm.hasUnsavedChanges else { return base }
 
         // CRLF is not cosmetic here. Splitting on "\n" alone leaves a trailing "\r" on every line,
         // and `sectionHeaderName` requires a line to END with "]" -- so "[gaps]\r" was not
-        // recognised as a section by the writer OR by `unsupportedShapeReason`. The writer then
-        // appended a second [gaps] table and produced a duplicate-key parse error. Found by the
-        // property fuzzer; it accounted for most of its failures on its own.
+        // recognised as a section by the writer. The writer then appended a second [gaps] table and
+        // produced a duplicate-key parse error. Found by the property fuzzer; it accounted for most
+        // of its failures on its own.
         let usesCRLF = base.contains("\r\n")
         var lines = base.replacingOccurrences(of: "\r\n", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
-        // General settings (top-level scalars). Only rewrite the ones that actually changed --
-        // rewriting in place would also normalize quoting and could duplicate a quoted key.
-        for (key, value) in vm.changedScalars() {
-            setScalar(&lines, key, value)
-        }
-        for (key, commands) in vm.changedCallbacks() {
-            setScalar(&lines, key, tomlArray(commands))
+        // Only rewrite the ones that actually changed -- rewriting in place would also normalize
+        // quoting.
+        for scalar in Settings.scalarKeys where scalar.literal(vm.settings) != scalar.literal(vm.loaded) {
+            setKey(&lines, section: nil, key: scalar.key, value: scalar.literal(vm.settings))
         }
 
-        if vm.gapsEdited { replaceGaps(&lines, vm) }
-        if vm.assignmentsEdited { replaceAssignments(&lines, vm, isV2: isV2(base)) }
-        if vm.keyMappingEdited { replaceKeyMapping(&lines, vm) }
-        if vm.execEdited { replaceExec(&lines, vm) }
-        if vm.windowRulesEdited { replaceWindowRules(&lines, vm, isV2: isV2(base)) }
-        applyBindingDiff(&lines, vm, base: base)
+        let (now, before) = (vm.settings.asWritten, vm.loaded.asWritten)
+        if vm.edited(\.gaps) { replaceGaps(&lines, vm) }
+        if vm.edited(\.assignments) { applyAssignmentDiff(&lines, now.assignments, before.assignments) }
+        if vm.edited(\.keyMappingPreset) {
+            setKey(&lines, section: "key-mapping", key: "preset", value: escapedLiteral(now.keyMappingPreset))
+        }
+        if vm.edited(\.exec) { applyExecDiff(&lines, now.exec, before.exec) }
+        if vm.edited(\.windowRules) { replaceWindowRules(&lines, vm) }
+        // Guarded like every other section. It used to run on every save, so a binding the Raw TOML
+        // tab had added was missing from the view model, read as deleted, and removed by the next
+        // unrelated toggle.
+        if vm.edited(\.modes) { applyBindingDiff(&lines, vm, now, before) }
 
         // Give the file back the line ending and the trailing newline it arrived with.
         //
@@ -183,6 +202,71 @@ enum ConfigurationWriter {
         var result = lines.joined(separator: usesCRLF ? "\r\n" : "\n")
         if base.hasSuffix("\n"), !result.hasSuffix("\n") { result += usesCRLF ? "\r\n" : "\n" }
         return result
+    }
+
+    /// Why `rendered` must not be written, or nil. The proof behind "do no harm".
+    ///
+    /// Line surgery cannot tell when it has missed: a binding in an inline table or under a spaced
+    /// header has no line to find, so the edit silently did nothing while the UI reported success. A
+    /// list of spellings to refuse up front never kept up with that, and it locked whole files out
+    /// over one odd line. So the result is read back instead: each section the user edited has to say
+    /// what the panes say, and every other top-level key has to say what it said before. A spelling
+    /// the writer can't edit is refused only when the edit actually touches it.
+    static func refusal(rendered: String, base: String, from vm: ConfigurationViewModel) -> String? {
+        if vm.hasUnsavedChanges, let shape = unsupportedShapeReason(base) { return shape }
+        let cannotEdit = "This change can't be made to how the config file is written, so nothing was saved. Use the Raw TOML tab."
+        let baseTable = try? TOMLTable(string: base)
+        // Everything the writer emits is escaped, so a file that parsed before and doesn't now was
+        // broken by the surgery, and the parser's complaint about a stray line would only confuse.
+        guard let table = try? TOMLTable(string: rendered) else { return baseTable == nil ? validate(rendered) : cannotEdit }
+        let parsed: Config
+        switch parseConfig(rendered) {
+            case .success(let config): parsed = config
+            case .failure(let errors): return errors.map(\.description).joined(separator: "\n")
+        }
+        let want = vm.settings.asWritten
+        if let row = firstDuplicate(want.assignments.map(\.workspace)) { return "Two rows pin workspace '\(row)'. Remove one, and this change will save." }
+        if let row = firstDuplicate(want.exec.envVars.map(\.name)) { return "Two rows set '\(row)'. Remove one, and this change will save." }
+
+        let now = Settings(config: parsed, table: table).asWritten
+        var rewritten: Set<String> = []
+        for scalar in Settings.scalarKeys where scalar.literal(vm.settings) != scalar.literal(vm.loaded) {
+            rewritten.insert(scalar.key)
+            if scalar.literal(now) != scalar.literal(want) { return cannotEdit }
+        }
+        func matches<T: Equatable>(_ section: KeyPath<Settings, T>, owning keys: String...) -> Bool {
+            guard vm.edited(section) else { return true }
+            rewritten.formUnion(keys)
+            return now[keyPath: section] == want[keyPath: section]
+        }
+        // Rules waiting for a command were deliberately not written, so they still count as untouched.
+        let rulesMatch = vm.settings.windowRules.contains(where: \.hasNoCommand) || matches(\.windowRules, owning: "on-window", "on-window-detected")
+        guard rulesMatch,
+              matches(\.gaps, owning: "gaps"),
+              matches(\.assignments, owning: "monitors", "workspace-to-monitor-force-assignment"),
+              matches(\.keyMappingPreset, owning: "key-mapping"),
+              matches(\.exec, owning: "exec"),
+              matches(\.modes, owning: "mode", "keys")
+        else { return cannotEdit }
+
+        // Compared on the parsed tables rather than through `Settings`, which can't see what the panes
+        // don't model. No baseline to protect when the file on disk did not parse to begin with.
+        guard let baseTable else { return nil }
+        for key in Set(baseTable.keys + table.keys).subtracting(rewritten) where canonical(baseTable, key) != canonical(table, key) {
+            return cannotEdit
+        }
+        return nil
+    }
+
+    private static func firstDuplicate(_ names: [String]) -> String? {
+        var seen = Set<String>()
+        return names.first { !seen.insert($0).inserted }
+    }
+
+    private static func canonical(_ table: TOMLTable, _ key: String) -> String {
+        let one = TOMLTable()
+        one[key] = table[key]
+        return one.convert(to: .toml)
     }
 
     /// Validate before writing. A config that fails to parse used to land on disk anyway and only
@@ -213,207 +297,49 @@ enum ConfigurationWriter {
         return validate(text).map { ValidationDiagnostic(message: $0, line: nil, column: nil) }
     }
 
-    /// TOML has many equivalent spellings for the same data. This writer edits *lines*, so it only
-    /// understands one of them: single-line values, bare keys, and `[section]` headers.
-    ///
-    /// Given a file that uses any other legal spelling, line surgery previously produced either a
-    /// duplicate-key parse error or -- worse -- clean-parsing TOML with the user's data quietly
-    /// removed. Nine such shapes are known. Rather than pretend to handle them,
-    /// detect them and refuse: the Raw TOML tab can edit anything, and a refusal the user can read
-    /// beats silent corruption.
-    ///
-    /// Returns nil when structured editing is safe, or a human-readable reason when it is not.
-    /// Whether the base text is written in the v2 schema. Only the sections the writer REWRITES
-    /// need to know: everything else is either identical in both schemas or invisible to the view
-    /// model, and what the view model cannot see, the writer cannot delete.
-    private static func isV2(_ base: String) -> Bool {
-        (try? TOMLTable(string: base)).map(isConfigV2) ?? false
-    }
-
-    /// Net unclosed `[` on a line, ignoring anything inside a string or after a `#`.
-    ///
-    /// Counting the raw text conflated three different brackets: an array's, one inside a regex
-    /// (`'\\[Debug'` is an ordinary window-title matcher), and one in a comment. A bracket in a
-    /// string left the depth stuck above zero, and since the scan `continue`s while the depth is
-    /// positive, every later line was skipped and `unsupportedShapeReason` returned nil for the
-    /// rest of the file -- disabling every later refusal (at the time that included the
-    /// since-retired fingerprint refusal, whose absence had damaged a real config). A bracket in
-    /// a comment did the mirror opposite and refused a file that was fine.
-    ///
-    /// Deliberately not a TOML parser: it tracks the quoting well enough that a value cannot lie
-    /// about structure, which is all the caller needs.
-    static func bracketBalance(_ line: String) -> Int {
-        var depth = 0
-        var quote: Character? = nil
-        var escaped = false
-        for character in line {
-            if let open = quote {
-                // Escapes only apply inside basic strings; TOML literal strings ('...') take none.
-                if escaped { escaped = false; continue }
-                if open == "\"" && character == "\\" { escaped = true; continue }
-                if character == open { quote = nil }
-                continue
-            }
-            switch character {
-                case "\"", "'": quote = character
-                case "#": return depth // rest of the line is a comment
-                case "[": depth += 1
-                case "]": depth -= 1
-                default: break
-            }
-        }
-        return depth
-    }
-
+    /// A file with both line endings can't be given back the way it arrived: `render` normalizes to
+    /// one, which rewrites every line of every section. Nothing else is refused up front; see `refusal`.
     static func unsupportedShapeReason(_ text: String) -> String? {
-        let managedSections = ["gaps", "exec", "key-mapping", "workspace-to-monitor-force-assignment", "monitors", "on-window"]
-        let managedScalars = [
-            "start-at-login", "automatically-unhide-macos-hidden-apps",
-            "auto-move-workspaces-on-monitor-connect", "enable-normalization-flatten-containers",
-            "enable-normalization-opposite-orientation-for-nested-containers",
-            "default-root-container-layout", "default-root-container-orientation",
-            "accordion-padding", "after-startup-command", "on-focus-changed",
-            "on-focused-workspace-changed", "on-focused-monitor-changed",
-            "show-menu-bar-icon", "show-dock-icon",
-        ]
-
-        // Sub-tables this writer re-emits itself are fine; any other sub-table of a
-        // wholesale-rewritten section would be silently dropped.
-        let emittedSubTables: Set<String> = ["gaps.inner", "gaps.outer", "exec.env-vars"]
-        // First path segment of the keys we re-emit inside a rewritten section. Anything else
-        // there is lost. Segment-wise, because `inner.horizontal` inside [gaps] is a form we do
-        // emit, while `key-notation-to-key-code.unicorn` inside [key-mapping] is not.
-        let emittedKeysBySection: [String: Set<String>] = [
-            "key-mapping": ["preset"],
-            "exec": ["inherit-env-vars", "env-vars"],
-            "gaps": ["inner", "outer"],
-        ]
-
-        // Swift treats "\r\n" as ONE Character, so `split(separator: "\n")` does not split a CRLF
-        // file at all: every walker in this type then sees the entire config as a single line,
-        // finds no section headers, and appends duplicate `[mode.main.binding]` / `[gaps]` blocks
-        // that make the file stop parsing. A lone `\r` (classic Mac) breaks it the same way.
-        // Found by `ConfigSafetyWriterFuzzTest`, which the denylist had no entry for.
-        if text.contains("\r") {
-            return "This config uses Windows or classic-Mac line endings, which this editor cannot rewrite safely. Use the Raw TOML tab."
-        }
-
-        var section = "" // "" == top level
-        var openBracketDepth = 0
-
-        // Same CRLF normalization as `render` -- the guard must see exactly what the writer sees, or
-        // it will bless a file the writer then mangles.
-        for raw in text.replacingOccurrences(of: "\r\n", with: "\n")
-            .split(separator: "\n", omittingEmptySubsequences: false)
-        {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-
-            // Inside a multi-line value: consume until the brackets balance.
-            if openBracketDepth > 0 {
-                openBracketDepth += bracketBalance(line)
-                continue
-            }
-            if line.isEmpty || line.hasPrefix("#") { continue }
-
-            if line.hasPrefix("[") {
-                if line.hasPrefix("[[") { section = ""; continue } // array-of-tables: handled wholesale
-                guard let name = sectionHeaderName(line) else { continue }
-                section = name
-                for managed in managedSections
-                    where name.hasPrefix("\(managed).") && !emittedSubTables.contains(name)
-                {
-                    return "[\(name)] is a sub-table of a section this editor rewrites, so editing here would delete it. Use the Raw TOML tab."
-                }
-                continue
-            }
-
-            guard let eq = line.firstIndex(of: "=") else { continue }
-            let key = String(line[..<eq]).trimmingCharacters(in: .whitespaces)
-            let value = String(line[line.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
-
-            // Multi-line array: `setScalar`/`removeBindingLine` rewrite line 1 and orphan the rest.
-            let opens = bracketBalance(value)
-            if opens > 0 {
-                if section.isEmpty, managedScalars.contains(key) {
-                    return "'\(key)' is written as a multi-line array, which this editor cannot rewrite safely. Use the Raw TOML tab."
-                }
-                if section.hasPrefix("mode.") || section == "keys" || section.hasPrefix("keys.") {
-                    return "Binding '\(key)' is written as a multi-line array. Use the Raw TOML tab."
-                }
-                openBracketDepth = opens
-                continue
-            }
-
-            let unquoted = key.trimmingCharacters(in: CharacterSet(charactersIn: "'\""))
-
-            if section.isEmpty {
-                if key != unquoted, managedScalars.contains(unquoted) {
-                    return "'\(key)' uses a quoted key, which this editor would duplicate rather than replace. Use the Raw TOML tab."
-                }
-                // Dotted / inline spelling of a section rewritten wholesale, e.g.
-                // `gaps.inner.horizontal = 5` or `exec = { inherit-env-vars = false }`.
-                for managed in managedSections where unquoted == managed || unquoted.hasPrefix("\(managed).") {
-                    return "'\(key)' uses a dotted or inline form of [\(managed)], which this editor would duplicate. Use the Raw TOML tab."
-                }
-            }
-
-            // `[mode.main]` + `binding.alt-h = …`: add/remove both target `[mode.main.binding]`.
-            if section.hasPrefix("mode."), unquoted.hasPrefix("binding.") {
-                return "Bindings are written as dotted keys ('\(key)'), which this editor cannot add to or remove from. Use the Raw TOML tab."
-            }
-
-            // v2 analogues. Bindings are edited by locating a `[keys]` / `[keys.<mode>]` HEADER, so
-            // any spelling that defines those tables without one -- `keys = { … }`, `keys.alt-h = …`
-            // at top level, or a dotted named mode inside `[keys]` -- makes the writer append a
-            // second, conflicting definition instead of editing the existing entries.
-            if section.isEmpty, unquoted == "keys" || unquoted.hasPrefix("keys.") {
-                return "'\(key)' uses a dotted or inline form of [keys], which this editor would duplicate. Use the Raw TOML tab."
-            }
-            if section == "keys", unquoted.contains(".") {
-                return "[keys] contains a dotted key ('\(key)'), which this editor cannot add to or remove from. Use the Raw TOML tab."
-            }
-
-            // Rich fingerprints and fallback lists inside the assignment sections are no longer
-            // refused: every row carries the `[MonitorDescription]` it loaded as, and
-            // `formatMonitorValue` re-emits an untouched row from that, field for field -- so a
-            // save can no longer degrade a sibling's `width`/`height` disambiguation or truncate
-            // its fallback list. (This section used to refuse both, after a save rewrote two
-            // physically identical DELL entries down to bare names. The row the user actually
-            // edits is still replaced by their picked token; the badge in the pane says so.)
-            // The *sub-table* spelling (`[workspace-to-monitor-force-assignment.2.fingerprint]`)
-            // stays refused by the managed-section sub-table rule above: it is its own section
-            // header, which the whole-section rewrite would leave behind as a conflicting
-            // duplicate.
-
-            // A key inside a rewritten section that we do not re-emit would simply vanish.
-            if let emitted = emittedKeysBySection[section] {
-                let firstSegment = unquoted.split(separator: ".").first.map(String.init) ?? unquoted
-                if !emitted.contains(firstSegment) {
-                    return "[\(section)] contains '\(key)', which this editor does not model and would delete. Use the Raw TOML tab."
-                }
-            }
-        }
-        return nil
+        // Swift treats "\r\n" as ONE Character, so these only both hold for a bare "\n" beside a CRLF.
+        guard text.contains("\r\n"), text.contains("\n") else { return nil }
+        return "This config mixes Windows and Unix line endings, and editing it here would change every line. Use the Raw TOML tab."
     }
 
-    // MARK: - Key mapping / exec / window rules
+    // MARK: - Exec / assignments / window rules
 
-    private static func replaceKeyMapping(_ lines: inout [String], _ vm: ConfigurationViewModel) {
-        removeSections(&lines) { $0 == "key-mapping" }
-        lines.append(contentsOf: ["", "[key-mapping]", "preset = \(quoted(vm.keyMappingPreset))"])
+    private static func applyExecDiff(_ lines: inout [String], _ now: Settings.Exec, _ before: Settings.Exec) {
+        if now.inheritEnvVars != before.inheritEnvVars {
+            setKey(&lines, section: "exec", key: "inherit-env-vars", value: now.inheritEnvVars ? "true" : "false")
+        }
+        for old in before.envVars where !now.envVars.contains(where: { $0.name == old.name }) {
+            removeKey(&lines, section: "exec.env-vars", key: old.name)
+        }
+        for row in now.envVars where !before.envVars.contains(row) {
+            setKey(&lines, section: "exec.env-vars", key: row.name, value: escapedLiteral(row.value))
+        }
     }
 
-    private static func replaceExec(_ lines: inout [String], _ vm: ConfigurationViewModel) {
-        removeSections(&lines) { $0 == "exec" || $0.hasPrefix("exec.") }
-        var block = ["", "[exec]", "inherit-env-vars = \(bool(vm.execInheritEnvVars))"]
-        let vars = vm.execEnvVars.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
-        if !vars.isEmpty {
-            block.append("[exec.env-vars]")
-            for v in vars.sorted(by: { $0.name < $1.name }) {
-                block.append("\(tomlKey(v.name)) = \(quoted(v.value))")
-            }
+    /// v2 spells this `[monitors]`, and a row's line can be under either name: the parser merges them
+    /// into the one list the pane shows.
+    private static func applyAssignmentDiff(_ lines: inout [String], _ now: [ConfigurationViewModel.WorkspaceAssignmentRow], _ before: [ConfigurationViewModel.WorkspaceAssignmentRow]) {
+        let spellings = ["monitors", "workspace-to-monitor-force-assignment"]
+        for old in before where !now.contains(where: { $0.workspace == old.workspace }) {
+            for section in spellings { removeKey(&lines, section: section, key: old.workspace) }
         }
-        appendBlock(&lines, block)
+        for row in now where !before.contains(row) {
+            setKey(&lines, section: section(for: row.workspace, among: spellings, in: lines), key: row.workspace, value: formatMonitorValue(row.monitor))
+        }
+    }
+
+    private static func formatMonitorValue(_ token: String) -> String {
+        let t = token.trimmingCharacters(in: .whitespaces)
+        if UUID(uuidString: t) != nil { return "{ fingerprint = { uuid = '\(t)' } }" }
+        if Int(t) != nil { return t }
+        if t == "main" || t == "secondary" { return escapedLiteral(t) }
+        // A bare string is parsed as a *regex*, so a literal display name containing regex
+        // metacharacters never matches -- and macOS names duplicate panels exactly that way,
+        // e.g. "ACME Display 32 (1)". Emit a name fingerprint instead of a booby-trapped pattern.
+        return "{ fingerprint = { name = \(escapedLiteral(t)) } }"
     }
 
     /// A rule the `[on-window]` shorthand can express: an app id and a command, nothing else.
@@ -428,7 +354,23 @@ enum ConfigurationWriter {
             && rule.duringStartup == nil
     }
 
-    private static func replaceWindowRules(_ lines: inout [String], _ vm: ConfigurationViewModel, isV2: Bool) {
+    /// Rules go in the shorthand when EVERY rule fits it and no app id repeats, and long form otherwise.
+    ///
+    /// All-or-nothing on purpose. `parseConfigV2` appends `[on-window]` *after*
+    /// `on-window-detected`, so in a mixed file the long-form rules always get first refusal
+    /// regardless of where they sit in the text -- a list the user had ordered in the GUI would
+    /// not run in that order. With no long-form rules there is nothing to take precedence, and
+    /// app ids are unique, so order genuinely cannot matter.
+    private static func fitShorthand(_ rules: [ConfigurationViewModel.WindowRuleRow]) -> Bool {
+        let appIds = rules.map(\.appId)
+        return !rules.isEmpty && rules.allSatisfy(isShorthandExpressible) && Set(appIds).count == appIds.count
+    }
+
+    static func ruleOrderAsWritten(_ rules: [ConfigurationViewModel.WindowRuleRow]) -> [ConfigurationViewModel.WindowRuleRow] {
+        fitShorthand(rules) ? rules.sorted { $0.appId < $1.appId } : rules
+    }
+
+    private static func replaceWindowRules(_ lines: inout [String], _ vm: ConfigurationViewModel) {
         // A rule with no command yet cannot be written -- `run` is required by the parser. Leave the
         // whole section alone rather than writing the rest, because the alternative is silent
         // deletion: clearing the Command field to retype it made that rule disappear from disk on
@@ -437,32 +379,21 @@ enum ConfigurationWriter {
         // indication. The same guard covers a value the GUI cannot read at all (`app = 42` loads as
         // an empty command), which would otherwise be quietly dropped from the user's file.
         //
-        // Nothing is lost by waiting: the rules on disk keep working, and the edit lands as soon as
-        // the command is complete.
-        guard vm.windowRules.allSatisfy({ !$0.run.trimmingCharacters(in: .whitespaces).isEmpty }) else { return }
+        // Nothing is lost by waiting: the rules on disk keep working, and `didWrite` keeps the edit
+        // pending, so it lands as soon as the command is complete.
+        let rules = vm.settings.windowRules
+        guard !rules.contains(where: \.hasNoCommand) else { return }
 
-        removeArrayOfTables(&lines, named: "on-window-detected")
         // The shorthand table too. Removing only the long form left a v2 user's `[on-window]` rules
         // in the file alongside the long-form copy this writes, so every one of them applied twice.
-        removeSections(&lines) { $0 == "on-window" }
-        // A rule with no `run` yet is one the user is still filling in (the natural order is
-        // matcher first, command second). It is skipped here because `run` is required by the
-        // parser -- but the row is NOT dropped from the view model, so it stays on screen.
-        let rules = vm.windowRules.filter { !$0.run.trimmingCharacters(in: .whitespaces).isEmpty }
+        // And `[on-window-detected.if]`, the sub-table spelling of a matcher, which a removal up to
+        // the next header would leave behind to clash with whatever is written next.
+        removeBlocks(&lines) { $0 == "on-window" || $0 == "on-window-detected" || $0.hasPrefix("on-window-detected.") }
 
-        // Keep a config that was written in the v2 shorthand in the v2 shorthand, but only when
-        // EVERY rule fits it and no app id repeats. Anything else is written long form.
-        //
-        // All-or-nothing on purpose. `parseConfigV2` appends `[on-window]` *after*
-        // `on-window-detected`, so in a mixed file the long-form rules always get first refusal
-        // regardless of where they sit in the text -- a list the user had ordered in the GUI would
-        // not run in that order. With no long-form rules there is nothing to take precedence, and
-        // app ids are unique, so order genuinely cannot matter.
-        let appIds = rules.map(\.appId)
-        if isV2, !rules.isEmpty, rules.allSatisfy(isShorthandExpressible), Set(appIds).count == appIds.count {
+        if fitShorthand(rules) {
             var block = ["", "[on-window]"]
-            for rule in rules.sorted(by: { $0.appId < $1.appId }) {
-                block.append("\(quoted(rule.appId)) = \(tomlArray(splitCommands(rule.run)))")
+            for rule in ruleOrderAsWritten(rules) {
+                block.append("\(escapedLiteral(rule.appId)) = \(tomlArray(splitCommands(rule.run)))")
             }
             appendBlock(&lines, block)
             return
@@ -470,13 +401,13 @@ enum ConfigurationWriter {
 
         for rule in rules {
             var block = ["", "[[on-window-detected]]"]
-            if !rule.appId.isEmpty { block.append("if.app-id = \(quoted(rule.appId))") }
-            if !rule.appNameRegex.isEmpty { block.append("if.app-name-regex-substring = \(quoted(rule.appNameRegex))") }
-            if !rule.windowTitleRegex.isEmpty { block.append("if.window-title-regex-substring = \(quoted(rule.windowTitleRegex))") }
-            if !rule.workspace.isEmpty { block.append("if.workspace = \(quoted(rule.workspace))") }
+            if !rule.appId.isEmpty { block.append("if.app-id = \(escapedLiteral(rule.appId))") }
+            if !rule.appNameRegex.isEmpty { block.append("if.app-name-regex-substring = \(escapedLiteral(rule.appNameRegex))") }
+            if !rule.windowTitleRegex.isEmpty { block.append("if.window-title-regex-substring = \(escapedLiteral(rule.windowTitleRegex))") }
+            if !rule.workspace.isEmpty { block.append("if.workspace = \(escapedLiteral(rule.workspace))") }
             // The upstream-branded spelling of this key is no longer parsed at all, so any rule the
             // GUI round-trips is written under the only name that loads.
-            if let during = rule.duringStartup { block.append("if.during-aerospork-startup = \(bool(during))") }
+            if let during = rule.duringStartup { block.append("if.during-aerospork-startup = \(during)") }
             if rule.checkFurtherCallbacks { block.append("check-further-callbacks = true") }
             block.append("run = \(tomlArray(splitCommands(rule.run)))")
             appendBlock(&lines, block)
@@ -512,141 +443,91 @@ enum ConfigurationWriter {
         return inner
     }
 
-    /// Removes every `[[name]]` block. `removeSections` deliberately ignores array-of-table headers,
-    /// so this is a separate walker.
-    private static func removeArrayOfTables(_ lines: inout [String], named name: String) {
-        var result: [String] = []
-        var i = 0
-        while i < lines.count {
-            if arrayOfTablesHeaderName(lines[i]) == name {
-                i += 1
-                var end = i
-                while end < lines.count, !isHeaderLine(lines[end]) { end += 1 }
-                // The same rule `removeSections` follows: blank and comment lines immediately before
-                // the next header document THAT header, not the block being removed. Without this,
-                // editing a window rule deleted the banner comment above whatever section came next
-                // -- a section the user never opened, which is exactly what the writer exists to
-                // leave alone.
-                var keepFrom = end
-                while keepFrom > i {
-                    let prev = lines[keepFrom - 1].trimmingCharacters(in: .whitespaces)
-                    if prev.isEmpty || prev.hasPrefix("#") { keepFrom -= 1 } else { break }
-                }
-                result.append(contentsOf: lines[keepFrom ..< end])
-                i = end
-            } else {
-                result.append(lines[i])
-                i += 1
-            }
-        }
-        lines = result
-    }
-
-    private static func splitCommands(_ s: String) -> [String] {
+    static func splitCommands(_ s: String) -> [String] {
         s.components(separatedBy: ConfigurationViewModel.commandSeparator)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }
 
-    private static func tomlArray(_ items: [String]) -> String {
+    static func tomlArray(_ items: [String]) -> String {
         "[" + items.map { escapedLiteral($0) }.joined(separator: ", ") + "]"
     }
 
-    // MARK: - Scalars
+    // MARK: - Per-key edits
 
-    private static func setScalar(_ lines: inout [String], _ key: String, _ value: String) {
-        let firstHeader = lines.firstIndex(where: isHeaderLine) ?? lines.count
-        for i in 0 ..< firstHeader {
-            let t = lines[i].trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("#") { continue }
-            if t.hasPrefix("\(key) ") || t.hasPrefix("\(key)="), t.contains("=") {
-                lines[i] = "\(key) = \(value)"
-                return
-            }
+    /// The lines of `[section]`, or of the preamble above the first header when `section` is nil. Nil
+    /// when the file has no such section.
+    private static func body(_ lines: [String], _ section: String?) -> Range<Int>? {
+        var start = 0
+        if let section {
+            guard let header = headerIndex(lines, section) else { return nil }
+            start = header + 1
         }
-        lines.insert("\(key) = \(value)", at: firstHeader)
+        return start ..< (lines[start...].firstIndex(where: isHeaderLine) ?? lines.count)
+    }
+
+    private static func keyLine(_ lines: [String], _ section: String?, _ key: String) -> Int? {
+        body(lines, section)?.first { lineKey(lines[$0]) == key }
+    }
+
+    /// Updates `key` where it stands, or adds it. Every other line of the section stays as it is, which
+    /// a rewrite of the whole section could not do: it re-spelled sibling rows, dropped comments and
+    /// moved the section.
+    private static func setKey(_ lines: inout [String], section: String?, key: String, value: String) {
+        let spelled = "\(tomlKey(key)) = \(value)"
+        if let i = keyLine(lines, section, key) {
+            let indent = lines[i].prefix { $0 == " " || $0 == "\t" }
+            let comment = lines[i].dropFirst(indent.count + stripTrailingComment(lines[i]).count)
+            lines[i] = "\(indent)\(spelled)\(comment)"
+        } else if let body = body(lines, section) {
+            // After the last key. Blank and comment lines before the next header document THAT header.
+            var at = body.upperBound
+            while at > body.lowerBound, isBlankOrComment(lines[at - 1]) { at -= 1 }
+            // A section with no keys yet keeps what opens it above the new line, like a file's banner.
+            if at == body.lowerBound {
+                while at < body.upperBound, lines[at].trimmingCharacters(in: .whitespaces).hasPrefix("#") { at += 1 }
+            }
+            lines.insert(spelled, at: at)
+        } else if let section {
+            appendBlock(&lines, ["", "[\(section)]", spelled])
+        }
+    }
+
+    private static func removeKey(_ lines: inout [String], section: String, key: String) {
+        if let i = keyLine(lines, section, key) { lines.remove(at: i) }
+    }
+
+    /// Which of a table's spellings, v2 first, `key` belongs in: where its line already is, else a
+    /// section the file already has, else the v2 spelling, which `setKey` creates.
+    private static func section(for key: String, among spellings: [String], in lines: [String]) -> String {
+        spellings.last { keyLine(lines, $0, key) != nil } ?? spellings.first { headerIndex(lines, $0) != nil } ?? spellings[0]
     }
 
     // MARK: - Gaps
 
-    // Internal, not private, so ConfigTest can round-trip it without touching the real config file.
+    /// Whole-section, in place: a value the pane can't show (a per-monitor list) has no single row to
+    /// edit, so this one is rewritten, and the footer in the pane says so.
+    ///
+    /// Internal, not private, so ConfigTest can round-trip it without touching the real config file.
     static func replaceGaps(_ lines: inout [String], _ vm: ConfigurationViewModel) {
-        removeSections(&lines) { $0 == "gaps" || $0.hasPrefix("gaps.") }
-        insertAfterPreamble(&lines, [
-            "",
+        let isGaps = { (name: String) in name == "gaps" || name.hasPrefix("gaps.") }
+        let at = lines.firstIndex { sectionHeaderName($0).map(isGaps) ?? false }
+        removeBlocks(&lines, where: isGaps)
+        let gaps = vm.settings.gaps
+        let block = [
             "[gaps]",
-            "inner.horizontal = \(vm.innerGapsHorizontal)",
-            "inner.vertical = \(vm.innerGapsVertical)",
-            "outer.top = \(vm.outerGapsTop)",
-            "outer.bottom = \(vm.outerGapsBottom)",
-            "outer.left = \(vm.outerGapsLeft)",
-            "outer.right = \(vm.outerGapsRight)",
-        ])
-    }
-
-    // MARK: - Workspace to monitor assignments
-
-    /// v2 spells this `[monitors]`. BOTH names have to be removed regardless of which one we then
-    /// emit: the view model shows one merged list, so leaving the other section behind would
-    /// resurrect the rows the user just deleted.
-    private static func replaceAssignments(_ lines: inout [String], _ vm: ConfigurationViewModel, isV2: Bool) {
-        removeSections(&lines) { $0 == "workspace-to-monitor-force-assignment" || $0 == "monitors" }
-        let rows = vm.assignments
-            .filter { !$0.workspace.trimmingCharacters(in: .whitespaces).isEmpty }
-            .filter { !$0.monitor.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard !rows.isEmpty else { return }
-        var block = ["", isV2 ? "[monitors]" : "[workspace-to-monitor-force-assignment]"]
-        for r in rows.sorted(by: { $0.workspace < $1.workspace }) {
-            block.append("\(tomlKey(r.workspace)) = \(formatMonitorValue(r))")
+            "inner.horizontal = \(gaps.innerHorizontal)",
+            "inner.vertical = \(gaps.innerVertical)",
+            "outer.top = \(gaps.outerTop)",
+            "outer.bottom = \(gaps.outerBottom)",
+            "outer.left = \(gaps.outerLeft)",
+            "outer.right = \(gaps.outerRight)",
+        ]
+        if let at {
+            lines.insert(contentsOf: block, at: at)
+        } else {
+            appendBlock(&lines, [""] + block)
         }
-        appendBlock(&lines, block)
-    }
-
-    /// Do no harm: while the token still equals what this row loaded as, the user has not edited
-    /// its monitor — re-emit the loaded descriptions faithfully. The single token is lossy (a
-    /// regex and a fingerprint name collapse to the same string, a fallback list to its first
-    /// entry), so serializing an untouched row from its token is how editing workspace A silently
-    /// rewrote workspace B's regex as a literal name that matches nothing.
-    private static func formatMonitorValue(_ r: ConfigurationViewModel.WorkspaceAssignmentRow) -> String {
-        if let loaded = r.loadedDescriptions, !loaded.isEmpty, r.monitor == r.loadedToken {
-            let values = loaded.map(formatMonitorDescription)
-            return values.count == 1 ? values[0] : "[" + values.joined(separator: ", ") + "]"
-        }
-        return formatMonitorValue(r.monitor)
-    }
-
-    private static func formatMonitorDescription(_ d: MonitorDescription) -> String {
-        switch d {
-            case .main: quoted("main")
-            case .secondary: quoted("secondary")
-            case .sequenceNumber(let n): String(n)
-            // A bare string is parsed as a regex; this one arrived as a regex, so it stays one.
-            case .pattern(let raw, _): quoted(raw)
-            case .fingerprint(let data): formatFingerprint(data)
-        }
-    }
-
-    private static func formatFingerprint(_ data: MonitorFingerprintPatternData) -> String {
-        var fields: [String] = []
-        if let v = data.vendorID { fields.append("vendor = \(v)") }
-        if let m = data.modelID { fields.append("model = \(m)") }
-        if let s = data.serialNumber { fields.append("serial = \(quoted(s))") }
-        if let n = data.displayNamePattern { fields.append("name = \(quoted(n))") }
-        if let w = data.widthPixels { fields.append("width = \(w)") }
-        if let h = data.heightPixels { fields.append("height = \(h)") }
-        if let u = data.displayUUID { fields.append("uuid = \(quoted(u))") }
-        return "{ fingerprint = { \(fields.joined(separator: ", ")) } }"
-    }
-
-    private static func formatMonitorValue(_ token: String) -> String {
-        let t = token.trimmingCharacters(in: .whitespaces)
-        if UUID(uuidString: t) != nil { return "{ fingerprint = { uuid = '\(t)' } }" }
-        if Int(t) != nil { return t }
-        if t == "main" || t == "secondary" { return quoted(t) }
-        // A bare string is parsed as a *regex*, so a literal display name containing regex
-        // metacharacters never matches -- and macOS names duplicate panels exactly that way,
-        // e.g. "ACME Display 32 (1)". Emit a name fingerprint instead of a booby-trapped pattern.
-        return "{ fingerprint = { name = \(quoted(t)) } }"
     }
 
     /// A bare TOML key may only contain A-Za-z0-9_- ; anything else must be quoted or the file
@@ -658,116 +539,36 @@ enum ConfigurationWriter {
         return escapedLiteral(t)
     }
 
-    // MARK: - Key bindings (add / remove only)
+    // MARK: - Key bindings
 
-    /// Section header a mode's bindings live under, in whichever schema the file is written in.
-    /// v1 spells it `[mode.<name>.binding]`; v2 spells the main mode `[keys]` and a named mode
-    /// `[keys.<name>]`. Writing the v1 spelling into a v2 file works -- the v1 parser still runs
-    /// first -- but it leaves the user with two different syntaxes for the same thing in one file.
-    private static func bindingSection(mode: String, isV2: Bool) -> String {
-        if !isV2 { return "mode.\(mode).binding" }
-        return mode == mainModeId ? "keys" : "keys.\(mode)"
+    /// Where a mode's bindings can live: `[keys]` / `[keys.<name>]`, the v2 spelling and the one a new
+    /// section is written in, or `[mode.<name>.binding]`, which still parses and overrides it.
+    private static func bindingSections(mode: String) -> [String] {
+        [mode == mainModeId ? "keys" : "keys.\(tomlKey(mode))", "mode.\(tomlKey(mode)).binding"]
     }
 
-    private static func applyBindingDiff(_ lines: inout [String], _ vm: ConfigurationViewModel, base: String) {
-        let v2 = isV2(base)
-        // mode -> key -> the section header that key's line actually lives under. Tracked per KEY,
-        // not per mode, because a v2 file can bind some of the main mode in `[keys]` and the rest in
-        // `[mode.main.binding]`; editing a row has to rewrite the line it came from. `[keys]` is
-        // filled first so `[mode.*]` overwrites it -- the same layering the parser applies, so an
-        // edit lands in the section the parser actually reads.
-        var original: [String: [String: (section: String, command: String)]] = [:]
-        let table = try? TOMLTable(string: base)
-        if v2, let keysTable = table?["keys"]?.table {
-            for (k, val) in keysTable {
-                if let sub = val.table {
-                    for (bindKey, v) in sub {
-                        original[k, default: [:]][bindKey] = ("keys.\(k)", ConfigurationViewModel.commandString(v))
-                    }
-                } else {
-                    original[mainModeId, default: [:]][k] = ("keys", ConfigurationViewModel.commandString(val))
-                }
-            }
-        }
-        if let modeTable = table?["mode"]?.table {
-            for (mode, val) in modeTable {
-                guard let binding = val.table?["binding"]?.table else { continue }
-                for (k, v) in binding {
-                    original[mode, default: [:]][k] = ("mode.\(mode).binding", ConfigurationViewModel.commandString(v))
-                }
-            }
-        }
-        // A mode the user deleted. Scoped to modes the view model actually LOADED, so a view model
-        // that never loaded any (tests, a fresh instance) cannot wipe every mode in the file.
-        let deleted = vm.loadedModeNames.subtracting(vm.modes.map(\.mode))
+    private static func applyBindingDiff(_ lines: inout [String], _ vm: ConfigurationViewModel, _ now: Settings, _ before: Settings) {
+        // A mode the user deleted.
+        let modes = vm.settings.modes.map(\.mode)
+        let deleted = Set(vm.loaded.modes.map(\.mode)).subtracting(modes)
         if !deleted.isEmpty {
-            removeSections(&lines) { name in
-                deleted.contains { name == "mode.\($0)" || name.hasPrefix("mode.\($0).") || (v2 && name == "keys.\($0)") }
+            removeBlocks(&lines) { name in
+                deleted.contains { name == "mode.\($0)" || name.hasPrefix("mode.\($0).") || name == "keys.\($0)" }
             }
         }
-        for md in vm.modes {
-            let desired = Set(md.bindings.map(\.key))
-            let orig = original[md.mode] ?? [:]
-            // Removals are scoped to modes the view model actually LOADED, for the same reason the
-            // whole-mode deletion above is: a view model that never read this file (a fresh
-            // instance, a test) has an empty `modes`, and every binding in the file would look
-            // deleted. Harmless while the writer only knew `[mode.*]` -- a v2 file has none -- but
-            // once `[keys]` is in the diff it would silently wipe the user's bindings.
-            if vm.loadedModeNames.contains(md.mode) {
-                for (key, o) in orig where !desired.contains(key) {
-                    removeBindingLine(&lines, section: o.section, key: key)
-                }
+        for mode in modes {
+            let sections = bindingSections(mode: mode)
+            let new = now.modes.first { $0.mode == mode }?.bindings ?? []
+            let old = before.modes.first { $0.mode == mode }?.bindings ?? []
+            for row in old where !new.contains(where: { $0.key == row.key }) {
+                // From both: a `[keys]` line under a `[mode.*]` one would otherwise take over.
+                for section in sections { removeKey(&lines, section: section, key: row.key) }
             }
-            for row in md.bindings {
-                if let o = orig[row.key] {
-                    // Re-binding an existing key used to be a silent no-op: the diff only added
-                    // keys absent from the original and removed keys absent from the desired set,
-                    // so changing a key's *command* wrote nothing and the UI reported success.
-                    //
-                    // Compared on the COMMAND, not just re-emitted: `formatCommand` normalizes
-                    // quoting, so rewriting an untouched line would turn `key = "cmd"` into
-                    // `key = 'cmd'` and make a no-op save modify the file.
-                    guard row.command != o.command else { continue }
-                    updateBindingLine(&lines, section: o.section, key: row.key, command: row.command)
-                } else {
-                    addBindingLine(&lines, section: bindingSection(mode: md.mode, isV2: v2), key: row.key, command: row.command)
-                }
+            // Only what changed: `formatCommand` normalizes quoting, so rewriting an untouched line
+            // would turn `key = "cmd"` into `key = 'cmd'`.
+            for row in new where !old.contains(row) {
+                setKey(&lines, section: section(for: row.key, among: sections, in: lines), key: row.key, value: formatCommand(row.command))
             }
-        }
-    }
-
-    private static func updateBindingLine(_ lines: inout [String], section: String, key: String, command: String) {
-        guard let h = headerIndex(lines, section) else { return }
-        var i = h + 1
-        while i < lines.count, !isHeaderLine(lines[i]) {
-            if lineKey(lines[i]) == key {
-                let indent = lines[i].prefix { $0 == " " || $0 == "\t" }
-                let replacement = "\(indent)\(key) = \(formatCommand(command))"
-                if lines[i] != replacement { lines[i] = replacement }
-                return
-            }
-            i += 1
-        }
-    }
-
-    private static func removeBindingLine(_ lines: inout [String], section: String, key: String) {
-        guard let h = headerIndex(lines, section) else { return }
-        var i = h + 1
-        while i < lines.count, !isHeaderLine(lines[i]) {
-            if lineKey(lines[i]) == key {
-                lines.remove(at: i)
-                return
-            }
-            i += 1
-        }
-    }
-
-    private static func addBindingLine(_ lines: inout [String], section: String, key: String, command: String) {
-        let line = "\(key) = \(formatCommand(command))"
-        if let h = headerIndex(lines, section) {
-            lines.insert(line, at: h + 1)
-        } else {
-            lines.append(contentsOf: ["", "[\(section)]", line])
         }
     }
 
@@ -783,12 +584,10 @@ enum ConfigurationWriter {
 
     // MARK: - Line helpers
 
-    private static func bool(_ v: Bool) -> String { v ? "true" : "false" }
-
     /// Quote a TOML string, *escaping* rather than deleting. The previous implementation stripped
     /// quote characters out of the value, which silently changed the user's data (a command
     /// containing an apostrophe came back different).
-    private static func escapedLiteral(_ s: String) -> String {
+    static func escapedLiteral(_ s: String) -> String {
         // Prefer a literal single-quoted string; TOML literal strings have no escapes at all, so
         // fall back to a basic double-quoted string when the value contains a single quote.
         if !s.contains("'") { return "'\(s)'" }
@@ -799,10 +598,13 @@ enum ConfigurationWriter {
         return "\"\(escaped)\""
     }
 
-    private static func quoted(_ s: String) -> String { escapedLiteral(s) }
-
     private static func isHeaderLine(_ line: String) -> Bool {
         line.trimmingCharacters(in: .whitespaces).hasPrefix("[")
+    }
+
+    private static func isBlankOrComment(_ line: String) -> Bool {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty || t.hasPrefix("#")
     }
 
     /// Name of a single-bracket table header (`[gaps]` -> "gaps"). Returns nil for array-of-table
@@ -847,13 +649,13 @@ enum ConfigurationWriter {
         return k
     }
 
-    /// Removes each matching single-bracket section: its header plus following lines up to (but not
-    /// including) the next header line.
-    private static func removeSections(_ lines: inout [String], where match: (String) -> Bool) {
+    /// Removes each block whose header name matches, `[x]` or `[[x]]`: the header plus the lines up to
+    /// (but not including) the next header.
+    private static func removeBlocks(_ lines: inout [String], where match: (String) -> Bool) {
         var result: [String] = []
         var i = 0
         while i < lines.count {
-            if let name = sectionHeaderName(lines[i]), match(name) {
+            if let name = sectionHeaderName(lines[i]) ?? arrayOfTablesHeaderName(lines[i]), match(name) {
                 i += 1
                 var end = i
                 while end < lines.count, !isHeaderLine(lines[end]) { end += 1 }
@@ -862,10 +664,7 @@ enum ConfigurationWriter {
                 // documentation for a section they never touched -- which broke the whole
                 // "untouched sections are left alone" promise.
                 var keepFrom = end
-                while keepFrom > i {
-                    let prev = lines[keepFrom - 1].trimmingCharacters(in: .whitespaces)
-                    if prev.isEmpty || prev.hasPrefix("#") { keepFrom -= 1 } else { break }
-                }
+                while keepFrom > i, isBlankOrComment(lines[keepFrom - 1]) { keepFrom -= 1 }
                 result.append(contentsOf: lines[keepFrom ..< end])
                 i = end
             } else {
@@ -874,10 +673,5 @@ enum ConfigurationWriter {
             }
         }
         lines = result
-    }
-
-    private static func insertAfterPreamble(_ lines: inout [String], _ block: [String]) {
-        let idx = lines.firstIndex(where: isHeaderLine) ?? lines.count
-        lines.insert(contentsOf: block, at: idx)
     }
 }

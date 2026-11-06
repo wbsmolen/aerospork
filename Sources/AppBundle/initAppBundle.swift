@@ -73,6 +73,9 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
     // send -- went untrapped. AppKit-initiated quits are handled by `AeroSporkAppDelegate`.
     interceptTermination(SIGINT)
     interceptTermination(SIGTERM)
+    // Here, not in `readConfig`: that also runs for `reload-config --dry-run` and every Settings save,
+    // none of which should rewrite the user's file.
+    migrateUserConfigToV2IfNeeded()
     if !reloadConfig() {
         check(reloadConfig(forceConfigUrl: defaultConfigUrl))
     }

@@ -1,45 +1,45 @@
 import Carbon
 
-/// Local drop-in replacement for soffes/HotKey's `Key` enum.
-/// Case names and Carbon virtual keycodes mirror HotKey's `Key` exactly, so the rest of the
-/// config code (keysMap.swift `[String: Key]` tables, `toString()`, `HotkeyBinding.keyCode`)
-/// keeps compiling unchanged. `carbonKeyCode` is used for `RegisterEventHotKey`.
-enum Key: CaseIterable, Equatable, Hashable, Sendable {
+/// Local drop-in replacement for soffes/HotKey's `Key` enum. Case names and Carbon virtual keycodes
+/// mirror HotKey's `Key` exactly. The raw value is the key's notation in the config.
+/// `carbonKeyCode` is used for `RegisterEventHotKey`.
+enum Key: String, CaseIterable, Equatable, Hashable, Sendable {
     // MARK: - Letters
     case a, b, c, d, e, f, g, h, i, j, k, l, m
     case n, o, p, q, r, s, t, u, v, w, x, y, z
 
     // MARK: - Numbers
-    case zero, one, two, three, four, five, six, seven, eight, nine
+    case zero = "0", one = "1", two = "2", three = "3", four = "4"
+    case five = "5", six = "6", seven = "7", eight = "8", nine = "9"
 
     // MARK: - Symbols
     case period
     case quote
-    case rightBracket
+    case rightBracket = "rightSquareBracket"
     case semicolon
     case slash
     case backslash
     case comma
     case equal
-    case grave // Backtick
-    case leftBracket
+    case grave = "backtick"
+    case leftBracket = "leftSquareBracket"
     case minus
-    case section
+    case section = "sectionSign"
 
     // MARK: - Whitespace
     case space
     case tab
-    case `return`
+    case `return` = "enter"
 
     // MARK: - Modifiers
-    case command
-    case rightCommand
-    case option
-    case rightOption
-    case control
-    case rightControl
+    case command = "cmd"
+    case rightCommand = "rCmd"
+    case option = "alt"
+    case rightOption = "rAlt"
+    case control = "ctrl"
+    case rightControl = "rCtrl"
     case shift
-    case rightShift
+    case rightShift = "rShift"
     case function
     case capsLock
 
@@ -48,10 +48,10 @@ enum Key: CaseIterable, Equatable, Hashable, Sendable {
     case pageDown
     case home
     case end
-    case upArrow
-    case rightArrow
-    case downArrow
-    case leftArrow
+    case upArrow = "up"
+    case rightArrow = "right"
+    case downArrow = "down"
+    case leftArrow = "left"
 
     // MARK: - Functions
     case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10
@@ -61,17 +61,17 @@ enum Key: CaseIterable, Equatable, Hashable, Sendable {
     case keypad0, keypad1, keypad2, keypad3, keypad4
     case keypad5, keypad6, keypad7, keypad8, keypad9
     case keypadClear
-    case keypadDecimal
+    case keypadDecimal = "keypadDecimalMark"
     case keypadDivide
     case keypadEnter
-    case keypadEquals
+    case keypadEquals = "keypadEqual"
     case keypadMinus
     case keypadMultiply
     case keypadPlus
 
     // MARK: - Misc
-    case escape
-    case delete
+    case escape = "esc"
+    case delete = "backspace"
     case forwardDelete
     case help
     case volumeUp

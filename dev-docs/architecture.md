@@ -117,7 +117,7 @@ Two surfaces, and neither is a window the app owns:
   panes in the native macOS preference toolbar over one `ConfigurationViewModel`. The selection is
   restored with `AppStorage`. Structured panes auto-save on a 600ms debounce; Raw TOML applies
   explicitly. The view model is a lossy projection of the config, which is why the writer guards
-  each section on an `…Edited` flag; see the writer invariant in `CLAUDE.md`.
+  each section on `edited(section)`; see the writer invariant in `CLAUDE.md`.
 
 The panes deliberately share navigation but not one generic layout. Forms use grouped native
 controls; editable collections use inset tables and a shared action bar; Raw TOML wraps `NSTextView`
@@ -129,7 +129,7 @@ per-keystroke without a line-array rebuild.
 
 **`SettingsChrome.swift` owns every shared control.** `NumberField`, `SettingsHint`,
 `SettingsFooter`, `IconButton`, `PanelHeader`, `ListActionBar`, `ContentUnavailableViewCompat`,
-`SectionLabel`, `Badge`, `StatusLabel`, `Banner`, `CodeEditor`, `CopyButton`. Nothing there holds state or touches the
+`SectionLabel`, `Badge`, `StatusLabel`, `Banner`, `CopyButton`. Nothing there holds state or touches the
 config; it is presentation only.
 
 That file exists because of a specific decay pattern. The panes were written at different times, and

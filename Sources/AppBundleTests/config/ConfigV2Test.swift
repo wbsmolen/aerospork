@@ -210,15 +210,15 @@ final class ConfigV2Test: XCTestCase {
 
     // MARK: - Settings GUI
 
-    /// The view model shows ONE merged list of assignments, so a monitor edit has to remove both
-    /// spellings of the section. Removing only the v1 name left `[monitors]` behind and resurrected
-    /// every row the user had just deleted.
+    /// The view model shows ONE merged list of assignments, so a deleted row has to go from whichever
+    /// spelling of the section holds it. Removing only the v1 name left `[monitors]` behind and
+    /// resurrected every row the user had just deleted.
     func testEditingMonitorsInAV2ConfigDoesNotResurrectOldRows() {
         let base = "mod = 'alt'\n\n[monitors]\n1 = 'main'\n2 = 'secondary'\n"
         let vm = ConfigurationViewModel()
-        vm.assignments = [.init(workspace: "1", monitor: "main"), .init(workspace: "2", monitor: "secondary")]
+        vm.settings.assignments = [.init(workspace: "1", monitor: "main"), .init(workspace: "2", monitor: "secondary")]
         vm.markLoaded()
-        vm.assignments.removeLast()
+        vm.settings.assignments.removeLast()
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         assertEquals(errors(out), [])
@@ -227,8 +227,6 @@ final class ConfigV2Test: XCTestCase {
         assertEquals(parse(out).workspaceToMonitorForceAssignment.keys.sorted(), ["1"])
     }
 
-    /// The GUI cannot see `[keys]` (it reads bindings out of `[mode.*]`), so it appends the v1
-    /// spelling -- which is exactly why v2 keeps honouring it. What it must NOT do is break the file.
     func testAddingABindingToAV2ConfigStillLoads() {
         let base = "mod = 'alt'\nworkspaces = '1-3'\n\n[keys]\nalt-q = 'close'\n"
         let vm = ConfigurationViewModel()

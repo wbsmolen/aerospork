@@ -11,10 +11,10 @@ struct GeneralSettingsTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Start AeroSpork at login", isOn: viewModel.binding(\.startAtLogin))
-                Toggle("Automatically unhide macOS hidden apps", isOn: viewModel.binding(\.automaticallyUnhideMacosHiddenApps))
+                Toggle("Start AeroSpork at login", isOn: viewModel.binding(\.settings.general.startAtLogin))
+                Toggle("Automatically unhide macOS hidden apps", isOn: viewModel.binding(\.settings.general.automaticallyUnhideMacosHiddenApps))
                     .help("Undo ⌘H automatically, so hidden windows keep tiling")
-                Toggle("Move workspaces to assigned monitors on connect", isOn: viewModel.binding(\.autoMoveWorkspacesOnMonitorConnect))
+                Toggle("Move workspaces to assigned monitors on connect", isOn: viewModel.binding(\.settings.general.autoMoveWorkspacesOnMonitorConnect))
                     .help("Plug in a dock and your pinned workspaces go back to the monitors you assigned them. Off, they stay wherever they landed when the monitor went away.")
             } header: {
                 SectionLabel("Startup & behaviour", "power")
@@ -23,13 +23,13 @@ struct GeneralSettingsTab: View {
             }
 
             Section {
-                Toggle("Show icon in the menu bar", isOn: viewModel.binding(\.showMenuBarIcon))
+                Toggle("Show icon in the menu bar", isOn: viewModel.binding(\.settings.general.showMenuBarIcon))
                     .help("The workspace chips, and the menu with workspace switching and Settings in it")
                 // Shows the *effective* value, which is not always the stored one: with the menu bar
                 // icon off, `AppVisibility` forces the Dock icon on so Settings stays reachable.
                 Toggle("Show icon in the Dock", isOn: Binding(
                     get: { viewModel.appVisibility.showsDockIcon },
-                    set: { viewModel.binding(\.showDockIcon).wrappedValue = $0 },
+                    set: { viewModel.binding(\.settings.general.showDockIcon).wrappedValue = $0 },
                 ))
                 .disabled(viewModel.appVisibility.dockIconIsForced)
             } header: {
@@ -41,20 +41,20 @@ struct GeneralSettingsTab: View {
             }
 
             Section {
-                Picker("New workspaces use", selection: viewModel.binding(\.defaultRootContainerLayout)) {
+                Picker("New workspaces use", selection: viewModel.binding(\.settings.general.defaultRootContainerLayout)) {
                     Text("Tiles").tag("tiles")
                     Text("Accordion").tag("accordion")
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Split direction", selection: viewModel.binding(\.defaultRootContainerOrientation)) {
+                Picker("Split direction", selection: viewModel.binding(\.settings.general.defaultRootContainerOrientation)) {
                     Text("Auto").tag("auto")
                     Text("Horizontal").tag("horizontal")
                     Text("Vertical").tag("vertical")
                 }
                 .pickerStyle(.segmented)
 
-                NumberField("Accordion peek", value: viewModel.binding(\.accordionPadding))
+                NumberField("Accordion peek", value: viewModel.binding(\.settings.general.accordionPadding))
             } header: {
                 SectionLabel("Layout", "rectangle.split.3x1")
             } footer: {
@@ -62,8 +62,8 @@ struct GeneralSettingsTab: View {
             }
 
             Section {
-                Toggle("Flatten single-child containers", isOn: viewModel.binding(\.enableNormalizationFlattenContainers))
-                Toggle("Alternate orientation for nested containers", isOn: viewModel.binding(\.enableNormalizationOppositeOrientation))
+                Toggle("Flatten single-child containers", isOn: viewModel.binding(\.settings.general.enableNormalizationFlattenContainers))
+                Toggle("Alternate orientation for nested containers", isOn: viewModel.binding(\.settings.general.enableNormalizationOppositeOrientation))
             } header: {
                 SectionLabel("Normalization", "wand.and.stars")
             } footer: {
@@ -71,7 +71,7 @@ struct GeneralSettingsTab: View {
             }
 
             Section {
-                Picker("Keyboard layout", selection: viewModel.binding(\.keyMappingPreset)) {
+                Picker("Keyboard layout", selection: viewModel.binding(\.settings.keyMappingPreset)) {
                     Text("QWERTY").tag("qwerty")
                     Text("Dvorak").tag("dvorak")
                     Text("Colemak").tag("colemak")

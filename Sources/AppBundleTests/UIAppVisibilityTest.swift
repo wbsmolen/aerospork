@@ -72,8 +72,8 @@ final class UIAppVisibilityTest: XCTestCase {
         let vm = ConfigurationViewModel()
         vm.markLoaded()
 
-        vm.showMenuBarIcon = false
-        vm.showDockIcon = true
+        vm.settings.general.showMenuBarIcon = false
+        vm.settings.general.showDockIcon = true
         let out = ConfigurationWriter.render(baseText: base, from: vm)
 
         switch parseConfig(out) {
@@ -90,7 +90,7 @@ final class UIAppVisibilityTest: XCTestCase {
         let base = "accordion-padding = 30\n"
         let vm = ConfigurationViewModel()
         vm.markLoaded()
-        vm.accordionPadding = 42
+        vm.settings.general.accordionPadding = 42
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertFalse(out.contains("show-menu-bar-icon"), out)

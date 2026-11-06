@@ -20,7 +20,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
         XCTAssertTrue(vm.addBinding(mode: "main", key: "alt-h", command: "focus left"))
 
         let out = ConfigurationWriter.render(baseText: "start-at-login = false\n", from: vm)
-        XCTAssertTrue(out.contains("[mode.main.binding]"), out)
+        XCTAssertTrue(out.contains("[keys]"), out)
         XCTAssertTrue(out.contains("alt-h = 'focus left'"), out)
         assertEquals(errors(out), [])
     }
@@ -31,7 +31,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
         vm.markLoaded()
         XCTAssertFalse(vm.addBinding(mode: "main", key: "  ", command: "focus left"))
         XCTAssertFalse(vm.addBinding(mode: "main", key: "alt-h", command: ""))
-        XCTAssertTrue(vm.modes.isEmpty)
+        XCTAssertTrue(vm.settings.modes.isEmpty)
     }
 
     func testAddModeRejectsDuplicatesAndBlanks() {
@@ -39,7 +39,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
         XCTAssertTrue(vm.addMode("resize"))
         XCTAssertFalse(vm.addMode("resize"))
         XCTAssertFalse(vm.addMode("   "))
-        assertEquals(vm.modes.map(\.mode), ["resize"])
+        assertEquals(vm.settings.modes.map(\.mode), ["resize"])
     }
 
     func testDeletingAModeRemovesItsSection() {
@@ -51,7 +51,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
             esc = 'mode main'
             """
         let vm = ConfigurationViewModel()
-        vm.modes = [
+        vm.settings.modes = [
             .init(mode: "main", bindings: [.init(key: "alt-h", command: "focus left")]),
             .init(mode: "resize", bindings: [.init(key: "esc", command: "mode main")]),
         ]
@@ -67,11 +67,11 @@ final class ConfigSafetyGuiTest: XCTestCase {
     /// `main` is the mode the app starts in; deleting it leaves nothing to fall back to.
     func testMainModeCannotBeDeleted() {
         let vm = ConfigurationViewModel()
-        vm.modes = [.init(mode: "main", bindings: [])]
+        vm.settings.modes = [.init(mode: "main", bindings: [])]
         vm.markLoaded()
         XCTAssertFalse(vm.canRemoveMode(mainModeId))
         vm.removeMode(mainModeId)
-        assertEquals(vm.modes.map(\.mode), ["main"])
+        assertEquals(vm.settings.modes.map(\.mode), ["main"])
     }
 
     /// Mode deletion is scoped to modes the view model actually LOADED. Without that scope, any
@@ -81,7 +81,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
         let base = "[mode.main.binding]\nalt-h = 'focus left'\n"
         let vm = ConfigurationViewModel()
         vm.markLoaded()
-        vm.accordionPadding = 42 // an unrelated edit
+        vm.settings.general.accordionPadding = 42 // an unrelated edit
         XCTAssertTrue(ConfigurationWriter.render(baseText: base, from: vm).contains("alt-h = 'focus left'"))
     }
 }

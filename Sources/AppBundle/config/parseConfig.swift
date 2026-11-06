@@ -4,10 +4,6 @@ import TOMLKit
 
 @MainActor
 func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
-    // Self-guarding: only ever rewrites the user's own v1 file, and only once. Sitting here rather
-    // than in a startup hook means `reload-config` and hot-reload are covered too.
-    migrateUserConfigToV2IfNeeded()
-
     let customConfigUrl: URL
     let isUserConfig: Bool
     switch findCustomConfigUrl() {

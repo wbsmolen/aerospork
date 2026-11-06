@@ -44,7 +44,7 @@ final class ConfigTest: XCTestCase {
         let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
         assertEquals(
             config.modes[mainModeId],
-            Mode(name: nil, bindings: [binding.descriptionWithKeyCode: binding]),
+            Mode(bindings: [binding.descriptionWithKeyCode: binding]),
         )
     }
 
@@ -81,7 +81,7 @@ final class ConfigTest: XCTestCase {
         /*let binding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
          assertEquals(
              config.modes[mainModeId],
-             Mode(name: nil, bindings: [binding.descriptionWithKeyCode: binding]),
+             Mode(bindings: [binding.descriptionWithKeyCode: binding]),
          )*/
     }
 
@@ -427,12 +427,12 @@ final class ConfigTest: XCTestCase {
     /// same either way and would pass against the broken writer.
     func testWriterRoundTripsGaps() {
         let vm = ConfigurationViewModel()
-        vm.innerGapsHorizontal = 10
-        vm.innerGapsVertical = 11
-        vm.outerGapsTop = 12
-        vm.outerGapsBottom = 13
-        vm.outerGapsLeft = 14
-        vm.outerGapsRight = 15
+        vm.settings.gaps.innerHorizontal = 10
+        vm.settings.gaps.innerVertical = 11
+        vm.settings.gaps.outerTop = 12
+        vm.settings.gaps.outerBottom = 13
+        vm.settings.gaps.outerLeft = 14
+        vm.settings.gaps.outerRight = 15
 
         var lines: [String] = []
         ConfigurationWriter.replaceGaps(&lines, vm)
@@ -505,7 +505,7 @@ final class ConfigTest: XCTestCase {
     func testWriterEditingGapsLeavesEverythingElseIntact() {
         let vm = ConfigurationViewModel()
         vm.markLoaded()
-        vm.innerGapsHorizontal += 5 // the only edit
+        vm.settings.gaps.innerHorizontal += 5 // the only edit
 
         let out = ConfigurationWriter.render(baseText: Self.lossyConfigSample, from: vm)
 
@@ -521,9 +521,8 @@ final class ConfigTest: XCTestCase {
 
     /// Editing workspace A must not re-spell workspace B. The row's single token is lossy -- a
     /// regex and a fingerprint name collapse to the same string, a fallback list to its first
-    /// entry -- so the writer re-emits untouched rows from the descriptions they loaded as.
-    /// Without that, pinning one workspace silently rewrote a sibling's `'dell|acme'` regex as a
-    /// literal fingerprint name that matches nothing.
+    /// entry -- so the writer leaves untouched rows alone. Before that, pinning one workspace silently
+    /// rewrote a sibling's `'dell|acme'` regex as a literal fingerprint name that matches nothing.
     func testWriterEditingOneAssignmentPreservesSiblingSemantics() {
         let base = """
             [workspace-to-monitor-force-assignment]
@@ -533,7 +532,7 @@ final class ConfigTest: XCTestCase {
             """
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
-        vm.loadAssignments(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
         vm.setAssignment(workspace: "9", monitorToken: "main") // the only edit
 
@@ -568,9 +567,9 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(out.contains("{ fingerprint = { name = 'DELL U3223QE (1)' } }"), "name pin lost its fingerprint form:\n\(out)")
 
         let vm2 = ConfigurationViewModel()
-        vm2.loadAssignments(fromText: out)
-        assertEquals(vm2.assignments.map(\.monitor), [uuid, "DELL U3223QE (1)"])
-        assertEquals(vm2.assignments.map(\.isComplex), [false, false])
+        vm2.load(fromText: out)
+        assertEquals(vm2.settings.assignments.map(\.monitor), [uuid, "DELL U3223QE (1)"])
+        assertEquals(vm2.settings.assignments.map(\.isComplex), [false, false])
     }
 
     /// Multi-command bindings used to round-trip through the view model joined by ", " and be
@@ -581,11 +580,9 @@ final class ConfigTest: XCTestCase {
                 alt-h = 'focus left'
             """
         let vm = ConfigurationViewModel()
-        vm.modes = [.init(mode: "main", bindings: [
-            .init(key: "alt-h", command: "focus left"),
-            .init(key: "alt-r", command: "flatten-workspace-tree\(ConfigurationViewModel.commandSeparator)mode main"),
-        ])]
+        vm.settings.modes = [.init(mode: "main", bindings: [.init(key: "alt-h", command: "focus left")])]
         vm.markLoaded()
+        vm.settings.modes[0].bindings.append(.init(key: "alt-r", command: "flatten-workspace-tree\(ConfigurationViewModel.commandSeparator)mode main"))
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("alt-r = ['flatten-workspace-tree', 'mode main']"), "expected a TOML array:\n\(out)")
@@ -598,9 +595,9 @@ final class ConfigTest: XCTestCase {
     /// Values containing a quote must be escaped, not silently stripped.
     func testWriterEscapesQuotesInsteadOfDeletingThem() {
         let vm = ConfigurationViewModel()
-        vm.modes = [.init(mode: "main", bindings: [])]
+        vm.settings.modes = [.init(mode: "main", bindings: [])]
         vm.markLoaded()
-        vm.modes[0].bindings = [.init(key: "alt-t", command: "exec-and-forget echo it's here")]
+        vm.settings.modes[0].bindings = [.init(key: "alt-t", command: "exec-and-forget echo it's here")]
 
         let out = ConfigurationWriter.render(baseText: "[mode.main.binding]", from: vm)
         XCTAssertTrue(out.contains("it's here"), "apostrophe was stripped:\n\(out)")
@@ -613,11 +610,11 @@ final class ConfigTest: XCTestCase {
     func testWriterEmitsPreviouslyUnreachableKeys() {
         let vm = ConfigurationViewModel()
         vm.markLoaded()
-        vm.onFocusedWorkspaceChanged = [.init(command: "move-mouse window-lazy-center")]
-        vm.keyMappingPreset = "dvorak"
-        vm.execInheritEnvVars = false
-        vm.execEnvVars = [.init(name: "FOO", value: "bar")]
-        vm.windowRules = [.init(appId: "com.apple.finder", run: "move-node-to-workspace 3")]
+        vm.settings.callbacks.onFocusedWorkspaceChanged = [.init(command: "move-mouse window-lazy-center")]
+        vm.settings.keyMappingPreset = "dvorak"
+        vm.settings.exec.inheritEnvVars = false
+        vm.settings.exec.envVars = [.init(name: "FOO", value: "bar")]
+        vm.settings.windowRules = [.init(appId: "com.apple.finder", run: "move-node-to-workspace 3")]
 
         let out = ConfigurationWriter.render(baseText: "", from: vm)
         let (config, errors) = parseConfigForTest(out)
@@ -633,21 +630,21 @@ final class ConfigTest: XCTestCase {
     /// its rules were live.
     func testGuiSeesShorthandWindowRules() {
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: """
+        vm.load(fromText: """
             [on-window]
             "com.apple.finder" = "move-node-to-workspace 3"
             "com.apple.mail" = "layout floating"
             """)
-        assertEquals(vm.windowRules.count, 2)
-        assertEquals(vm.windowRules.first?.appId, "com.apple.finder")
-        assertEquals(vm.windowRules.first?.run, "move-node-to-workspace 3")
+        assertEquals(vm.settings.windowRules.count, 2)
+        assertEquals(vm.settings.windowRules.first?.appId, "com.apple.finder")
+        assertEquals(vm.settings.windowRules.first?.run, "move-node-to-workspace 3")
     }
 
     /// Long form is tried before the shorthand (`parseConfigV2` appends `[on-window]` after it), so
     /// the list has to be read in that order or the GUI shows rules in an order they do not run in.
     func testGuiListsLongFormWindowRulesBeforeShorthand() {
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: """
+        vm.load(fromText: """
             [[on-window-detected]]
             if.app-id = 'com.apple.mail'
             run = ['layout floating']
@@ -655,7 +652,7 @@ final class ConfigTest: XCTestCase {
             [on-window]
             "com.apple.finder" = "move-node-to-workspace 3"
             """)
-        assertEquals(vm.windowRules.map(\.appId), ["com.apple.mail", "com.apple.finder"])
+        assertEquals(vm.settings.windowRules.map(\.appId), ["com.apple.mail", "com.apple.finder"])
     }
 
     /// Editing a rule used to write a long-form copy while leaving the shorthand table in place, so
@@ -666,9 +663,9 @@ final class ConfigTest: XCTestCase {
             "com.apple.finder" = "move-node-to-workspace 3"
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+        vm.settings.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         let (config, errors) = parseConfigForTest(out)
@@ -692,9 +689,9 @@ final class ConfigTest: XCTestCase {
             "com.apple.finder" = "move-node-to-workspace 3"
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+        vm.settings.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("[on-window]"), "shorthand was converted to long form:\n\(out)")
@@ -706,7 +703,7 @@ final class ConfigTest: XCTestCase {
     func testARegexMatcherForcesLongFormForEveryRule() {
         let vm = ConfigurationViewModel()
         vm.markLoaded()
-        vm.windowRules = [
+        vm.settings.windowRules = [
             .init(appId: "com.apple.finder", run: "move-node-to-workspace 3"),
             .init(appId: "", appNameRegex: "Term", run: "layout floating"),
         ]
@@ -729,10 +726,10 @@ final class ConfigTest: XCTestCase {
             run = ['move-node-to-workspace 3']
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        assertEquals(vm.windowRules.count, 1)
-        vm.windowRules[0].run = "move-node-to-workspace 4"
+        assertEquals(vm.settings.windowRules.count, 1)
+        vm.settings.windowRules[0].run = "move-node-to-workspace 4"
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         let (config, errors) = parseConfigForTest(out)
@@ -757,19 +754,18 @@ final class ConfigTest: XCTestCase {
             inner.horizontal = 10
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules[0].run = "move-node-to-workspace 4"
+        vm.settings.windowRules[0].run = "move-node-to-workspace 4"
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("# Gaps -- tuned for a 32\" panel"), "an untouched section lost its comment:\n\(out)")
         XCTAssertTrue(out.contains("inner.horizontal = 10"), out)
     }
 
-    /// Choosing the shorthand from the rules alone rewrote a v1 config into v2, because `on-window`
-    /// is a v2 root key -- so retyping a workspace number changed the file's schema, and later saves
-    /// then wrote bindings to a different place than the ones already in the file.
-    func testEditingARuleDoesNotConvertAV1ConfigToV2() {
+    /// The rule was the only thing edited, so the bindings beside it stay where they are, and later
+    /// edits to them keep landing there even though the file now also holds a v2 key.
+    func testEditingARuleInAV1ConfigLeavesItsBindingsAlone() {
         let base = """
             [mode.main.binding]
             alt-h = 'focus left'
@@ -779,15 +775,17 @@ final class ConfigTest: XCTestCase {
             run = ['move-node-to-workspace 3']
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
-        vm.markLoaded()
-        vm.windowRules[0].run = "move-node-to-workspace 4"
+        vm.load(fromText: base)
+        vm.settings.windowRules[0].run = "move-node-to-workspace 4"
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
-        XCTAssertFalse(out.contains("[on-window]"), "a v1 config was silently converted to v2:\n\(out)")
+        assertNil(ConfigurationWriter.refusal(rendered: out, base: base, from: vm))
+        XCTAssertTrue(out.hasPrefix("[mode.main.binding]\nalt-h = 'focus left'\n"), out)
+        XCTAssertTrue(out.contains("[on-window]"), out)
         let (config, errors) = parseConfigForTest(out)
         assertEquals(errors, [])
         assertEquals(config.onWindowDetected.count, 1)
+        assertEquals(config.modes[mainModeId]?.bindings.count, 1)
     }
 
     /// Clearing a rule's command to retype it used to delete that rule from the file on the next
@@ -802,12 +800,12 @@ final class ConfigTest: XCTestCase {
             "com.apple.mail" = "layout floating"
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        assertEquals(vm.windowRules.count, 2)
+        assertEquals(vm.settings.windowRules.count, 2)
         // The user selects the mail rule and clears its Command field, intending to retype it. The
         // row stays on screen; the question is whether it survives on disk until they finish.
-        vm.windowRules[1].run = ""
+        vm.settings.windowRules[1].run = ""
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         let (config, errors) = parseConfigForTest(out)
@@ -826,59 +824,36 @@ final class ConfigTest: XCTestCase {
             "com.apple.finder" = 42
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+        vm.settings.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("42"), "a line the GUI could not read was deleted:\n\(out)")
     }
 
-    /// A `[` inside a string value used to blind every refusal after it.
-    ///
-    /// `unsupportedShapeReason` counts brackets over the raw text to detect a multi-line array, so
-    /// an escaped bracket in a regex -- `'\\[Debug'`, an ordinary thing to write in a window-title
-    /// matcher -- left the depth stuck above zero and every later line was skipped. The guard then
-    /// returned nil for the rest of the file, including the fingerprint check whose own comment
-    /// records that its absence "shipped, and it damaged a real config".
-    func testABracketInsideAStringDoesNotBlindTheShapeGuard() {
-        // The detector is the sub-table refusal (the fingerprint refusal it originally used has
-        // been retired -- untouched rows are preserved now, not refused). The property under test
-        // is unchanged: a guard AFTER the bracket-carrying line must still fire.
+    /// A `[` in a string or a comment is not a section or an array opening. Telling them apart used to
+    /// take a bracket counter, and getting it wrong blinded every refusal after that line.
+    func testABracketInAValueOrCommentIsJustText() {
         let config = """
+            accordion-padding = 30 # TODO [
+
             [[on-window-detected]]
             if.window-title-regex-substring = '\\[Debug'
             run = ['layout floating']
 
-            [workspace-to-monitor-force-assignment.2.fingerprint]
-            uuid = '11111111-2222-3333-4444-555555555555'
-            """
-        let reason = ConfigurationWriter.unsupportedShapeReason(config)
-        XCTAssertNotNil(
-            reason,
-            "the sub-table refusal was skipped: a bracket in a string disabled every guard after it",
-        )
-        XCTAssertTrue(reason?.contains("sub-table") == true, reason ?? "nil")
-    }
-
-    /// And the mirror image: a bracket in a comment must not refuse a perfectly good config.
-    func testABracketInACommentDoesNotRefuseTheConfig() {
-        let config = """
-            accordion-padding = 30 # TODO [
             [gaps]
             inner.horizontal = 10
             """
-        assertEquals(ConfigurationWriter.unsupportedShapeReason(config), nil)
-    }
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: config)
+        vm.settings.general.accordionPadding = 31
+        vm.settings.gaps.innerVertical = 11
 
-    /// A real multi-line array must still be refused -- that is what the counting is for.
-    func testAGenuineMultiLineArrayIsStillRefused() {
-        let config = """
-            after-startup-command = [
-                'exec-and-forget echo hi',
-            ]
-            """
-        XCTAssertNotNil(ConfigurationWriter.unsupportedShapeReason(config))
+        let out = ConfigurationWriter.render(baseText: config, from: vm)
+        assertNil(ConfigurationWriter.refusal(rendered: out, base: config, from: vm))
+        XCTAssertTrue(out.contains("accordion-padding = 31 # TODO ["), out)
+        XCTAssertTrue(out.contains("if.window-title-regex-substring = '\\[Debug'"), out)
     }
 
     /// A trailing comment on a header made the section unremovable, so the writer appended a second
@@ -891,10 +866,10 @@ final class ConfigTest: XCTestCase {
             "com.apple.finder" = "move-node-to-workspace 3"
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        assertEquals(vm.windowRules.count, 1)
-        vm.windowRules[0].run = "move-node-to-workspace 4"
+        assertEquals(vm.settings.windowRules.count, 1)
+        vm.settings.windowRules[0].run = "move-node-to-workspace 4"
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         let (config, errors) = parseConfigForTest(out)
@@ -911,9 +886,9 @@ final class ConfigTest: XCTestCase {
             run = ['layout floating']
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules[0].run = "layout tiling"
+        vm.settings.windowRules[0].run = "layout tiling"
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         let (config, errors) = parseConfigForTest(out)
@@ -922,19 +897,16 @@ final class ConfigTest: XCTestCase {
     }
 
     /// A fallback list is tried in order until one monitor resolves. It used to be refused because
-    /// the view model keeps only `.first`; now the row remembers the full list it loaded as, so an
-    /// edit to a *different* row re-emits it whole.
+    /// the view model keeps only `.first`; an edit to a *different* row now leaves its line alone.
     func testAMonitorFallbackListIsPreservedRatherThanTruncated() {
         let config = """
             [workspace-to-monitor-force-assignment]
             1 = 'main'
             2 = ['secondary', 'built-in']
             """
-        XCTAssertNil(ConfigurationWriter.unsupportedShapeReason(config))
-
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
-        vm.loadAssignments(fromText: config)
+        vm.load(fromText: config)
         vm.markLoaded()
         vm.setAssignment(workspace: "1", monitorToken: "3") // edit the OTHER row
 
@@ -959,9 +931,9 @@ final class ConfigTest: XCTestCase {
         var sizes: [Int] = []
         for i in 0 ..< 4 {
             let vm = ConfigurationViewModel()
-            vm.loadWindowRules(fromText: text)
+            vm.load(fromText: text)
             vm.markLoaded()
-            vm.windowRules[0].run = "move-node-to-workspace \(i + 4)"
+            vm.settings.windowRules[0].run = "move-node-to-workspace \(i + 4)"
             text = ConfigurationWriter.render(baseText: text, from: vm)
             sizes.append(text.split(separator: "\n", omittingEmptySubsequences: false).count)
         }
@@ -981,9 +953,9 @@ final class ConfigTest: XCTestCase {
 
             """
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules[0].run = "move-node-to-workspace 4"
+        vm.settings.windowRules[0].run = "move-node-to-workspace 4"
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.hasSuffix("\n"), "the trailing newline was eaten:\n\(out.suffix(60).debugDescription)")
@@ -995,7 +967,7 @@ final class ConfigTest: XCTestCase {
         let vm = ConfigurationViewModel()
         vm.markLoaded()
         vm.rawToml = "accordion-padding = 7\n"
-        vm.accordionPadding = 999 // must be ignored
+        vm.settings.general.accordionPadding = 999 // must be ignored
         vm.rawTomlApplyRequested = true
 
         assertEquals(ConfigurationWriter.render(baseText: "accordion-padding = 30", from: vm), "accordion-padding = 7\n")
@@ -1022,6 +994,28 @@ final class ConfigTest: XCTestCase {
         assertEquals(KeyNotation.pretty("alt-shift-h"), "⌥⇧h")
         assertEquals(KeyNotation.pretty("cmd-enter"), "⌘enter")
         assertEquals(KeyNotation.pretty("h"), "h")
+    }
+
+    /// The notation is written into configs, so renaming a key's raw value breaks every config using
+    /// it. This list is exactly what the hand-written qwerty map accepted before the raw values
+    /// replaced it, and the keys below it are the ones it left out on purpose.
+    func testKeyNotationsAreStable() {
+        let notations = """
+            0 1 2 3 4 5 6 7 8 9 a b c d e f g h i j k l m n o p q r s t u v w x y z
+            minus equal leftSquareBracket rightSquareBracket backslash sectionSign semicolon quote
+            comma period slash backtick space enter esc backspace tab left down up right
+            pageUp pageDown home end forwardDelete
+            f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+            keypad0 keypad1 keypad2 keypad3 keypad4 keypad5 keypad6 keypad7 keypad8 keypad9
+            keypadClear keypadDecimalMark keypadDivide keypadEnter keypadEqual keypadMinus keypadMultiply keypadPlus
+            """.split(whereSeparator: \.isWhitespace).map(String.init)
+        assertEquals(keyNotationToKeyCode.keys.sorted(), notations.sorted())
+        assertEquals(keyNotationToKeyCode["esc"], .escape)
+        assertEquals(keyNotationToKeyCode["1"], .one)
+        assertEquals(keyNotationToKeyCode["leftSquareBracket"], .leftBracket)
+        for unbindable in ["cmd", "alt", "ctrl", "shift", "rCmd", "capsLock", "function", "help", "mute", "volumeUp"] {
+            assertNil(keyNotationToKeyCode[unbindable])
+        }
     }
 
     func testParseKeyMapping() {

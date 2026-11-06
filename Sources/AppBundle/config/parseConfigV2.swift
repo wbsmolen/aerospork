@@ -8,9 +8,9 @@ import TOMLKit
 // lines in `parseConfig`, and it means every existing test still describes real behavior.
 //
 // v2 is a strict SUPERSET of v1 -- every v1 key still parses. That is not politeness, it is what
-// keeps the settings GUI safe: `ConfigurationWriter` emits `[mode.<name>.binding]` and
-// `[[on-window-detected]]`, so a v2 file that has been edited by the GUI is a MIXTURE of both
-// spellings and has to keep loading.
+// keeps the settings GUI safe: `ConfigurationWriter` adds v2 sections beside the v1 lines it leaves
+// alone, and writes `[[on-window-detected]]` for any rule the shorthand can't express, so a file that
+// has been edited by the GUI can be a MIXTURE of both spellings and has to keep loading.
 
 /// Top-level keys that exist only in v2. Their presence is what identifies the schema.
 let configV2RootKeys: [String] = ["mod", "workspaces", "keys", "monitors", "on-window"]
@@ -19,9 +19,9 @@ let configV2RootKeys: [String] = ["mod", "workspaces", "keys", "monitors", "on-w
 ///
 /// * any v2 key present                    => v2
 /// * only `[mode.*]`                       => v1
-/// * both                                  => v2. The GUI appends `[mode.main.binding]` to whatever
-///                                            file it is handed, so this is a shape we CREATE. v2
-///                                            keeps honouring `[mode.*]`, so nothing is lost.
+/// * both                                  => v2. The GUI adds `[keys]` beside a `[mode.*]` it is
+///                                            leaving alone, so this is a shape we CREATE. v2 keeps
+///                                            honouring `[mode.*]`, so nothing is lost.
 /// * neither (empty file, or scalars only) => v1. Binding generation is opt-in: silence must not
 ///                                            invent thirty bindings for a config that never asked.
 func isConfigV2(_ table: TOMLTable) -> Bool { configV2RootKeys.contains { table[$0] != nil } }
@@ -76,7 +76,7 @@ func workspaceKeyNotation(_ name: String) -> String? {
 ///
 /// Layering, weakest first: generated -> `[keys]` -> `[mode.*]`. "Anything in `[keys]` overrides a
 /// generated binding with the same key" is the rule that keeps the defaults from trapping anyone,
-/// and `[mode.*]` sits on top because that is what the settings GUI writes.
+/// and `[mode.*]` sits on top so an older file's explicit binding keeps winning.
 @MainActor func applyConfigV2(_ rawTable: TOMLTable, _ config: inout Config, _ errors: inout [TomlParseError]) {
     let mapping = config.keyMapping.resolve()
     var modes: [String: Mode] = [:]
@@ -91,10 +91,10 @@ func workspaceKeyNotation(_ name: String) -> String? {
         modes[mainModeId] = generated
     }
     for (name, mode) in rawTable["keys"].map({ parseKeysTable($0, .rootKey("keys"), &errors, mapping) }) ?? [:] {
-        modes[name] = Mode(name: nil, bindings: (modes[name]?.bindings ?? [:]) + mode.bindings)
+        modes[name] = Mode(bindings: (modes[name]?.bindings ?? [:]) + mode.bindings)
     }
     for (name, mode) in config.modes {
-        modes[name] = Mode(name: mode.name, bindings: (modes[name]?.bindings ?? [:]) + mode.bindings)
+        modes[name] = Mode(bindings: (modes[name]?.bindings ?? [:]) + mode.bindings)
     }
     // v2 always HAS a main mode -- it is `[keys]`, plus whatever `mod` generated. Requiring the user
     // to declare it (as v1 does) would mean writing an empty section to say nothing.
@@ -128,7 +128,16 @@ func workspaceKeyNotation(_ name: String) -> String? {
         errors.append(.semantic(backtrace, "'\(unknown.joined(separator: "-"))' is not a modifier. Use cmd, alt, ctrl or shift"))
         return nil
     }
-    return Mode(name: nil, bindings: bindingsFrom(generatedBindingsV2(mod: mod, workspaces: workspaces), backtrace, &errors, mapping))
+    let generated = TOMLTable()
+    for (notation, command) in generatedBindingsV2(mod: mod, workspaces: workspaces) {
+        // Reported rather than one silently replacing the other: two workspaces whose names start with
+        // the same letter generate the same key, and a workspace with no shortcut is the worst outcome.
+        if generated[notation] != nil {
+            errors.append(.semantic(backtrace, "'\(notation)' is generated twice. Two workspaces starting with the same character can't share a key -- rename one, or bind it in [keys]"))
+        }
+        generated[notation] = command
+    }
+    return Mode(bindings: parseBindings(generated, backtrace, &errors, mapping))
 }
 
 /// `[keys]` is the main mode's bindings; a sub-table `[keys.<name>]` is a named mode. A binding
@@ -142,12 +151,12 @@ func workspaceKeyNotation(_ name: String) -> String? {
     let flat = TOMLTable()
     for (key, value) in table {
         if let sub = value.table {
-            result[key] = Mode(name: nil, bindings: parseBindings(sub, backtrace + .key(key), &errors, mapping))
+            result[key] = Mode(bindings: parseBindings(sub, backtrace + .key(key), &errors, mapping))
         } else {
             flat[key] = value
         }
     }
-    result[mainModeId] = Mode(name: nil, bindings: (result[mainModeId]?.bindings ?? [:]) + parseBindings(flat, backtrace, &errors, mapping))
+    result[mainModeId] = Mode(bindings: (result[mainModeId]?.bindings ?? [:]) + parseBindings(flat, backtrace, &errors, mapping))
     return result
 }
 
@@ -204,31 +213,4 @@ func expandWorkspaceRange(_ token: String) -> [String]? {
           from.value <= to.value
     else { return nil }
     return (from.value ... to.value).compactMap { Unicode.Scalar($0).map { String(Character($0)) } }
-}
-
-/// Turns (notation, command) pairs into real bindings, reporting a redeclaration rather than
-/// silently dropping one -- two workspaces whose names start with the same letter generate the same
-/// key, and a workspace that silently has no shortcut is the worst possible outcome.
-@MainActor private func bindingsFrom(
-    _ pairs: [(notation: String, command: String)],
-    _ backtrace: TomlBacktrace,
-    _ errors: inout [TomlParseError],
-    _ mapping: [String: Key],
-) -> [String: HotkeyBinding] {
-    var result: [String: HotkeyBinding] = [:]
-    for (notation, command) in pairs {
-        let binding = parseBinding(notation, backtrace, mapping)
-            .flatMap { modifiers, key -> ParsedToml<HotkeyBinding> in
-                parseCommand(command).toEither().toParsedToml(backtrace).map {
-                    HotkeyBinding(modifiers, key, [$0], descriptionWithKeyNotation: notation)
-                }
-            }
-            .getOrNil(appendErrorTo: &errors)
-        guard let binding else { continue }
-        if result[binding.descriptionWithKeyCode] != nil {
-            errors.append(.semantic(backtrace, "'\(notation)' is generated twice. Two workspaces starting with the same character can't share a key -- rename one, or bind it in [keys]"))
-        }
-        result[binding.descriptionWithKeyCode] = binding
-    }
-    return result
 }
