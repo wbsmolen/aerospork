@@ -225,6 +225,27 @@ final class ConfigurationViewModel: ObservableObject {
         )
     }
 
+    /// One field of a window rule, by the rule's id.
+    ///
+    /// Never by index. SwiftUI reads and writes through an old binding while it rebuilds a pane, and by
+    /// then the index names another rule or none: reading one that way crashed the whole app on removing
+    /// a selected rule, and a text field committing on its way out wrote into the rule that took its place.
+    func windowRuleBinding<T>(
+        _ id: WindowRuleRow.ID,
+        default fallback: T,
+        get: @escaping @MainActor (WindowRuleRow) -> T,
+        set: @escaping @MainActor (inout WindowRuleRow, T) -> Void,
+    ) -> Binding<T> {
+        Binding(
+            get: { self.settings.windowRules.first { $0.id == id }.map(get) ?? fallback },
+            set: { newValue in
+                guard let i = self.settings.windowRules.firstIndex(where: { $0.id == id }) else { return }
+                set(&self.settings.windowRules[i], newValue)
+                self.scheduleAutoSave()
+            },
+        )
+    }
+
     private var autoSaveTask: Task<Void, Never>?
 
     /// Drops a pending autosave without writing it.
@@ -581,13 +602,17 @@ final class ConfigurationViewModel: ObservableObject {
         }
 
         do {
-            if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
-            try ConfigurationWriter.write(rendered)
-            // The file watcher refreshes after its reload; this save suppresses the watcher for its own
-            // write and did not, so a gap, layout or normalization change did nothing on screen until
-            // some unrelated window event. Not under XCTest, where a refresh enumerates the machine's apps.
-            if reloadConfig(), !isUnitTest {
-                runRefreshSession(.globalObserver("settingsSaved"), screenIsDefinitelyUnlocked: false)
+            // Nothing to write, so nothing to back up or reload. A save that changes nothing used to do
+            // all three, and each one pushed a real backup out of the five kept.
+            if rendered != base {
+                if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
+                try ConfigurationWriter.write(rendered)
+                // The file watcher refreshes after its reload; this save suppresses the watcher for its own
+                // write and did not, so a gap, layout or normalization change did nothing on screen until
+                // some unrelated window event. Not under XCTest, where a refresh enumerates the machine's apps.
+                if reloadConfig(), !isUnitTest {
+                    runRefreshSession(.globalObserver("settingsSaved"), screenIsDefinitelyUnlocked: false)
+                }
             }
             // A GUI save reloads the config WITHOUT running a refresh session, so the `updateTrayText`
             // hook does not fire. Without this, flipping "Show Dock icon" did nothing until the next

@@ -86,7 +86,12 @@ private struct AppServerTerminationHandler: TerminationHandler {
         // BEFORE the cleanup, which moves every window -- and frozen, so the refresh those moves
         // trigger cannot overwrite this snapshot with the dumped positions.
         WorkspaceMemory.freezeAndSave()
-        try await makeAllWindowsVisibleAndRestoreSize()
+        // Before the cleanup too. Every window it moves sends a notification, the awaits between windows
+        // let the refresh in, and a refresh parks hidden workspaces' windows again -- so one restored early
+        // in the loop was off screen when the app exited.
+        TrayMenuModel.shared.isEnabled = false
+        refreshScheduler.cancelRunningRefresh()
+        await makeAllWindowsVisibleAndRestoreSize()
         if isDebug {
             sendCommandToReleaseServer(args: ["enable", "on"])
         }
@@ -122,12 +127,17 @@ func monitorToRestore(_ window: Window) async throws -> Monitor {
 }
 
 @MainActor
-private func makeAllWindowsVisibleAndRestoreSize() async throws {
+private func makeAllWindowsVisibleAndRestoreSize() async {
     // Make all windows fullscreen before Quit
     for (_, window) in MacWindow.allWindowsMap {
-        let monitorVisibleRect = try await monitorToRestore(window).visibleRect
-        let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
-        try await window.setAxFrameBlocking(centredOnMonitor(monitorVisibleRect, windowSize), windowSize)
+        // One at a time: an app that fails to answer must not leave every later window off screen.
+        do {
+            let monitorVisibleRect = try await monitorToRestore(window).visibleRect
+            let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
+            try await window.setAxFrameBlocking(centredOnMonitor(monitorVisibleRect, windowSize), windowSize)
+        } catch {
+            AppLog.session.error("Couldn't restore window \(window.windowId, privacy: .public) before quitting: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 

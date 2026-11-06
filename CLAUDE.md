@@ -173,7 +173,9 @@ planted in a world-writable directory decides where another user's windows go.
 
 Every first registration asks, not only startup, so an app that answers late still gets its windows back; an
 entry is spent once used. `restoreVisibleWorkspaces` puts each monitor back on what it showed, except the
-focused monitor, which keeps what focus adopted from macOS.
+focused monitor, which keeps what focus adopted from macOS. `restoredBinding` puts a window back in its place
+among those already back, at its share of the split, or floating. The restore is flat: nested containers and a
+workspace's own layout aren't rebuilt.
 
 The key is the `CGWindowID` and nothing else. It comes from a monotonic counter owned by
 **WindowServer**, so it is stable across a restart of *this* process and meaningless afterwards. The

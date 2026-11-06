@@ -187,4 +187,62 @@ final class SettingsApplyTest: XCTestCase {
         let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("), "a GUI save no longer refreshes")
         XCTAssertLessThan(write.lowerBound, refresh.lowerBound)
     }
+
+    // MARK: - Window rule rows are found by id
+
+    /// Removing a selected rule took the whole app down: SwiftUI read the toggle's old binding before
+    /// rebuilding the pane, and it indexed a row that was no longer there.
+    func testARuleBindingOutlivesItsRule() {
+        let vm = ConfigurationViewModel()
+        let removed = ConfigurationViewModel.WindowRuleRow(appId: "a", run: "layout floating", checkFurtherCallbacks: true)
+        let kept = ConfigurationViewModel.WindowRuleRow(appId: "b", run: "layout tiling")
+        vm.settings.windowRules = [removed, kept]
+        let toggle = vm.windowRuleBinding(removed.id, default: false, get: { $0.checkFurtherCallbacks }, set: { $0.checkFurtherCallbacks = $1 })
+        let appId = vm.windowRuleBinding(removed.id, default: "", get: { $0.appId }, set: { $0.appId = $1 })
+        assertEquals(toggle.wrappedValue, true)
+
+        vm.settings.windowRules.removeAll { $0.id == removed.id }
+
+        assertEquals(toggle.wrappedValue, false)
+        // A text field commits on its way out. By index this landed in the rule that took the row.
+        appId.wrappedValue = "typed into the removed rule"
+        assertEquals(vm.settings.windowRules.map(\.appId), ["b"])
+        vm.cancelPendingAutoSave()
+    }
+
+    func testABindingStillEditsItsOwnRuleAfterTheListMoves() {
+        let vm = ConfigurationViewModel()
+        let first = ConfigurationViewModel.WindowRuleRow(appId: "a", run: "x")
+        let second = ConfigurationViewModel.WindowRuleRow(appId: "b", run: "y")
+        vm.settings.windowRules = [first, second]
+        let appId = vm.windowRuleBinding(second.id, default: "", get: { $0.appId }, set: { $0.appId = $1 })
+
+        vm.settings.windowRules.removeAll { $0.id == first.id }
+        appId.wrappedValue = "c"
+
+        assertEquals(vm.settings.windowRules.map(\.appId), ["c"])
+        vm.cancelPendingAutoSave()
+    }
+
+    /// Every other binding in the pane was guarded and one was not. There is only one way to make one now.
+    func testTheRulesPaneBuildsNoBindingOfItsOwn() throws {
+        let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs/WindowRulesTab.swift"), encoding: .utf8)
+        XCTAssertFalse(withoutComments(source).contains(" Binding("))
+    }
+
+    // MARK: - A save that changes nothing
+
+    /// A save that changed nothing still wrote, reloaded and took a backup, which pushed a real one out of
+    /// the five kept. Merely opening Settings could do it. In the source for the reason given above.
+    func testASaveThatChangesNothingTouchesNothing() throws {
+        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift", length: 4000)
+        let guardLine = try XCTUnwrap(body.range(of: "if rendered != base {"))
+        let write = try XCTUnwrap(body.range(of: "try ConfigurationWriter.write(rendered)"))
+        let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("))
+        XCTAssertLessThan(guardLine.lowerBound, write.lowerBound)
+        XCTAssertLessThan(write.lowerBound, refresh.lowerBound)
+        // The view model has to hear about it either way, or a change undone stays "unsaved".
+        let closing = try XCTUnwrap(body.range(of: "didWrite(rendered)"))
+        XCTAssertLessThan(refresh.lowerBound, closing.lowerBound)
+    }
 }

@@ -522,9 +522,10 @@ final class WorkspaceMemoryTest: XCTestCase {
         let normalised = source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         XCTAssertTrue(
             normalised.contains(
-                "let workspace = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId) "
+                "let remembered = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId) "
+                    + "let workspace = remembered "
                     + "?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace) "
-                    + "let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)",
+                    + "var data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)",
             ),
             """
             the remembered workspace is not the value bound to the window -- location is being used
@@ -674,5 +675,98 @@ final class WorkspaceMemoryTest: XCTestCase {
     func testStartupDoesNotOverrideTheConfiguredLayout() throws {
         let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/initAppBundle.swift"), encoding: .utf8)
         XCTAssertFalse(source.contains(".layout = "), "startup is deciding a workspace's layout again, over `default-root-container-layout`")
+    }
+
+    // MARK: - Order, sizes and floating
+
+    /// Binds windows the way registration does, in the order their apps happened to answer.
+    private func register(_ ids: [UInt32], on workspace: Workspace) {
+        for id in ids {
+            let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            let data = WorkspaceMemory.restoredBinding(of: id, on: workspace, default: fallback)
+            TestWindow.new(id: id, parent: data.parent, adaptiveWeight: data.adaptiveWeight).also {
+                $0.bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+            }
+        }
+    }
+
+    func testWindowsComeBackInTheirOrderWhicheverAppAnswersFirst() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: [
+            "1": .init(workspace: "A", bundleId: "b", index: 0),
+            "2": .init(workspace: "A", bundleId: "b", index: 1),
+            "3": .init(workspace: "A", bundleId: "b", index: 2),
+        ]))
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+
+        register([3, 1, 2], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.children.map { ($0 as! Window).windowId }, [1, 2, 3])
+    }
+
+    func testAWindowNotInTheFileDoesNotDisturbTheOrder() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: [
+            "1": .init(workspace: "A", bundleId: "b", index: 0),
+            "3": .init(workspace: "A", bundleId: "b", index: 1),
+        ]))
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+
+        register([3, 9, 1], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.children.map { ($0 as! Window).windowId }, [1, 3, 9])
+    }
+
+    func testAWindowComesBackAtItsSize() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: ["1": .init(workspace: "A", bundleId: "b", index: 0, weight: 2267)]))
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+
+        assertEquals(WorkspaceMemory.restoredBinding(of: 1, on: workspace, default: fallback).adaptiveWeight, 2267)
+    }
+
+    func testAFloatingWindowComesBackFloating() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: ["1": .init(workspace: "A", bundleId: "b", isFloating: true)]))
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+
+        XCTAssertTrue(WorkspaceMemory.restoredBinding(of: 1, on: workspace, default: fallback).parent === workspace)
+    }
+
+    /// Whatever it was before, a window that looks like a popup now stays one until proven otherwise.
+    func testAPopupIsNotPutBackInTheTiles() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: ["1": .init(workspace: "A", bundleId: "b", index: 0)]))
+        WorkspaceMemory.load()
+        let popup = BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+
+        XCTAssertTrue(WorkspaceMemory.restoredBinding(of: 1, on: Workspace.get(byName: "A"), default: popup).parent === macosPopupWindowsContainer)
+    }
+
+    /// A file from before this was added has none of the three, and a window goes where it always went.
+    func testAnOlderFileLeavesTheWindowWhereItWouldHaveGone() throws {
+        setUpWorkspacesOnTheseMonitors()
+        let json = #"{"session":"\#(WorkspaceMemory.session())","windows":{"42":{"workspace":"A","bundleId":"b"}},"workspaceMonitors":{}}"#
+        try Data(json.utf8).write(to: WorkspaceMemory.fileUrl)
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: 7)
+
+        assertEquals(WorkspaceMemory.restoredBinding(of: 42, on: workspace, default: fallback).index, 7)
+    }
+
+    /// Layout re-splits weights on every pass and they wobble in their last bits. If that counted as a
+    /// change, the file would be rewritten on every refresh.
+    func testAWeightOnlyWobblingIsNotAChange() {
+        let entry = WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 0, weight: 1426.5)
+        XCTAssertEqual(entry, WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 0, weight: 1426.5000000001))
+        XCTAssertNotEqual(entry, WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 0, weight: 1500))
+        XCTAssertNotEqual(entry, WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 1, weight: 1426.5))
     }
 }

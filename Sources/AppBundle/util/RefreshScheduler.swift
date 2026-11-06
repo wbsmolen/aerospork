@@ -47,6 +47,9 @@ final class RefreshScheduler {
         restartTimer()
     }
 
+    /// For quitting: what is already running must not write another frame.
+    func cancelRunningRefresh() { running?.task.cancel() }
+
     func sessionWillStart() {
         sessionsInFlight += 1
         timer?.cancel()

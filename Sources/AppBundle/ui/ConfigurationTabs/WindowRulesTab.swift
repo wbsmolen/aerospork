@@ -48,11 +48,13 @@ struct WindowRulesTab: View {
     /// Shown for a rule with no matchers at all. Prose, not config text -- see `matchCell`.
     private static let anyWindow = "(any window)"
 
+    private typealias Rule = ConfigurationViewModel.WindowRuleRow
+
     @ObservedObject var viewModel: ConfigurationViewModel
     @State private var selection: ConfigurationViewModel.WindowRuleRow.ID?
 
-    private var selectedIndex: Int? {
-        selection.flatMap { id in viewModel.settings.windowRules.firstIndex { $0.id == id } }
+    private var selectedRule: Rule? {
+        selection.flatMap { id in viewModel.settings.windowRules.first { $0.id == id } }
     }
 
     var body: some View {
@@ -102,7 +104,7 @@ struct WindowRulesTab: View {
     }
 
     @ViewBuilder
-    private func matchCell(_ rule: ConfigurationViewModel.WindowRuleRow) -> some View {
+    private func matchCell(_ rule: Rule) -> some View {
         HStack(spacing: 5) {
             if !rule.appId.isEmpty {
                 ApplicationIcon(bundleIdentifier: rule.appId)
@@ -124,27 +126,27 @@ struct WindowRulesTab: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let i = selectedIndex {
+        if let rule = selectedRule {
             Form {
                 Section {
                     LabeledContent("App ID") {
                         HStack(spacing: 8) {
-                            SettingsField("App ID", prompt: "com.apple.finder", text: field(i, \.appId))
-                            Button("Choose app…") { chooseApplication(for: viewModel.settings.windowRules[i].id) }
+                            SettingsField("App ID", prompt: "com.apple.finder", text: field(rule.id, \.appId))
+                            Button("Choose app…") { chooseApplication(for: rule.id) }
                                 .fixedSize()
                         }
                     }
                     LabeledContent("App name") {
-                        SettingsField("App name", prompt: "^Finder$", text: field(i, \.appNameRegex))
+                        SettingsField("App name", prompt: "^Finder$", text: field(rule.id, \.appNameRegex))
                     }
                     LabeledContent("Window title") {
-                        SettingsField("Window title", prompt: "^Preferences$", text: field(i, \.windowTitleRegex))
+                        SettingsField("Window title", prompt: "^Preferences$", text: field(rule.id, \.windowTitleRegex))
                     }
                     LabeledContent("Workspace") {
-                        SettingsField("Workspace", prompt: "3", text: field(i, \.workspace))
+                        SettingsField("Workspace", prompt: "3", text: field(rule.id, \.workspace))
                             .frame(maxWidth: 140)
                     }
-                    Picker("Startup timing", selection: startupTiming(i)) {
+                    Picker("Startup timing", selection: startupTiming(rule.id)) {
                         Text("Any").tag("any")
                         Text("Startup").tag("startup")
                         Text("Runtime").tag("runtime")
@@ -157,40 +159,39 @@ struct WindowRulesTab: View {
                 }
 
                 Section {
-                    let guided = parseGuidedWindowAction(viewModel.settings.windowRules[i].run)
+                    let guided = parseGuidedWindowAction(rule.run)
                     if guided.isCustom {
                         HStack(spacing: 8) {
                             Badge("custom", tone: .muted, help: "This command contains actions the guided controls cannot represent.")
-                            Button("Start over with guided controls") { setRun(i, "") }
+                            Button("Start over with guided controls") { field(rule.id, \.run).wrappedValue = "" }
                                 .buttonStyle(.borderless)
                         }
                     } else {
-                        Picker("Make the window", selection: guidedLayout(i)) {
+                        Picker("Make the window", selection: guidedLayout(rule.id)) {
                             Text("Leave as is").tag(GuidedWindowAction.Layout.unchanged)
                             Text("Float").tag(GuidedWindowAction.Layout.floating)
                             Text("Tile").tag(GuidedWindowAction.Layout.tiling)
                         }
                         .pickerStyle(.segmented)
                         LabeledContent("Move it to workspace") {
-                            SettingsField("Workspace", prompt: "don't move it", text: guidedWorkspace(i))
+                            SettingsField("Workspace", prompt: "don't move it", text: guidedWorkspace(rule.id))
                                 .frame(maxWidth: 160)
                         }
                     }
                     LabeledContent("Exact command") {
-                        SettingsField("Command", prompt: "move-node-to-workspace 3", text: field(i, \.run))
+                        SettingsField("Command", prompt: "move-node-to-workspace 3", text: field(rule.id, \.run))
                     }
-                    Toggle("Keep checking later rules", isOn: Binding(
-                        get: { viewModel.settings.windowRules[i].checkFurtherCallbacks },
-                        set: {
-                            viewModel.settings.windowRules[i].checkFurtherCallbacks = $0
-                            viewModel.scheduleAutoSave()
-                        },
+                    Toggle("Keep checking later rules", isOn: viewModel.windowRuleBinding(
+                        rule.id,
+                        default: false,
+                        get: { $0.checkFurtherCallbacks },
+                        set: { $0.checkFurtherCallbacks = $1 },
                     ))
                 } header: {
                     SectionLabel("Then run", "bolt")
                 } footer: {
                     // The writer holds every rule edit back until each rule has a command.
-                    if viewModel.settings.windowRules[i].run.trimmingCharacters(in: .whitespaces).isEmpty {
+                    if rule.run.trimmingCharacters(in: .whitespaces).isEmpty {
                         StatusLabel("No command yet, so rule changes aren't saved. Add one to save them.", kind: .warning)
                     }
                     Text("Applied once, when the window appears. Chain commands with `\(ConfigurationViewModel.commandSeparator.trimmingCharacters(in: .whitespaces))`. By default a matching rule stops the search.")
@@ -222,11 +223,11 @@ struct WindowRulesTab: View {
     ///
     /// Asked of the rule, not of the rendered string: an app id of literally `(any window)` is legal
     /// free text, and comparing the summary would render a real matcher as prose.
-    private func hasNoMatchers(_ r: ConfigurationViewModel.WindowRuleRow) -> Bool {
+    private func hasNoMatchers(_ r: Rule) -> Bool {
         r.appId.isEmpty && r.appNameRegex.isEmpty && r.windowTitleRegex.isEmpty && r.workspace.isEmpty
     }
 
-    private func summary(_ r: ConfigurationViewModel.WindowRuleRow) -> String {
+    private func summary(_ r: Rule) -> String {
         var parts: [String] = []
         if !r.appId.isEmpty { parts.append(r.appId) }
         if !r.appNameRegex.isEmpty { parts.append("name~\(r.appNameRegex)") }
@@ -235,78 +236,60 @@ struct WindowRulesTab: View {
         return parts.isEmpty ? Self.anyWindow : parts.joined(separator: " ")
     }
 
-    private func field(_ i: Int, _ keyPath: WritableKeyPath<ConfigurationViewModel.WindowRuleRow, String>) -> Binding<String> {
-        Binding(
-            get: { viewModel.settings.windowRules.indices.contains(i) ? viewModel.settings.windowRules[i][keyPath: keyPath] : "" },
-            set: { newValue in
-                guard viewModel.settings.windowRules.indices.contains(i) else { return }
-                viewModel.settings.windowRules[i][keyPath: keyPath] = newValue
-                viewModel.scheduleAutoSave()
-            },
-        )
+    private func field(_ id: Rule.ID, _ keyPath: WritableKeyPath<Rule, String>) -> Binding<String> {
+        viewModel.windowRuleBinding(id, default: "", get: { $0[keyPath: keyPath] }, set: { $0[keyPath: keyPath] = $1 })
     }
 
-    private func startupTiming(_ i: Int) -> Binding<String> {
-        Binding(
+    private func startupTiming(_ id: Rule.ID) -> Binding<String> {
+        viewModel.windowRuleBinding(
+            id,
+            default: "any",
             get: {
-                guard viewModel.settings.windowRules.indices.contains(i) else { return "any" }
-                return switch viewModel.settings.windowRules[i].duringStartup {
+                switch $0.duringStartup {
                     case true?: "startup"
                     case false?: "runtime"
                     case nil: "any"
                 }
             },
-            set: { value in
-                guard viewModel.settings.windowRules.indices.contains(i) else { return }
-                viewModel.settings.windowRules[i].duringStartup = switch value {
+            set: { rule, value in
+                rule.duringStartup = switch value {
                     case "startup": true
                     case "runtime": false
                     default: nil
                 }
-                viewModel.scheduleAutoSave()
             },
         )
     }
 
-    private func guidedLayout(_ i: Int) -> Binding<GuidedWindowAction.Layout> {
-        Binding(
-            get: {
-                guard viewModel.settings.windowRules.indices.contains(i) else { return .unchanged }
-                return parseGuidedWindowAction(viewModel.settings.windowRules[i].run).layout
-            },
-            set: { layout in
-                guard viewModel.settings.windowRules.indices.contains(i) else { return }
-                var action = parseGuidedWindowAction(viewModel.settings.windowRules[i].run)
+    private func guidedLayout(_ id: Rule.ID) -> Binding<GuidedWindowAction.Layout> {
+        viewModel.windowRuleBinding(
+            id,
+            default: .unchanged,
+            get: { parseGuidedWindowAction($0.run).layout },
+            set: { rule, layout in
+                var action = parseGuidedWindowAction(rule.run)
                 guard !action.isCustom else { return }
                 action.layout = layout
-                setRun(i, composeGuidedWindowAction(action))
+                rule.run = composeGuidedWindowAction(action)
             },
         )
     }
 
-    private func guidedWorkspace(_ i: Int) -> Binding<String> {
-        Binding(
-            get: {
-                guard viewModel.settings.windowRules.indices.contains(i) else { return "" }
-                return parseGuidedWindowAction(viewModel.settings.windowRules[i].run).workspace
-            },
-            set: { workspace in
-                guard viewModel.settings.windowRules.indices.contains(i) else { return }
-                var action = parseGuidedWindowAction(viewModel.settings.windowRules[i].run)
+    private func guidedWorkspace(_ id: Rule.ID) -> Binding<String> {
+        viewModel.windowRuleBinding(
+            id,
+            default: "",
+            get: { parseGuidedWindowAction($0.run).workspace },
+            set: { rule, workspace in
+                var action = parseGuidedWindowAction(rule.run)
                 guard !action.isCustom else { return }
                 action.workspace = workspace.trimmingCharacters(in: .whitespaces)
-                setRun(i, composeGuidedWindowAction(action))
+                rule.run = composeGuidedWindowAction(action)
             },
         )
     }
 
-    private func setRun(_ i: Int, _ command: String) {
-        guard viewModel.settings.windowRules.indices.contains(i) else { return }
-        viewModel.settings.windowRules[i].run = command
-        viewModel.scheduleAutoSave()
-    }
-
-    private func chooseApplication(for ruleID: ConfigurationViewModel.WindowRuleRow.ID) {
+    private func chooseApplication(for ruleID: Rule.ID) {
         let panel = NSOpenPanel()
         panel.title = "Choose an application"
         panel.prompt = "Choose"
