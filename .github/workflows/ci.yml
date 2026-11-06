@@ -20,8 +20,8 @@ jobs:
     runs-on: macos-latest
     # The failure this whole toolchain dance exists to avoid -- `swiftly run swift` spinning at 100%
     # CPU forever -- produces no output, so it would otherwise burn the 360min default before anyone
-    # noticed. A clean run is ~10min including the dependency downloads.
-    timeout-minutes: 30
+    # noticed. A clean run is ~15min including the dependency downloads and the release build.
+    timeout-minutes: 45
     env:
       # script/setup.sh routes `swift` through `swiftly run swift` whenever swiftly is on PATH.
       # Hosted runners have Xcode and no swiftly, so it would silently fall through to plain `swift`
@@ -42,13 +42,27 @@ jobs:
       # One step on purpose: run-tests.sh is the invariant this project is actually held to, and
       # everything below shares one expensive build.
       #   ./build-debug.sh              -> builds app + CLI + test target
-      #   ./run-swift-test.sh           -> `swift test`: both bundles, AppBundleTests + CommonTests
+      #   swift test                    -> both bundles, AppBundleTests + CommonTests
       #   ./.debug/aerospork -h/-v/...  -> CLI smoke checks
-      #   ./format.sh                   -> swiftformat (rewrites) + swiftlint
-      #   ./generate.sh --all           -> regenerates every *Generated.swift + the xcodeproj
-      #   ./script/check-uncommitted-files.sh
-      #        -> fails on any diff, which is what turns the two rewriting steps above into
-      #           "formatting is clean" and "generated files are in sync" assertions.
+      #   swiftformat --lint + swiftlint
+      #   ./generate.sh --all           -> regenerates every *Generated.swift + the xcodeproj, and
+      #        fails if that changed anything, so "generated files are in sync" is asserted too.
       # Splitting these into named steps would mean duplicating the script and letting it drift.
       - name: run-tests.sh
         run: ./run-tests.sh
+
+      # The release path is otherwise untested until release day. run-tests.sh generated the project.
+      - name: Xcode release build, unsigned
+        run: |
+          xcodebuild -quiet clean build \
+            -project aerospork.xcodeproj \
+            -scheme aerospork \
+            -destination "generic/platform=macOS" \
+            -configuration Release \
+            -derivedDataPath .xcode-build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: shellcheck
+        run: |
+          brew install shellcheck
+          shellcheck -S warning ./*.sh script/*.sh

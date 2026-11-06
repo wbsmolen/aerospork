@@ -35,8 +35,6 @@ func resetManipulatedWithMouseIfPossible() async throws {
     }
 }
 
-private let adaptiveWeightBeforeResizeWithMouseKey = TreeNodeUserDataKey<CGFloat>(key: "adaptiveWeightBeforeResizeWithMouseKey")
-
 @MainActor
 private func resizeWithMouse(_ window: Window) async throws { // todo cover with tests
     resetClosedWindowsCache()
@@ -83,13 +81,13 @@ extension TreeNode {
     @MainActor
     fileprivate func getWeightBeforeResize(_ orientation: Orientation) -> CGFloat {
         let currentWeight = getWeight(orientation) // Check assertions
-        return getUserData(key: adaptiveWeightBeforeResizeWithMouseKey)
+        return weightBeforeResizeWithMouse
             ?? (lastAppliedLayoutVirtualRect?.getDimension(orientation) ?? currentWeight)
-            .also { putUserData(key: adaptiveWeightBeforeResizeWithMouseKey, data: $0) }
+            .also { weightBeforeResizeWithMouse = $0 }
     }
 
     fileprivate func resetResizeWeightBeforeResizeRecursive() {
-        cleanUserData(key: adaptiveWeightBeforeResizeWithMouseKey)
+        weightBeforeResizeWithMouse = nil
         for child in children {
             child.resetResizeWeightBeforeResizeRecursive()
         }

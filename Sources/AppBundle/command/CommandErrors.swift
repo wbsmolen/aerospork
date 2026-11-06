@@ -39,17 +39,8 @@ extension Command {
         return !failIfNoop
     }
 
-    /// Resolves toggle state (on/off/toggle) for ToggleEnum
+    /// Resolves toggle state (on/off/toggle)
     func resolveToggle(_ toggle: ToggleEnum, current: Bool) -> Bool {
-        switch toggle {
-            case .on: true
-            case .off: false
-            case .toggle: !current
-        }
-    }
-
-    /// Resolves toggle state (on/off/toggle) for EnableCmdArgs.State
-    func resolveToggle(_ toggle: EnableCmdArgs.State, current: Bool) -> Bool {
         switch toggle {
             case .on: true
             case .off: false

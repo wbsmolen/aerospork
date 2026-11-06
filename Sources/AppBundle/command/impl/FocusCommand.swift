@@ -5,11 +5,7 @@ struct FocusCommand: Command {
     let args: FocusCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
-        debugLog("COMMAND: FocusCommand starting - target: \(args.target)")
-        let startTime = Date()
-
         guard let target = args.resolveTargetOrReportError(env, io) else {
-            debugLog("COMMAND: FocusCommand failed - no target resolved")
             return false
         }
         // Note: Floating windows are temporarily treated as tiling for directional focus.
@@ -19,25 +15,19 @@ struct FocusCommand: Command {
             if args.floatingAsTiling {
                 restoreFloatingWindows(floatingWindows: floatingWindows, workspace: target.workspace)
             }
-            let elapsed = Date().timeIntervalSince(startTime) * 1000
-            debugLog("COMMAND: FocusCommand completed in \(String(format: "%.1f", elapsed))ms")
         }
 
         switch args.target {
             case .direction(let direction):
-                debugLog("COMMAND: Focus direction: \(direction)")
                 let window = target.windowOrNil
                 if let (parent, ownIndex) = window?.closestParent(hasChildrenInDirection: direction, withLayout: nil) {
                     guard let windowToFocus = parent.children[ownIndex + direction.focusOffset]
                         .findFocusTargetRecursive(snappedTo: direction.opposite)
                     else {
-                        debugLog("COMMAND: No window to focus found in direction \(direction)")
                         return false
                     }
-                    debugLog("COMMAND: Focusing window: \(windowToFocus.windowId)")
                     return windowToFocus.focusWindow()
                 } else {
-                    debugLog("COMMAND: Hit workspace boundaries in direction \(direction)")
                     return hitWorkspaceBoundaries(target, io, args, direction)
                 }
             case .windowId(let windowId):
