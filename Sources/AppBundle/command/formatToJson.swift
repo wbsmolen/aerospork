@@ -4,9 +4,9 @@ import Foundation
 extension [AeroObj] {
     @MainActor
     func formatToJson(_ format: [StringInterToken], ignoreRightPaddingVar: Bool) -> Result<String, String> {
-        var list: [[String: Primitive]] = []
+        var list: [[String: Json]] = []
         for richObj in self {
-            var rawObj: [String: Primitive] = [:]
+            var rawObj: [String: Json] = [:]
             for token in format {
                 switch token {
                     case .interVar(PlainInterVar.rightPadding.rawValue) where ignoreRightPaddingVar:

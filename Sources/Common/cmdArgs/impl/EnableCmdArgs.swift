@@ -8,20 +8,16 @@ public struct EnableCmdArgs: CmdArgs {
         options: [
             "--fail-if-noop": trueBoolFlag(\.failIfNoop),
         ],
-        arguments: [newArgParser(\.targetState, parseState, mandatoryArgPlaceholder: EnableCmdArgs.State.unionLiteral)],
+        arguments: [newArgParser(\.targetState, parseState, mandatoryArgPlaceholder: ToggleEnum.unionLiteral)],
     )
     /*conforms*/ public var windowId: UInt32?
     /*conforms*/ public var workspaceName: WorkspaceName?
-    public var targetState: Lateinit<State> = .uninitialized
+    public var targetState: Lateinit<ToggleEnum> = .uninitialized
     public var failIfNoop: Bool = false
 
-    public init(rawArgs: [String], targetState: State) {
+    public init(rawArgs: [String], targetState: ToggleEnum) {
         self.rawArgs = .init(rawArgs)
         self.targetState = .initialized(targetState)
-    }
-
-    public enum State: String, CaseIterable, Sendable {
-        case on, off, toggle
     }
 }
 
@@ -30,6 +26,6 @@ public func parseEnableCmdArgs(_ args: [String]) -> ParsedCmd<EnableCmdArgs> {
         .filterNot("--fail-if-noop is incompatible with 'toggle' argument") { $0.targetState.val == .toggle && $0.failIfNoop }
 }
 
-private func parseState(arg: String, nextArgs: inout [String]) -> Parsed<EnableCmdArgs.State> {
-    parseEnum(arg, EnableCmdArgs.State.self)
+private func parseState(arg: String, nextArgs: inout [String]) -> Parsed<ToggleEnum> {
+    parseEnum(arg, ToggleEnum.self)
 }

@@ -5,25 +5,15 @@ struct MoveCommand: Command {
     let args: MoveCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
-        let startTime = Date()
         let direction = args.direction.val
-        debugLog("COMMAND: MoveCommand starting - direction: \(direction)")
 
         guard let target = args.resolveTargetOrReportError(env, io) else {
-            debugLog("COMMAND: MoveCommand failed - no target resolved")
             return false
         }
         guard let currentWindow = target.windowOrNil else {
-            debugLog("COMMAND: MoveCommand failed - no window focused")
             return io.err(noWindowIsFocused)
         }
 
-        defer {
-            let elapsed = Date().timeIntervalSince(startTime) * 1000
-            debugLog("COMMAND: MoveCommand completed in \(String(format: "%.1f", elapsed))ms")
-        }
-
-        debugLog("COMMAND: Moving window: \(currentWindow.windowId)")
         guard let parent = currentWindow.parent else { return false }
         switch parent.cases {
             case .tilingContainer(let parent):
@@ -32,16 +22,13 @@ struct MoveCommand: Command {
                 if parent.orientation == direction.orientation && parent.children.indices.contains(indexOfSiblingTarget) {
                     switch parent.children[indexOfSiblingTarget].tilingTreeNodeCasesOrDie() {
                         case .tilingContainer(let topLevelSiblingTargetContainer):
-                            debugLog("COMMAND: Deep moving into container")
                             return deepMoveIn(window: currentWindow, into: topLevelSiblingTargetContainer, moveDirection: direction)
                         case .window: // "swap windows"
-                            debugLog("COMMAND: Swapping windows")
                             let prevBinding = currentWindow.unbindFromParent()
                             currentWindow.bind(to: parent, adaptiveWeight: prevBinding.adaptiveWeight, index: indexOfSiblingTarget)
                             return true
                     }
                 } else {
-                    debugLog("COMMAND: Moving out of current container")
                     return moveOut(window: currentWindow, direction: direction, io, args, env)
                 }
             case .workspace: // floating window

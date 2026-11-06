@@ -2,7 +2,17 @@
 
 Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for earlier releases are on the [releases page](https://github.com/wbsmolen/aerospork/releases).
 
-## Unreleased
+## 1.3.0 (2026-11-05)
+
+Fixes windows showing up on the wrong workspace or monitor, an invisible window holding an empty tile, and a restart scrambling your arrangement. Also makes each refresh cheaper, and makes Settings safer with your config file.
+
+### Upgrade notes
+
+- AeroSpork now asks once whether to check for updates automatically: on the first launch after this update, or the second launch of a new install. A setting told the update framework never to check and never to ask, so you only got an update by choosing **Check for Updates…**.
+- Startup no longer switches the first workspace to accordion when it holds more than three windows. `default-root-container-layout` decides.
+- `%{monitor-fingerprint}` now prints a table you can paste into `[monitors]`, as the docs always said it could. Anything parsing the old `vendor:… name:…` output needs updating.
+- `mode <name>` fails when the config has no such mode, instead of leaving no hotkeys registered. A reload that removes the mode you are in goes back to `main`.
+- Runtime error reports are written to `~/Library/Logs/com.wbs.aerospork/`, not to a directory in `/tmp` shared with other accounts.
 
 ### Windows stay on their own workspace
 
@@ -11,7 +21,6 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - A window the system draws fully transparent no longer takes up an empty tile. It is set aside after a second and comes back to the tiling once it is visible again.
 - On quit, a window from a hidden workspace goes back to its workspace's monitor instead of the monitor it was parked against.
 - A restart keeps your arrangement. Each monitor comes back showing the workspace it showed, not just the focused one, and an app that answers slowly after a restart gets its windows back on the right workspace instead of the focused one. Minimized windows are remembered too.
-- Startup no longer switches the first workspace to accordion when it holds more than three windows. `default-root-container-layout` decides.
 - When two monitors trade places, each workspace stays with its physical monitor.
 - `summon-workspace` from another monitor trades the two workspaces, and no longer leaves that monitor empty, which could shuffle every monitor.
 - `move-workspace-to-monitor` on a hidden workspace no longer replaces what its old monitor is showing.
@@ -20,7 +29,7 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 
 ### Responsiveness
 
-- Much lower idle CPU. A refresh no longer asks the system about every running process, which was most of what AeroSpork did while idle.
+- Lower CPU use. A refresh no longer asks the system about every running process, which took most of the time in each one.
 - Fewer refreshes. A command used to be followed at once by a second full pass; now it is one, coalesced with whatever else happened.
 - A steady stream of window events can no longer keep restarting a refresh so that none ever finishes.
 - Two fast hotkeys now run strictly in order, so the first can no longer push a stale focus after the second.
@@ -39,7 +48,6 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 
 - A binding added or removed in Raw TOML is no longer undone by the next change in another pane, and the other panes show what Raw TOML applied.
 - A window rule still waiting for its command no longer loses other rule edits made alongside it. They are all written once that rule has a command.
-- `mode <name>` fails when the config has no such mode, instead of leaving no hotkeys registered. A reload that removes the mode you are in goes back to `main`.
 - Converting a config from v1 to v2 happens once at startup. `reload-config --dry-run` and Settings saves no longer rewrite the file that way.
 - Settings keeps one backup each time it is opened, plus one per Raw TOML apply. Autosave used to rotate all five backups out within seconds.
 - A hotkey that can't be registered, usually because another app owns it, is recorded in the log.
@@ -52,17 +60,18 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - A window rule whose matcher is its own `[on-window-detected.if]` table can be edited in Settings.
 - Saving without a change no longer rewrites a file that mixes line endings. Editing such a file in the panes is refused, because it would change every line.
 - A Raw TOML apply that was refused no longer takes effect on the next change in another pane.
+- A window rule with no command says so in the pane, since rule changes aren't saved until every rule has one.
 
 ### Security and updates
 
-- AeroSpork now asks once whether to check for updates automatically: on the first launch after this update, or the second launch of a new install. A setting told the update framework never to check and never to ask, so you only got an update by choosing **Check for Updates…**.
 - Updates are verified before they are unpacked, not after. This starts with the update after the one that brings it.
 - The CLI reads stdin only for `workspace next`/`prev` and `move-node-to-workspace next`/`prev`. Every other command used to read it too, which swallowed the input of a `while read` loop.
 - CLI clients that connect and stall can no longer hold up the rest of the app. Each request and each reply has 30 seconds to finish.
 - If another account already holds the CLI socket's path, AeroSpork logs it and runs without the CLI, instead of refusing to start.
 - The CLI and the app each hang up if the other end of the socket is running as a different user.
 - Error dialogs no longer fail to appear when the message contains a backslash, and a message can no longer run as a script.
-- Runtime error reports are written to `~/Library/Logs/com.wbs.aerospork/`, not to a directory in `/tmp` shared with other accounts.
+- A scheduled update alert comes to the front instead of opening unseen behind your windows.
+- Commands run by AeroSpork no longer get a trailing `:` on `PATH`, which means the current directory, when it starts with no `PATH` set.
 - Remembering windows across a restart no longer mistakes another process named WindowServer for the real one, or gives up if the process list grows while it reads it.
 
 ## 1.2.0 (2026-09-13)

@@ -73,7 +73,7 @@ The following variables can be used inside `<output-format>`:
 %{monitor-id}:: 1-based Number. Sequential number of the belonging monitor
 %{monitor-appkit-nsscreen-screens-id}:: 1-based Number. Index of the belonging monitor in the `NSScreen.screens` array. Useful for integration with other tools that use `NSScreen.screens` ordering (like sketchybar).
 %{monitor-name}:: String. Name of the belonging monitor
-%{monitor-fingerprint}:: String. Hardware fingerprint of the monitor: whichever of vendor, model, serial, name, resolution and UUID the display reports. Use it to identify a specific physical monitor in a docking setup.
+%{monitor-fingerprint}:: String. Hardware fingerprint of the monitor: whichever of vendor, model, serial, name, size and UUID the display reports, as a table you can paste into `[monitors]`. Use it to identify a specific physical monitor in a docking setup.
 %{monitor-vendor-id}:: String. Vendor ID of the monitor in hexadecimal format (e.g., `0x10AC`). Empty if not available.
 %{monitor-model-id}:: String. Model ID of the monitor in hexadecimal format (e.g., `0xD0C1`). Empty if not available.
 %{monitor-serial-number}:: String. Serial number of the monitor. Empty if not available.

@@ -2,7 +2,6 @@ import Common
 
 extension CmdArgs {
     func toCommand() -> any Command {
-        debugLog("CMDMANIFEST: Converting CmdArgs to Command - kind: \(Self.info.kind)")
         let command: any Command
         switch Self.info.kind {
             case .balanceSizes:
@@ -33,7 +32,6 @@ extension CmdArgs {
                 command = JoinWithCommand(args: self as! JoinWithCmdArgs)
             case .layout:
                 let layoutArgs = self as! LayoutCmdArgs
-                debugLog("CMDMANIFEST: Creating LayoutCommand with toggleBetween: \(layoutArgs.toggleBetween.val)")
                 command = LayoutCommand(args: layoutArgs)
             case .listApps:
                 command = ListAppsCommand(args: self as! ListAppsCmdArgs)
@@ -83,7 +81,6 @@ extension CmdArgs {
                 command = WorkspaceBackAndForthCommand(args: self as! WorkspaceBackAndForthCmdArgs)
         }
         check(command.info == Self.info)
-        debugLog("CMDMANIFEST: Created command: \(String(describing: Swift.type(of: command)))")
         return command
     }
 }

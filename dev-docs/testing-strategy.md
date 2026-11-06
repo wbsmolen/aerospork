@@ -10,8 +10,9 @@ and the tooling/skills to build and maintain to keep it honest over time.
 > repository wrappers. If Swiftly is installed but the `.swift-version` toolchain is not, or the
 > selected Xcode SDK is the intended toolchain, use the documented `xcrun` escape hatch:
 > ```
-> ./run-swift-test.sh                         # normal pinned-toolchain path
-> AEROSPORK_SWIFT=xcrun ./run-swift-test.sh   # selected-Xcode path
+> ./run-tests.sh                                                                  # normal pinned-toolchain path
+> AEROSPORK_SWIFT=xcrun ./run-tests.sh                                            # selected-Xcode path
+> DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test       # just the tests
 > ```
 
 ---

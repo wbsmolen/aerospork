@@ -32,8 +32,8 @@ Debug builds use `~/.aerospork-debug.toml` instead of `~/.aerospork.toml` for co
 ### Testing & Code Quality
 ```bash
 ./run-tests.sh                # Run full test suite + lint checks
-./run-swift-test.sh           # Run Swift tests only (swift test)
-./format.sh                   # Format code with swiftformat + swiftlint
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test   # Run Swift tests only
+./format.sh                   # Format code with swiftformat + swiftlint (run-tests.sh only lints)
 ```
 
 ### Other Commands
@@ -323,8 +323,8 @@ Run tests with `./run-tests.sh` which:
 1. Builds debug version
 2. Runs `swift test` for unit tests
 3. Validates CLI help/version output
-4. Runs formatting and linting checks
-5. Checks for uncommitted generated files
+4. Runs formatting and linting checks, without rewriting anything
+5. Fails if regenerating generated files changed the tree. Untracked files and local work don't matter
 
 > **Toolchain:** use Xcode's toolchain, not swiftly's. On a beta macOS the swiftly-pinned toolchain
 > (`.swift-version`) can spin at 100% CPU indefinitely on the TOMLKit manifest, and swiftly may not

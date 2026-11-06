@@ -10,8 +10,7 @@ import XCTest
 final class ConfigIntrospectionTest: XCTestCase {
     private func get(_ path: String) -> String? {
         switch buildConfigMap().find(keyPath: path.split(separator: ".").map(String.init)) {
-            case .success(.scalar(let s)): return s.describe
-            case .success: return "<non-scalar>"
+            case .success(let value): return value.scalarDescription ?? "<non-scalar>"
             case .failure: return nil
         }
     }

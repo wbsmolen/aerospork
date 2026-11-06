@@ -2,8 +2,11 @@
 cd "$(dirname "$0")"
 source ./script/setup.sh
 
+# What this run changes is what fails it, so that local work in progress and untracked files don't.
+status_before="$(git status --porcelain)"
+
 ./build-debug.sh
-./run-swift-test.sh
+swift test
 
 ./.debug/aerospork -h > /dev/null
 ./.debug/aerospork --help > /dev/null
@@ -17,9 +20,18 @@ source ./script/setup.sh
 ./.debug/aerospork -v | grep -qiE '^aerospork CLI client version: [0-9]+\.[0-9]+\.[0-9]+ '
 ./.debug/aerospork --version | grep -qiE '^aerospork CLI client version: [0-9]+\.[0-9]+\.[0-9]+ '
 
-./format.sh
+./script/install-dep.sh --swiftformat
+./.deps/swiftformat/swiftformat --lint .
+./script/install-dep.sh --swiftlint
+./.deps/swiftlint/swiftlint lint --quiet
+
 ./generate.sh --all
-./script/check-uncommitted-files.sh
+if test "$status_before" != "$(git status --porcelain)"; then
+    git status --short
+    git diff | sed 's/^/    /'
+    echo "!!! This run changed the tree: generated files are out of sync. Commit what ./generate.sh --all produces."
+    exit 1
+fi
 
 echo
 echo "All tests have passed successfully"

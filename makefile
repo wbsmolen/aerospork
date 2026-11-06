@@ -8,7 +8,7 @@ test:
 	./run-tests.sh
 
 swift-test:
-	./run-swift-test.sh
+	bash -c 'source ./script/setup.sh && swift test'
 
 format:
 	./format.sh

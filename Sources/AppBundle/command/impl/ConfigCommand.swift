@@ -43,7 +43,7 @@ extension String {
         case .failure(let error):
             return io.err(error)
     }
-    var configMap: ConfigMapValue
+    var configMap: Json
     switch buildConfigMap().find(keyPath: keyPath) {
         case .success(let value):
             configMap = value
@@ -52,12 +52,12 @@ extension String {
     }
     if args.keys {
         switch configMap {
-            case .scalar(let scalar):
-                return io.err("--keys flag cannot be applied to scalar object '\(scalar)'")
-            case .map(let map):
-                configMap = .array(map.keys.map { .scalar(.string($0)) })
+            case .dict(let map):
+                configMap = .array(map.keys.map { .string($0) })
             case .array(let array):
-                configMap = .array((0 ..< array.count).map { .scalar(.int($0)) })
+                configMap = .array((0 ..< array.count).map { .int($0) })
+            default:
+                return io.err("--keys flag cannot be applied to scalar object '\(configMap.scalarDescription ?? "null")'")
         }
     }
     if args.json {
@@ -68,34 +68,30 @@ extension String {
         }
     } else {
         switch configMap {
-            case .scalar(let scalar):
-                return io.out(scalar.describe)
-            case .map:
+            case .dict:
                 return io.err("Complicated objects can be printed only with --json flag. " +
                     "Alternatively, you can try to inspect keys of the object with --keys flag")
             case .array(let array):
                 let plainArray: Result<[String], String> = array.mapAllOrFailure {
-                    switch $0 {
-                        case .scalar(let scalar): .success(scalar.describe)
-                        default: .failure("Printing array of non-string objects is supported only with --json flag." +
-                                "Alternatively, you can try to inspect keys of the object with --keys flag")
-                    }
+                    $0.scalarDescription.map(Result.success)
+                        ?? .failure("Printing array of non-string objects is supported only with --json flag." +
+                            "Alternatively, you can try to inspect keys of the object with --keys flag")
                 }
                 return switch plainArray {
                     case .success(let array): io.out(array.sorted().joined(separator: "\n"))
                     case .failure(let error): io.err(error)
                 }
+            default:
+                return io.out(configMap.scalarDescription ?? "null")
         }
     }
 }
 
-extension ConfigMapValue {
-    func find(keyPath: [String]) -> Result<ConfigMapValue, String> {
+extension Json {
+    func find(keyPath: [String]) -> Result<Json, String> {
         if let key = keyPath.first {
             switch self {
-                case .scalar(let scalar):
-                    return .failure("Can't dereference scalar value '\(scalar.describe)'")
-                case .map(let map):
+                case .dict(let map):
                     if let child = map[key] {
                         return child.find(keyPath: Array(keyPath[1...]))
                     } else {
@@ -111,6 +107,8 @@ extension ConfigMapValue {
                     } else {
                         return .failure("Can't convert key token '\(key)' to Int")
                     }
+                default:
+                    return .failure("Can't dereference scalar value '\(scalarDescription ?? "null")'")
             }
         } else {
             return .success(self)
@@ -120,8 +118,7 @@ extension ConfigMapValue {
     func dumpAllKeysRecursive(path: String, result: inout [String]) {
         result.append(path)
         switch self {
-            case .scalar: break
-            case .map(let map):
+            case .dict(let map):
                 for (key, value) in map {
                     let path = path == "." ? key : path + "." + key
                     value.dumpAllKeysRecursive(path: path, result: &result)
@@ -131,6 +128,7 @@ extension ConfigMapValue {
                     let path = path == "." ? String(index) : path + "." + String(index)
                     value.dumpAllKeysRecursive(path: path, result: &result)
                 }
+            default: break
         }
     }
 }
@@ -150,44 +148,44 @@ extension [Command] {
 ///
 /// Everything here comes from the parsed `config`, not the file, so it reflects what the WM is
 /// actually using right now.
-@MainActor func buildConfigMap() -> ConfigMapValue {
-    func str(_ s: String) -> ConfigMapValue { .scalar(.string(s)) }
-    func int(_ i: Int) -> ConfigMapValue { .scalar(.int(i)) }
-    func flag(_ b: Bool) -> ConfigMapValue { str(b ? "true" : "false") }
-    func commands(_ c: [any Command]) -> ConfigMapValue { .array(c.map { str($0.args.description) }) }
+@MainActor func buildConfigMap() -> Json {
+    func str(_ s: String) -> Json { (.string(s)) }
+    func int(_ i: Int) -> Json { (.int(i)) }
+    func flag(_ b: Bool) -> Json { str(b ? "true" : "false") }
+    func commands(_ c: [any Command]) -> Json { .array(c.map { str($0.args.description) }) }
 
-    func gap(_ v: DynamicConfigValue<Int>) -> ConfigMapValue {
+    func gap(_ v: DynamicConfigValue<Int>) -> Json {
         switch v {
             case .constant(let i): return int(i)
             case .perMonitor(let per, let def):
-                return .map([
+                return .dict([
                     "default": int(def),
                     "per-monitor": .array(per.map { str("\($0.description): \($0.value)") }),
                 ])
         }
     }
 
-    let mode = config.modes.mapValues { (mode: Mode) -> ConfigMapValue in
-        var keyNotationToScript: [String: ConfigMapValue] = [:]
+    let mode = config.modes.mapValues { (mode: Mode) -> Json in
+        var keyNotationToScript: [String: Json] = [:]
         for binding in mode.bindings.values {
             keyNotationToScript[binding.descriptionWithKeyNotation] =
-                .scalar(.string(binding.commands.prettyDescription))
+                (.string(binding.commands.prettyDescription))
         }
-        return .map(["binding": .map(keyNotationToScript)])
+        return .dict(["binding": .dict(keyNotationToScript)])
     }
 
     // `key-mapping` retains real effective state (the preset actually in force plus any custom
     // notation), and was missing from this map -- so `config --get key-mapping.preset` could not
     // answer a question the user can definitely have.
-    let keyMapping: ConfigMapValue = .map([
-        "preset": .scalar(.string(config.keyMapping.presetName)),
-        "key-notation-to-key-code": .map(
-            config.keyMapping.customKeyNotations.mapValues { .scalar(.string(String(describing: $0))) },
+    let keyMapping: Json = .dict([
+        "preset": (.string(config.keyMapping.presetName)),
+        "key-notation-to-key-code": .dict(
+            config.keyMapping.customKeyNotations.mapValues { (.string(String(describing: $0))) },
         ),
     ])
 
-    return .map([
-        "mode": .map(mode),
+    return .dict([
+        "mode": .dict(mode),
         "key-mapping": keyMapping,
 
         "start-at-login": flag(config.startAtLogin),
@@ -210,24 +208,24 @@ extension [Command] {
         "on-focused-workspace-changed": commands(config.onFocusedWorkspaceChanged),
         "on-focused-monitor-changed": commands(config.onFocusedMonitorChanged),
 
-        "gaps": .map([
-            "inner": .map(["horizontal": gap(config.gaps.inner.horizontal), "vertical": gap(config.gaps.inner.vertical)]),
-            "outer": .map([
+        "gaps": .dict([
+            "inner": .dict(["horizontal": gap(config.gaps.inner.horizontal), "vertical": gap(config.gaps.inner.vertical)]),
+            "outer": .dict([
                 "left": gap(config.gaps.outer.left), "right": gap(config.gaps.outer.right),
                 "top": gap(config.gaps.outer.top), "bottom": gap(config.gaps.outer.bottom),
             ]),
         ]),
 
-        "workspace-to-monitor-force-assignment": .map(
+        "workspace-to-monitor-force-assignment": .dict(
             config.workspaceToMonitorForceAssignment.mapValues { descriptions in
-                ConfigMapValue.array(descriptions.map { str($0.humanDescription) })
+                Json.array(descriptions.map { str($0.humanDescription) })
             },
         ),
 
         "on-window-detected": .array(config.onWindowDetected.map { str(String(describing: $0.matcher)) }),
 
-        "exec": .map([
-            "env-vars": .map(config.execConfig.envVariables.mapValues { str($0) }),
+        "exec": .dict([
+            "env-vars": .dict(config.execConfig.envVariables.mapValues { str($0) }),
         ]),
     ])
 }
@@ -251,42 +249,5 @@ extension MonitorDescription {
                 if let u = d.displayUUID { parts.append("uuid \(u)") }
                 return "fingerprint(" + (parts.isEmpty ? "empty" : parts.joined(separator: ", ")) + ")"
         }
-    }
-}
-
-enum ConfigScalarValue: Encodable {
-    case string(String)
-    case int(Int)
-
-    var describe: String {
-        return switch self {
-            case .string(let string): string
-            case .int(let int): String(int)
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        let value: Encodable = switch self {
-            case .string(let string): string
-            case .int(let int): int
-        }
-        var container = encoder.singleValueContainer()
-        try container.encode(value)
-    }
-}
-
-enum ConfigMapValue: Encodable {
-    case scalar(ConfigScalarValue)
-    case map([String: ConfigMapValue])
-    case array([ConfigMapValue])
-
-    func encode(to encoder: Encoder) throws {
-        let value: Encodable = switch self {
-            case .scalar(let scalar): scalar
-            case .map(let map): map
-            case .array(let array): array
-        }
-        var container = encoder.singleValueContainer()
-        try container.encode(value)
     }
 }

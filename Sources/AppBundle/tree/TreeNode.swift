@@ -142,13 +142,8 @@ class TreeNode: Equatable, AeroAny {
         lhs === rhs
     }
 
-    private var userData: [String: Any] = [:]
-    func getUserData<T>(key: TreeNodeUserDataKey<T>) -> T? { userData[key.key] as! T? }
-    func putUserData<T>(key: TreeNodeUserDataKey<T>, data: T) {
-        userData[key.key] = data
-    }
-    @discardableResult
-    func cleanUserData<T>(key: TreeNodeUserDataKey<T>) -> T? { userData.removeValue(forKey: key.key) as! T? }
+    /// What this node's weight was when a mouse resize began. See `resizeWithMouse`.
+    var weightBeforeResizeWithMouse: CGFloat?
 
     // MARK: - Tree Navigation
 
@@ -285,10 +280,6 @@ class TreeNode: Equatable, AeroAny {
                 return nil
         }
     }
-}
-
-struct TreeNodeUserDataKey<T> {
-    let key: String
 }
 
 let WEIGHT_DOESNT_MATTER = CGFloat(-2)

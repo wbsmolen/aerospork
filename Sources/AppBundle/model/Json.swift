@@ -59,6 +59,17 @@ enum Json: Encodable, Equatable {
         }
     }
 
+    /// How a scalar prints outside JSON. nil for what has no one-line form.
+    var scalarDescription: String? {
+        switch self {
+            case .array, .dict, .null: nil
+            case .bool(let x): x.description
+            case .int(let x): x.description
+            case .string(let x): x
+            case .uint32(let x): x.description
+        }
+    }
+
     var asDictOrDie: [String: Json] {
         if case .dict(let dict) = self {
             dict

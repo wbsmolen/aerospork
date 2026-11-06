@@ -4,16 +4,11 @@ source ./script/setup.sh
 
 echo "Building debug .app bundle..."
 
-# Build the executables using swift build
-./generate.sh --ignore-xcodeproj
-swift build
-swift build --target AppBundleTests
-
-# Clean and create .debug directory
-rm -rf .debug && mkdir -p .debug
+./build-debug.sh
 
 # Create .app bundle structure
 APP_BUNDLE=".debug/AeroSpork-Debug.app"
+rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
@@ -78,10 +73,6 @@ if test -z "$codesign_identity"; then
 fi
 echo "Code signing bundle as '$codesign_identity'..."
 codesign -s "$codesign_identity" -f --deep --entitlements resources/aerospork.entitlements "$APP_BUNDLE"
-
-# Also copy CLI for convenience
-echo "Copying CLI..."
-cp .build/debug/aerospork .debug/aerospork
 
 echo ""
 echo "✅ Debug .app bundle created successfully!"

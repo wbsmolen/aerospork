@@ -189,6 +189,10 @@ struct WindowRulesTab: View {
                 } header: {
                     SectionLabel("Then run", "bolt")
                 } footer: {
+                    // The writer holds every rule edit back until each rule has a command.
+                    if viewModel.settings.windowRules[i].run.trimmingCharacters(in: .whitespaces).isEmpty {
+                        StatusLabel("No command yet, so rule changes aren't saved. Add one to save them.", kind: .warning)
+                    }
                     Text("Applied once, when the window appears. Chain commands with `\(ConfigurationViewModel.commandSeparator.trimmingCharacters(in: .whitespaces))`. By default a matching rule stops the search.")
                 }
             }

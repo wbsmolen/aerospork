@@ -51,6 +51,22 @@ final class MonitorFingerprintTest: XCTestCase {
 
     // MARK: - Backward compatibility (the pre-UUID matching that already worked)
 
+    /// `list-monitors --format '%{monitor-fingerprint}'` is documented as what to paste into `[monitors]`.
+    func testAFingerprintPastesIntoTheConfig() {
+        let fp = MonitorFingerprint(
+            vendorID: 0x10AC, modelID: 0xD0C1, serialNumber: "AB1", displayName: "ACME \"32\"",
+            widthPixels: 3840, heightPixels: 2160, displayUUID: "BBBBBBBB-0000-4000-8000-000000000002",
+        )
+        guard case .success(let parsed) = parseConfig("[monitors]\n1 = \(fp.description)\n"),
+              case .fingerprint(let pattern)? = parsed.workspaceToMonitorForceAssignment["1"]?.first
+        else {
+            return XCTFail("not read back as a fingerprint: \(fp.description)")
+        }
+        assertTrue(fp.matches(patternData: pattern))
+        assertEquals(pattern.vendorID, 0x10AC)
+        assertEquals(pattern.heightPixels, 2160)
+    }
+
     func testNameExactAndSubstringMatch() {
         let fp = MonitorFingerprint(displayName: "Built-in Retina Display")
         assertTrue(fp.matches(patternData: pattern(name: "Built-in Retina Display"))) // exact, case-insensitive
