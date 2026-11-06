@@ -155,7 +155,7 @@ struct WindowRulesTab: View {
                 } header: {
                     SectionLabel("Match when…", "line.3.horizontal.decrease.circle")
                 } footer: {
-                    Text("Empty matchers are left out. A rule with no matchers at all applies to every window. `aerospork list-apps` prints app IDs.")
+                    SettingsHint("Empty matchers are left out. A rule with no matchers at all applies to every window. `aerospork list-apps` prints app IDs.")
                 }
 
                 Section {
@@ -194,7 +194,7 @@ struct WindowRulesTab: View {
                     if rule.run.trimmingCharacters(in: .whitespaces).isEmpty {
                         StatusLabel("No command yet, so rule changes aren't saved. Add one to save them.", kind: .warning)
                     }
-                    Text("Applied once, when the window appears. Chain commands with `\(ConfigurationViewModel.commandSeparator.trimmingCharacters(in: .whitespaces))`. By default a matching rule stops the search.")
+                    SettingsHint("Applied once, when the window appears. Chain commands with `\(ConfigurationViewModel.commandSeparator.trimmingCharacters(in: .whitespaces))`. By default a matching rule stops the search.")
                 }
             }
             .formStyle(.grouped)

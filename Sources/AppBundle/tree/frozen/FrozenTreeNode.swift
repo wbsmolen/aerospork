@@ -37,16 +37,22 @@ struct FrozenContainer: Sendable, Codable, Equatable {
     }
 
     @MainActor init(_ container: TilingContainer) {
-        children = container.children.map {
-            switch $0.nodeCases {
-                case .window(let w): .window(FrozenWindow(w))
-                case .tilingContainer(let c): .container(FrozenContainer(c))
+        let sequenceWeight = container.sequenceWeight
+        children = container.sequenceIncludingAway().map { entry -> FrozenTreeNode in
+            guard let node = entry.node else {
+                let id = entry.window.orDie()
+                let share = container.awayWindows.first { $0.id == id }?.share ?? 0
+                return .window(FrozenWindow(id: id, weight: share * sequenceWeight))
+            }
+            switch node.nodeCases {
+                case .window(let w): return .window(FrozenWindow(w))
+                case .tilingContainer(let c): return .container(FrozenContainer(c))
                 case .workspace,
                      .macosMinimizedWindowsContainer,
                      .macosHiddenAppsWindowsContainer,
                      .macosFullscreenWindowsContainer,
                      .macosPopupWindowsContainer:
-                    illegalChildParentRelation(child: $0, parent: container)
+                    illegalChildParentRelation(child: node, parent: container)
             }
         }
         layout = container.layout

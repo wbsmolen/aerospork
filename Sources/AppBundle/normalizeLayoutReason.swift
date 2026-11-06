@@ -113,15 +113,15 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window], sta
                 defer { restoreMru(mruBefore, movedWindow: window) }
                 if isMacosFullscreen {
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
-                    window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+                    window.leaveTilesForMacos(workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER)
                 } else if isMacosMinimized {
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
-                    window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+                    window.leaveTilesForMacos(macosMinimizedWindowsContainer, adaptiveWeight: 1)
                 } else if isMacosWindowOfHiddenApp || isTransparent {
                     // A transparent window is parked with the hidden app's: it keeps its workspace,
                     // and leaves the tiling as a window you cannot see should.
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
-                    window.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+                    window.leaveTilesForMacos(workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER)
                 }
             case .macos(let prevParentKind, let prevWorkspaceName):
                 if !isMacosFullscreen && !isMacosMinimized && !isMacosWindowOfHiddenApp && !isTransparent {
@@ -212,7 +212,11 @@ func exitMacOsNativeUnconventionalState(window: Window, prevParentKind: NonLeafT
         case .workspace:
             window.bindAsFloatingWindow(to: workspace)
         case .tilingContainer:
-            try await window.relayoutWindow(on: workspace, forceTile: true)
+            if let slot = workspace.rootTilingContainer.takeAwaySlot(of: window.windowId) {
+                window.bind(to: slot.parent, adaptiveWeight: slot.adaptiveWeight, index: slot.index)
+            } else {
+                try await window.relayoutWindow(on: workspace, forceTile: true)
+            }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window

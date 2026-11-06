@@ -85,7 +85,7 @@ struct GapsSettingsTab: View {
                 } header: {
                     SectionLabel("Around the screen", "rectangle.inset.filled")
                 } footer: {
-                    Text("The top gap is measured below the menu bar, so 0 is flush with the usable area.")
+                    SettingsHint("The top gap is measured below the menu bar, so 0 is flush with the usable area.")
                 }
             }
             .formStyle(.grouped)

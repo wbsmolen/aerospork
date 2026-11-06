@@ -162,4 +162,14 @@ final class PerfInvariantsTest: XCTestCase {
             }
         }
     }
+
+    /// In a debug build on macOS 27 a fresh system font was now and then a broken object, and CoreText raised
+    /// an uncatchable exception on it. Asking once per row per redraw took the app down within a few pane
+    /// switches. What draws by hand keeps its fonts.
+    func testDrawingCodeDoesNotAskForFonts() throws {
+        let recorder = try sourceBody("override func draw(_ dirtyRect: NSRect)", in: "Sources/AppBundle/ui/ConfigurationTabs/KeyBindingsTab.swift", length: 1000)
+        XCTAssertFalse(recorder.contains("NSFont."), recorder)
+        let ruler = try sourceBody("override func drawHashMarksAndLabels", in: "Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift", length: 800)
+        XCTAssertFalse(ruler.contains("NSFont."), ruler)
+    }
 }

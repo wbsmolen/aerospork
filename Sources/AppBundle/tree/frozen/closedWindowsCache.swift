@@ -116,17 +116,37 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
         frozenContainer.layout,
         index: INDEX_BIND_LAST,
     )
+    // In the unit of the weights, because an entry that isn't here becomes a share of the whole sequence.
+    let total = frozenContainer.children.reduce(0) { sum, child in
+        switch child {
+            case .window(let w): sum + max(0, w.weight)
+            case .container(let c): sum + max(0, c.weight)
+        }
+    }
+    var preceding: [UInt32] = []
     for child in frozenContainer.children {
         switch child {
             case .window(let w):
-                // A window that isn't here is skipped, and the rest keep their order around it. This
-                // used to stop at the first one, stranding everything after it.
-                windows(w.id)?.bind(to: container, adaptiveWeight: w.weight, index: INDEX_BIND_LAST)
-            case .container(let c):
-                // Not an empty one, which would hold an empty tile until the next normalization.
-                if c.allWindowIds.contains(where: { windows($0) != nil }) {
-                    restoreTreeRecursive(frozenContainer: c, parent: container, windows)
+                if let window = windows(w.id) {
+                    window.bind(to: container, adaptiveWeight: w.weight, index: INDEX_BIND_LAST)
+                } else {
+                    // Not here yet: a slow app, or a window minimized at the time. It keeps its place, and the
+                    // rest keep their order around it.
+                    container.awayWindows.append(AwayWindow(id: w.id, share: total > 0 ? max(0, w.weight) / total : 0, after: preceding))
                 }
+                preceding.append(w.id)
+            case .container(let c):
+                let ids = c.allWindowIds
+                if ids.contains(where: { windows($0) != nil }) {
+                    restoreTreeRecursive(frozenContainer: c, parent: container, windows)
+                } else {
+                    // Not an empty container, which would hold an empty tile. Its windows keep a place here.
+                    let share = total > 0 ? max(0, c.weight) / total / CGFloat(max(ids.count, 1)) : 0
+                    for (i, id) in ids.enumerated() {
+                        container.awayWindows.append(AwayWindow(id: id, share: share, after: preceding + ids[..<i]))
+                    }
+                }
+                preceding += ids
         }
     }
 }

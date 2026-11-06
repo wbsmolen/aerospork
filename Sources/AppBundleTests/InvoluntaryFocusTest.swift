@@ -70,7 +70,7 @@ final class InvoluntaryFocusTest: XCTestCase {
             source.range(of: "prevWorkspaceName: window.nodeWorkspace?.name"),
             "the minimize command stopped recording the workspace it is leaving",
         )
-        let bind = try XCTUnwrap(source.range(of: "bind(to: macosMinimizedWindowsContainer"))
+        let bind = try XCTUnwrap(source.range(of: "leaveTilesForMacos(macosMinimizedWindowsContainer"))
         XCTAssertTrue(
             record.upperBound < bind.lowerBound,
             "the workspace must be recorded BEFORE the bind -- afterwards `nodeWorkspace` is already nil",

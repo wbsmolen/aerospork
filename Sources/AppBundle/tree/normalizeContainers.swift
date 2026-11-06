@@ -9,7 +9,8 @@ extension Workspace {
 
 extension TilingContainer {
     @MainActor fileprivate func unbindEmptyAndAutoFlatten() {
-        if let child = children.singleOrNil(), config.enableNormalizationFlattenContainers && (child is TilingContainer || !isRootContainer) {
+        // Not while a window is away: it comes back into this container, and one child looks the same as flat.
+        if let child = children.singleOrNil(), awayWindows.isEmpty, config.enableNormalizationFlattenContainers && (child is TilingContainer || !isRootContainer) {
             child.unbindFromParent()
             let mru = parent?.mostRecentChild
             let previousBinding = unbindFromParent()
@@ -25,6 +26,7 @@ extension TilingContainer {
                 (child as? TilingContainer)?.unbindEmptyAndAutoFlatten()
             }
             if children.isEmpty && !isRootContainer {
+                handAwayWindowsToParent()
                 unbindFromParent()
             }
         }

@@ -146,6 +146,9 @@ struct SettingsHint: View {
         Text(LocalizedStringKey(text))
             .font(.callout)
             .foregroundStyle(.secondary)
+            // Stated, not assumed: a grouped form's section footer right-aligns its text otherwise, which
+            // only shows in a real settings window, and reads badly over several lines.
+            .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

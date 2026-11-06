@@ -118,6 +118,7 @@ final class MacWindow: Window {
             return
         }
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded(window: self) }
+        for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { $0 == windowId } }
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
         let focus = focus

@@ -25,7 +25,7 @@ struct MacosNativeFullscreenCommand: Command {
             return io.err(windowIsntPartOfTree(window))
         }
         if newState { // Enter fullscreen
-            window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+            window.leaveTilesForMacos(workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1)
         } else { // Exit fullscreen
             switch window.layoutReason {
                 // `workspace`, not the recorded `prevWorkspaceName`: this is the user un-fullscreening

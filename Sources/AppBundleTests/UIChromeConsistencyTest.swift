@@ -164,4 +164,30 @@ final class UIChromeConsistencyTest: XCTestCase {
             "menu bar chip font ratio should be 0.62 to match aerospork-design/components/brand/WorkspaceChips.jsx",
         )
     }
+
+    /// A section footer is a `SettingsHint`. A plain `Text` there comes out right-aligned and at full
+    /// brightness, and only in a real settings window, so no render in a test ever showed it.
+    func testASectionFooterIsAHint() throws {
+        let folder = projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs")
+        for file in try FileManager.default.contentsOfDirectory(atPath: folder.path()) where file.hasSuffix(".swift") {
+            let source = withoutComments(try String(contentsOf: folder.appending(path: file), encoding: .utf8))
+            var rest = source[...]
+            while let footer = rest.range(of: "footer: {") {
+                var depth = 1
+                var end = footer.upperBound
+                var inString = false
+                while depth > 0, end < rest.endIndex {
+                    switch rest[end] {
+                        case "\"": inString.toggle()
+                        case "{" where !inString: depth += 1
+                        case "}" where !inString: depth -= 1
+                        default: break
+                    }
+                    end = rest.index(after: end)
+                }
+                XCTAssertFalse(rest[footer.upperBound ..< end].contains(" Text("), "\(file): \(rest[footer.upperBound ..< end].prefix(80))")
+                rest = rest[end...]
+            }
+        }
+    }
 }

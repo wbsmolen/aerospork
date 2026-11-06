@@ -475,6 +475,10 @@ fileprivate final class LineNumberRulerView: NSRulerView {
         return max(0, lower - 1)
     }
 
+    /// Kept, not asked for while drawing. See `KeyRecorderField.RecorderView`.
+    private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+    private static let errorNumberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+
     override func drawHashMarksAndLabels(in rect: NSRect) {
         guard let textView,
               let layoutManager = textView.layoutManager,
@@ -485,11 +489,11 @@ fileprivate final class LineNumberRulerView: NSRulerView {
 
         let string = textView.string as NSString
         let normalAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular),
+            .font: Self.numberFont,
             .foregroundColor: NSColor.tertiaryLabelColor,
         ]
         let errorAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+            .font: Self.errorNumberFont,
             .foregroundColor: NSColor.systemRed,
         ]
         let visibleGlyphs = layoutManager.glyphRange(forBoundingRect: textView.visibleRect, in: textContainer)

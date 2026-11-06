@@ -130,5 +130,12 @@ extension Window {
         bind(to: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     }
 
+    /// Into a container macOS decides about. If it was tiled, it keeps its place to come back to.
+    @MainActor
+    func leaveTilesForMacos(_ container: NonLeafTreeNodeObject, adaptiveWeight: CGFloat) {
+        (parent as? TilingContainer)?.noteAway(self)
+        bind(to: container, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
+    }
+
     func asMacWindow() -> MacWindow { self as! MacWindow }
 }
