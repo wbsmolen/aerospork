@@ -25,7 +25,18 @@ enum CliAction: Equatable {
     case badArgs(String)
     /// `-v` / `--version`. Answered by the client alone when the server is unreachable.
     case version
-    case send([String])
+    case send([String], readsStdin: Bool)
+}
+
+/// Whether the command takes its `next`/`prev` list from stdin. Nothing else may touch it: in a
+/// `while read` loop the first call would swallow the loop's input, and a pipe that never closes
+/// would hang a command that has no use for it.
+func readsStdin(_ cmd: any CmdArgs) -> Bool {
+    switch cmd {
+        case let cmd as WorkspaceCmdArgs: cmd.target.val.isRelatve
+        case let cmd as MoveNodeToWorkspaceCmdArgs: cmd.target.val.isRelatve
+        default: false
+    }
 }
 
 /// The whole argument-handling decision. Pure: no I/O, no `exit()`, no globals but the parser.
@@ -36,7 +47,7 @@ func plan(args: [String]) -> CliAction {
     // still answer when there is no server to ask.
     if args.first == "--version" || args.first == "-v" { return .version }
     return switch parseCmdArgs(args) {
-        case .cmd: .send(args)
+        case .cmd(let cmd): .send(args, readsStdin: readsStdin(cmd))
         case .help(let help): .help(help)
         case .failure(let e): .badArgs(e)
     }
@@ -96,11 +107,15 @@ struct Main {
     static func main() {
         let args: [String] = Array(CommandLine.arguments.dropFirst())
         let action = plan(args: args)
+        var stdin = ""
         switch action {
             case .usageError: printStderr(usage); exit(ExitCode.badArgs)
             case .usage: print(usage); exit(ExitCode.success)
             case .help(let help): print(help); exit(ExitCode.success)
             case .badArgs(let e): printStderr(e); exit(ExitCode.badArgs)
+            // Before connecting: whatever feeds the pipe can take as long as it likes, and the server
+            // hangs up on a connection that says nothing.
+            case .send(_, readsStdin: true): stdin = readStdin().orExit()
             case .version, .send: break
         }
 
@@ -112,7 +127,6 @@ struct Main {
         }
         defer { socket.close() }
 
-        let stdin = readStdin().orExit()
         // `--version` carries no subcommand, so the server is asked for nothing but its version.
         let ans = run(socket, action == .version ? [] : args, stdin: stdin).orExit()
         if action == .version { printVersionAndExit(serverVersion: ans.serverVersionAndHash) }
