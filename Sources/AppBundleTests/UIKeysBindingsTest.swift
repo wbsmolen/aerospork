@@ -34,7 +34,7 @@ final class UIKeysBindingsTest: XCTestCase {
 
     private func loaded(_ text: String = v2) -> ConfigurationViewModel {
         let vm = ConfigurationViewModel()
-        vm.loadBindings(fromText: text)
+        vm.load(fromText: text)
         vm.markLoaded()
         return vm
     }
@@ -80,10 +80,10 @@ final class UIKeysBindingsTest: XCTestCase {
     func testModePickerSeesModesThatOnlyExistInTheKeysSection() {
         assertEquals(loaded().allModeNames, ["main", "service"])
         // ...and it reaches `modes`, the writable set, so its bindings can be edited.
-        assertEquals(loaded().modes.map(\.mode), ["main", "service"])
+        assertEquals(loaded().settings.modes.map(\.mode), ["main", "service"])
         // Generated bindings stay OUT of the writable set -- they have no line to round-trip against.
         XCTAssertFalse(
-            loaded().modes.first { $0.mode == mainModeId }?.bindings.contains { $0.key == "alt-1" } ?? true,
+            loaded().settings.modes.first { $0.mode == mainModeId }?.bindings.contains { $0.key == "alt-1" } ?? true,
             "a generated binding leaked into the writable set",
         )
     }
@@ -119,7 +119,7 @@ final class UIKeysBindingsTest: XCTestCase {
         let vm = loaded()
         assertEquals(ConfigurationWriter.render(baseText: Self.v2, from: vm), Self.v2, additionalMsg: "a no-op save changed the file")
 
-        vm.accordionPadding = 42 // an edit on a completely different tab
+        vm.settings.general.accordionPadding = 42 // an edit on a completely different tab
         let out = ConfigurationWriter.render(baseText: Self.v2, from: vm)
         assertEquals(errors(out), [])
         XCTAssertFalse(out.contains("[mode."), "a generated or keys binding was written back:\n\(out)")
@@ -212,7 +212,7 @@ final class UIKeysBindingsTest: XCTestCase {
             """
         let vm = loaded(base)
         assertEquals(ConfigurationWriter.render(baseText: base, from: vm), base)
-        vm.accordionPadding = 42 // force every section through the writer
+        vm.settings.general.accordionPadding = 42 // force every section through the writer
         XCTAssertTrue(
             ConfigurationWriter.render(baseText: base, from: vm).contains("alt-enter = \"exec-and-forget open -na Ghostty\""),
             "an untouched binding was requoted",

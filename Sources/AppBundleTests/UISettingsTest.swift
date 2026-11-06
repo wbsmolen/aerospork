@@ -178,28 +178,28 @@ final class UISettingsTest: XCTestCase {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
 
-        vm.innerGapsHorizontal = 4
-        vm.innerGapsVertical = 9
+        vm.settings.gaps.innerHorizontal = 4
+        vm.settings.gaps.innerVertical = 9
         vm.setInnerGaps(12)
-        XCTAssertEqual([vm.innerGapsHorizontal, vm.innerGapsVertical], [12, 12])
+        XCTAssertEqual([vm.settings.gaps.innerHorizontal, vm.settings.gaps.innerVertical], [12, 12])
         XCTAssertTrue(vm.hasUnsavedChanges)
 
-        vm.hasUnsavedChanges = false
+        vm.markLoaded()
         vm.setInnerGaps(12)
         XCTAssertFalse(vm.hasUnsavedChanges, "setting the already-linked value should not schedule a save")
 
-        vm.outerGapsTop = 1
-        vm.outerGapsBottom = 2
-        vm.outerGapsLeft = 3
-        vm.outerGapsRight = 4
+        vm.settings.gaps.outerTop = 1
+        vm.settings.gaps.outerBottom = 2
+        vm.settings.gaps.outerLeft = 3
+        vm.settings.gaps.outerRight = 4
         vm.setOuterGaps(16)
         XCTAssertEqual(
-            [vm.outerGapsTop, vm.outerGapsBottom, vm.outerGapsLeft, vm.outerGapsRight],
+            [vm.settings.gaps.outerTop, vm.settings.gaps.outerBottom, vm.settings.gaps.outerLeft, vm.settings.gaps.outerRight],
             [16, 16, 16, 16],
         )
         XCTAssertTrue(vm.hasUnsavedChanges)
 
-        vm.hasUnsavedChanges = false
+        vm.markLoaded()
         vm.setOuterGaps(16)
         XCTAssertFalse(vm.hasUnsavedChanges, "setting the already-linked value should not schedule a save")
     }
@@ -209,7 +209,7 @@ final class UISettingsTest: XCTestCase {
     func testUnpinnedDefinedWorkspacesAreDefinedMinusAssigned() {
         let vm = ConfigurationViewModel()
         vm.definedWorkspaces = ["1", "2", "2", "3"]
-        vm.assignments = [.init(workspace: "2", monitor: "main")]
+        vm.settings.assignments = [.init(workspace: "2", monitor: "main")]
         XCTAssertEqual(vm.unpinnedDefinedWorkspaces, ["1", "3"], "dedupe, config order, assigned excluded")
     }
 
@@ -243,7 +243,7 @@ final class UISettingsTest: XCTestCase {
         vm.liveMonitors = Self.twoMonitors()
         let dell = vm.liveMonitors[0]
         let lg = vm.liveMonitors[1]
-        vm.assignments = [
+        vm.settings.assignments = [
             .init(workspace: "a", monitor: "main"),
             .init(workspace: "b", monitor: "secondary"),
             .init(workspace: "c", monitor: "1"),
@@ -280,7 +280,7 @@ final class UISettingsTest: XCTestCase {
         XCTAssertEqual(vm.assignments(pinnedTo: dell).map(\.id), [id])
         XCTAssertEqual(vm.unpinnedDefinedWorkspaces, ["1", "2"])
 
-        vm.hasUnsavedChanges = false
+        vm.markLoaded()
         vm.setAssignment(workspace: "3", monitorToken: dell.uuid!)
         XCTAssertFalse(vm.hasUnsavedChanges, "re-pinning to the same monitor must not schedule a save")
 
@@ -290,7 +290,7 @@ final class UISettingsTest: XCTestCase {
 
         let emptyRow = vm.addAssignment(monitorToken: dell.uuid!)
         XCTAssertEqual(
-            vm.assignments.first { $0.id == emptyRow }?.monitor, dell.uuid!,
+            vm.settings.assignments.first { $0.id == emptyRow }?.monitor, dell.uuid!,
             "Other… must create the row already pinned to the selected monitor",
         )
     }

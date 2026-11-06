@@ -52,14 +52,13 @@ final class SettingsApplyTest: XCTestCase {
         """
 
     func testTurningOffAlternateOrientationOnTheIssueConfigIsWritten() {
-        XCTAssertNil(ConfigurationWriter.unsupportedShapeReason(Self.issueConfig), "the writer refuses the config from the issue")
         let vm = ConfigurationViewModel()
         vm.markLoaded()
-        vm.enableNormalizationOppositeOrientation = false
+        vm.settings.general.enableNormalizationOppositeOrientation = false
 
         let rendered = ConfigurationWriter.render(baseText: Self.issueConfig, from: vm)
 
-        XCTAssertNil(ConfigurationWriter.validate(rendered))
+        XCTAssertNil(ConfigurationWriter.refusal(rendered: rendered, base: Self.issueConfig, from: vm), "the writer refuses the config from the issue")
         guard case .success(let parsed) = parseConfig(rendered) else { return XCTFail("the rendered file does not parse") }
         XCTAssertFalse(parsed.enableNormalizationOppositeOrientationForNestedContainers)
     }
@@ -68,17 +67,35 @@ final class SettingsApplyTest: XCTestCase {
     /// unrelated toggle used to read that as a deletion.
     func testABindingAddedInRawTomlSurvivesTheNextUnrelatedToggle() {
         let vm = ConfigurationViewModel()
-        vm.loadBindings(fromText: "[mode.main.binding]\nalt-h = 'focus left'\n")
+        vm.load(fromText: "[mode.main.binding]\nalt-h = 'focus left'\n")
         vm.markLoaded()
-        vm.accordionPadding = 42
+        vm.settings.general.accordionPadding = 42
 
         let fileAfterApply = "[mode.main.binding]\nalt-h = 'focus left'\nalt-j = 'focus down'\n"
         XCTAssertTrue(ConfigurationWriter.render(baseText: fileAfterApply, from: vm).contains("alt-j"))
     }
 
-    func testAnAppliedRawTomlIsReadBackByTheOtherPanes() throws {
-        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift", length: 5000)
-        XCTAssertTrue(body.contains("if rawTomlApplyRequested { reloadFromConfig() }"))
+    /// Raw TOML replaced what every other pane is showing. Panes left on the old values would show the
+    /// wrong thing, and write it back over the file the next time someone edited that section.
+    func testAnAppliedRawTomlIsReadBackByTheOtherPanes() {
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: "[mode.main.binding]\nalt-h = 'focus left'\n")
+        let applied = "accordion-padding = 7\n\n[mode.main.binding]\nalt-h = 'focus left'\nalt-j = 'focus down'\n"
+        vm.rawToml = applied
+        vm.rawTomlApplyRequested = true
+        vm.didWrite(ConfigurationWriter.render(baseText: "", from: vm))
+        vm.rawTomlApplyRequested = false // `saveConfiguration` does this on its way out
+
+        assertEquals(vm.settings.general.accordionPadding, 7)
+        assertEquals(vm.settings.modes.first?.bindings.map(\.key), ["alt-h", "alt-j"])
+        XCTAssertFalse(vm.hasUnsavedChanges)
+        XCTAssertFalse(vm.rawTomlEdited)
+
+        vm.settings.general.startAtLogin = true
+        let out = ConfigurationWriter.render(baseText: applied, from: vm)
+        XCTAssertNil(ConfigurationWriter.refusal(rendered: out, base: applied, from: vm))
+        XCTAssertTrue(out.contains("alt-j = 'focus down'"), out)
+        XCTAssertTrue(out.contains("accordion-padding = 7"), out)
     }
 
     /// A refused Apply must not leave the buffer armed for the next toggle's autosave.
@@ -96,24 +113,41 @@ final class SettingsApplyTest: XCTestCase {
     func testARuleEditHeldBackByAHalfFilledRuleStaysPending() {
         let base = "mod = 'alt'\n\n[on-window]\n\"com.apple.finder\" = 'move-node-to-workspace 3'\n"
         let vm = ConfigurationViewModel()
-        vm.loadWindowRules(fromText: base)
+        vm.load(fromText: base)
         vm.markLoaded()
-        vm.windowRules[0].run = "move-node-to-workspace 4"
-        vm.windowRules.append(.init(appId: "com.apple.mail", run: ""))
+        vm.settings.windowRules[0].run = "move-node-to-workspace 4"
+        vm.settings.windowRules.append(.init(appId: "com.apple.mail", run: ""))
 
         let held = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertFalse(held.contains("workspace 4"), "the writer holds the whole section back")
-        vm.markSaved(held)
-        XCTAssertTrue(vm.windowRulesEdited, "the edit was recorded as saved")
+        XCTAssertNil(ConfigurationWriter.refusal(rendered: held, base: base, from: vm), "waiting for a command is not an error")
+        vm.didWrite(held)
+        XCTAssertTrue(vm.edited(\.windowRules), "the edit was recorded as saved")
         XCTAssertTrue(vm.hasUnsavedChanges)
 
-        vm.windowRules[1].run = "layout floating"
+        vm.settings.windowRules[1].run = "layout floating"
         let out = ConfigurationWriter.render(baseText: held, from: vm)
         XCTAssertTrue(out.contains("workspace 4"), out)
         XCTAssertTrue(out.contains("layout floating"), out)
-        vm.markSaved(out)
-        XCTAssertFalse(vm.windowRulesEdited)
+        XCTAssertNil(ConfigurationWriter.refusal(rendered: out, base: held, from: vm))
+        vm.didWrite(out)
+        XCTAssertFalse(vm.edited(\.windowRules))
         XCTAssertFalse(vm.hasUnsavedChanges)
+    }
+
+    /// A matcher can be written as its own `[on-window-detected.if]` table, as the issue config does.
+    /// Leaving that behind when the rule was rewritten produced a clash, and no rule could be edited.
+    func testEditingARuleSpelledWithASubTableIsWritten() {
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: Self.issueConfig)
+        assertEquals(vm.settings.windowRules.map(\.appId), ["com.apple.finder", "md.obsidian"])
+        vm.settings.windowRules[0].run = "layout tiling"
+
+        let out = ConfigurationWriter.render(baseText: Self.issueConfig, from: vm)
+        XCTAssertNil(ConfigurationWriter.refusal(rendered: out, base: Self.issueConfig, from: vm))
+        guard case .success(let parsed) = parseConfig(out) else { return XCTFail(out) }
+        assertEquals(parsed.onWindowDetected.count, 2)
+        XCTAssertFalse(out.contains("on-window-detected.if"), out)
     }
 
     /// The pending save is attempted rather than dropped. The view model is put in a state that its

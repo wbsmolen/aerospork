@@ -127,10 +127,10 @@ final class PersistentWorkspacesTest: XCTestCase {
     }
 
     /// The Monitors pane's "Pin a workspace here" menu lists defined workspaces. It must read both
-    /// spellings, or a config written with AeroSpace's key offers nothing to pin. `loadConfiguration`
-    /// reads the user's real file, so this is checked in the source.
-    func testSettingsTreatsBothSpellingsAsDefined() throws {
-        let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationViewModel.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains(#"definedWorkspaces = workspaceNames(table?["workspaces"]) + workspaceNames(table?["persistent-workspaces"])"#))
+    /// spellings, or a config written with the older key offers nothing to pin.
+    func testSettingsTreatsBothSpellingsAsDefined() {
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: "workspaces = '1-2'\npersistent-workspaces = ['web']\n")
+        assertEquals(vm.definedWorkspaces, ["1", "2", "web"])
     }
 }

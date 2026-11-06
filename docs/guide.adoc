@@ -143,7 +143,7 @@ The default config above is written in the current (v2) schema: `mod` and `works
 the i3-style bindings, `[keys]` holds only what you add or override, and the assignment and rule
 sections are spelled `[monitors]` and `[on-window]`. A v1 config (everything spelled out under
 `[mode.main.binding]`, `workspace-to-monitor-force-assignment`, `[[on-window-detected]]`) still
-loads — and the first time it does, AeroSpork rewrites it to v2 in place, keeping your original
+loads — and the next time AeroSpork starts, it rewrites the file to v2 in place, keeping your original
 next to it as `<name>.pre-v2`. The migration only happens when the converted file provably parses
 to the same configuration, and it is skipped forever once a `.pre-v2` file exists — so going back
 to v1 sticks. One consequence to know in advance: the rewrite regenerates the file, so comments
@@ -210,8 +210,8 @@ so on stderr and in the `config` log. Copy the file across, then:
   string form, `if = 'test %{...}'`, is rejected with an error that names the replacement. A rule can run only
   `layout floating`, `layout tiling` and `move-node-to-workspace`, and `if.during-aerospace-startup` is
   spelled `if.during-aerospork-startup`.
-* The first time a v1-style config (bindings under `[mode.main.binding]`) loads, AeroSpork rewrites it
-  to v2 and keeps the original as `<name>.pre-v2`. See <<config-v2>>.
+* The first time AeroSpork starts with a v1-style config (bindings under `[mode.main.binding]`), it
+  rewrites it to v2 and keeps the original as `<name>.pre-v2`. See <<config-v2>>.
 
 [#key-notation]
 === Key notation
@@ -382,18 +382,20 @@ AeroSpork again while it runs) opens a native settings window with seven panes: 
 Keys, Monitors, Events, Window Rules and Raw TOML. The window comes to the front, and AeroSpork
 never tiles it or moves it to a workspace. Structured controls apply live, a moment after you stop
 changing them. There is no Save button, and a change still pending when you close the window is
-saved. A save rewrites only the sections you actually edited, so your comments and
-formatting survive, and a saved change takes effect on screen immediately. Raw TOML is the exception: it applies only when you click Apply, since
+saved. A save changes only the lines you actually edited, so your comments and
+formatting survive, and a saved change takes effect on screen immediately. Gaps and window rules
+are the exceptions, rewritten as a whole section when you edit them. New sections are written in
+the v2 spelling. Raw TOML is the exception to applying live: it applies only when you click Apply, since
 half-typed TOML is invalid most of the time, and it is the guarantee that no config key is out of
 the GUI's reach.
 
-Every GUI save first drops a timestamped backup next to your config
-(`<config>.toml.<yyyyMMdd-HHmmss>.backup`; the five most recent are kept), and the Raw TOML pane's
-Restore menu lists them. A few config shapes the structured panes cannot rewrite safely — Windows
-line endings, dotted or inline spellings of a managed section, multi-line arrays — are refused
-with a pointer to Raw TOML rather than degraded, and values richer than a pane's controls (a
-hardware fingerprint, a monitor fallback list) are marked `complex` and preserved untouched by
-every save.
+Settings drops a timestamped backup next to your config the first time it saves after being opened,
+and for every Raw TOML apply (`<config>.toml.<yyyyMMdd-HHmmss>.backup`; the five most recent are
+kept), and the Raw TOML pane's Restore menu lists them. Every save is read back before it is written.
+An edit that would not come out right, because of how the file spells that value (a dotted or inline
+form, a multi-line array) or because the file mixes Windows and Unix line endings, is refused with a
+pointer to Raw TOML. Values richer than a pane's controls (a hardware fingerprint, a monitor fallback
+list) are marked `complex` and left untouched unless you edit that row.
 
 One related consequence worth knowing: `show-menu-bar-icon = false` together with
 `show-dock-icon = false` does not hide both. With no menu-bar icon the Dock icon is forced back

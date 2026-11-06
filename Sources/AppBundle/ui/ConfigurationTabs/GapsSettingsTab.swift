@@ -14,12 +14,12 @@ struct GapsSettingsTab: View {
                 // by the same values that are about to be written, so the loop closes here.
                 Section {
                     GapsPreview(
-                        innerHorizontal: viewModel.innerGapsHorizontal,
-                        innerVertical: viewModel.innerGapsVertical,
-                        outerTop: viewModel.outerGapsTop,
-                        outerBottom: viewModel.outerGapsBottom,
-                        outerLeft: viewModel.outerGapsLeft,
-                        outerRight: viewModel.outerGapsRight,
+                        innerHorizontal: viewModel.settings.gaps.innerHorizontal,
+                        innerVertical: viewModel.settings.gaps.innerVertical,
+                        outerTop: viewModel.settings.gaps.outerTop,
+                        outerBottom: viewModel.settings.gaps.outerBottom,
+                        outerLeft: viewModel.settings.gaps.outerLeft,
+                        outerRight: viewModel.settings.gaps.outerRight,
                     )
                     .frame(height: 156)
                     .padding(.vertical, 4)
@@ -27,9 +27,9 @@ struct GapsSettingsTab: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Gaps preview")
                     .accessibilityValue(
-                        "Inner gaps \(viewModel.innerGapsHorizontal) horizontal, \(viewModel.innerGapsVertical) vertical. "
-                            + "Outer gaps \(viewModel.outerGapsTop) top, \(viewModel.outerGapsBottom) bottom, "
-                            + "\(viewModel.outerGapsLeft) left, \(viewModel.outerGapsRight) right.",
+                        "Inner gaps \(viewModel.settings.gaps.innerHorizontal) horizontal, \(viewModel.settings.gaps.innerVertical) vertical. "
+                            + "Outer gaps \(viewModel.settings.gaps.outerTop) top, \(viewModel.settings.gaps.outerBottom) bottom, "
+                            + "\(viewModel.settings.gaps.outerLeft) left, \(viewModel.settings.gaps.outerRight) right.",
                     )
                 } header: {
                     SectionLabel("Preview", "eye")
@@ -47,17 +47,17 @@ struct GapsSettingsTab: View {
                         get: { innerLinked },
                         set: { linked in
                             innerLinked = linked
-                            if linked { viewModel.setInnerGaps(viewModel.innerGapsHorizontal) }
+                            if linked { viewModel.setInnerGaps(viewModel.settings.gaps.innerHorizontal) }
                         },
                     ))
                     if innerLinked {
                         NumberField("Horizontal & vertical", value: Binding(
-                            get: { viewModel.innerGapsHorizontal },
+                            get: { viewModel.settings.gaps.innerHorizontal },
                             set: { viewModel.setInnerGaps($0) },
                         ))
                     } else {
-                        NumberField("Horizontal", value: viewModel.binding(\.innerGapsHorizontal))
-                        NumberField("Vertical", value: viewModel.binding(\.innerGapsVertical))
+                        NumberField("Horizontal", value: viewModel.binding(\.settings.gaps.innerHorizontal))
+                        NumberField("Vertical", value: viewModel.binding(\.settings.gaps.innerVertical))
                     }
                 } header: {
                     SectionLabel("Between windows", "rectangle.split.2x1")
@@ -68,19 +68,19 @@ struct GapsSettingsTab: View {
                         get: { outerLinked },
                         set: { linked in
                             outerLinked = linked
-                            if linked { viewModel.setOuterGaps(viewModel.outerGapsTop) }
+                            if linked { viewModel.setOuterGaps(viewModel.settings.gaps.outerTop) }
                         },
                     ))
                     if outerLinked {
                         NumberField("All sides", value: Binding(
-                            get: { viewModel.outerGapsTop },
+                            get: { viewModel.settings.gaps.outerTop },
                             set: { viewModel.setOuterGaps($0) },
                         ))
                     } else {
-                        NumberField("Top", value: viewModel.binding(\.outerGapsTop))
-                        NumberField("Bottom", value: viewModel.binding(\.outerGapsBottom))
-                        NumberField("Left", value: viewModel.binding(\.outerGapsLeft))
-                        NumberField("Right", value: viewModel.binding(\.outerGapsRight))
+                        NumberField("Top", value: viewModel.binding(\.settings.gaps.outerTop))
+                        NumberField("Bottom", value: viewModel.binding(\.settings.gaps.outerBottom))
+                        NumberField("Left", value: viewModel.binding(\.settings.gaps.outerLeft))
+                        NumberField("Right", value: viewModel.binding(\.settings.gaps.outerRight))
                     }
                 } header: {
                     SectionLabel("Around the screen", "rectangle.inset.filled")
@@ -102,10 +102,10 @@ struct GapsSettingsTab: View {
         }
         .task(id: viewModel.loadGeneration) {
             guard viewModel.loadGeneration > 0 else { return }
-            innerLinked = viewModel.innerGapsHorizontal == viewModel.innerGapsVertical
-            outerLinked = viewModel.outerGapsTop == viewModel.outerGapsBottom
-                && viewModel.outerGapsTop == viewModel.outerGapsLeft
-                && viewModel.outerGapsTop == viewModel.outerGapsRight
+            innerLinked = viewModel.settings.gaps.innerHorizontal == viewModel.settings.gaps.innerVertical
+            outerLinked = viewModel.settings.gaps.outerTop == viewModel.settings.gaps.outerBottom
+                && viewModel.settings.gaps.outerTop == viewModel.settings.gaps.outerLeft
+                && viewModel.settings.gaps.outerTop == viewModel.settings.gaps.outerRight
         }
     }
 }

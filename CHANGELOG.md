@@ -44,6 +44,14 @@ Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for
 - Settings keeps one backup each time it is opened, plus one per Raw TOML apply. Autosave used to rotate all five backups out within seconds.
 - A hotkey that can't be registered, usually because another app owns it, is recorded in the log.
 - `start-at-login` only asks macOS to change something when it needs changing, instead of on every reload.
+- A Settings change that can't be made to how the file is written is refused with a message. Some, such as a binding in an inline table, used to report success and write nothing.
+- A multi-line value, a quoted key or an inline table no longer locks the whole file out of the Settings panes. Only an edit that touches that spelling is refused.
+- Changing a monitor pin, an environment variable, the key mapping preset or `inherit-env-vars` now changes that one line. Comments stay and other rows are not re-spelled.
+- Editing gaps keeps `[gaps]` where it is in the file, instead of moving it to the top.
+- Settings writes new sections as `[keys]`, `[monitors]` and `[on-window]`, including in an older config. Sections that already exist are edited where they are.
+- A window rule whose matcher is its own `[on-window-detected.if]` table can be edited in Settings.
+- Saving without a change no longer rewrites a file that mixes line endings. Editing such a file in the panes is refused, because it would change every line.
+- A Raw TOML apply that was refused no longer takes effect on the next change in another pane.
 
 ## 1.2.0 (2026-09-13)
 

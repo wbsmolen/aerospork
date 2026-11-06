@@ -73,7 +73,7 @@ Debug builds use `~/.aerospork-debug.toml` instead of `~/.aerospork.toml` for co
 **Configuration System** (`Sources/AppBundle/config/`)
 - `Config.swift`: Main config structure
 - `parseConfig.swift`: the single canonical TOML parser (TOMLKit), mapping keys to `Config` via `WritableKeyPath`
-- `ConfigurationWriter.swift`: comment-preserving writer used by the GUI (line-based, only rewrites UI-managed keys)
+- `ConfigurationWriter.swift`: comment-preserving writer used by the GUI (line-based and per-key; only gaps and window rules are rewritten whole; new sections use the v2 spelling; `refusal` reads every render back before it is written)
 - `ConfigFileWatcher.swift`: hot-reload — watches the active config file and reloads on change
 - Supports modes, hotkey bindings, workspace-to-monitor assignments, gaps, callbacks
 
@@ -83,8 +83,11 @@ Debug builds use `~/.aerospork-debug.toml` instead of `~/.aerospork.toml` for co
 > string, monitor fallback lists to `.first`), so unconditionally re-serializing a section destroys
 > whatever the UI can't express. This shipped as a real bug: a `{ fingerprint = { display_name,
 > width, height } }` assignment was silently rewritten as a bare name regex. `ConfigurationWriter`
-> guards every section on a `…Edited` flag from `ConfigurationViewModel`, and
-> `testWriterNoOpSaveIsByteIdentical` enforces it.
+> guards every section on `edited(section)` from `ConfigurationViewModel` (`settings != loaded`, one
+> struct per section). `refusal` reads each render back before it is written: an edited section has
+> to say what the panes say, and every other top-level key what it said before. A spelling the
+> writer can't edit is refused when an edit touches it, not up front.
+> `testWriterNoOpSaveIsByteIdentical` and `ConfigSafetyWriterFuzzTest` enforce it.
 
 **Layout System** (`Sources/AppBundle/layout/`)
 - Recursive, synchronous layout algorithm in `layoutRecursive.swift`
@@ -122,7 +125,7 @@ Sources/
 
 **Virtual Workspaces**: AeroSpork doesn't use native macOS Spaces. It implements its own workspace emulation by hiding/showing windows, allowing instant switching without animations.
 
-**Monitor Fingerprinting**: `MonitorFingerprint.fromScreen` identifies a display by, in order of reliability: the stable per-display UUID (`CGDisplayCreateUUIDFromDisplayID`), EDID vendor/model/serial (`CGDisplayVendorNumber`/`CGDisplayModelNumber`/`CGDisplaySerialNumber` — CoreGraphics, *not* the Intel-era `IODisplayConnect` IOKit class, which does not exist on Apple Silicon), `localizedName`, and size. `matches(patternData:)` checks `uuid` first because it is the only key that separates two otherwise identical panels. DisplayLink (USB virtual) displays expose no EDID — CoreGraphics returns `kDisplayVendorIDUnknown`/`kDisplayProductIDGeneric`/`0`, which are normalized to `nil`, so `uuid` is the only thing that pins a workspace to a specific DisplayLink panel, e.g. `1 = { uuid = "..." }` in `[monitors]` (the sub-table spelling `[workspace-to-monitor-force-assignment.1.fingerprint]` also parses, but the settings GUI refuses to edit configs written that way). Fingerprint `width`/`height` are in **points**, the same unit as `%{monitor-width}`/`%{monitor-height}`. Read the values to write into a fingerprint from `aerospork list-monitors --format '%{monitor-fingerprint}'`.
+**Monitor Fingerprinting**: `MonitorFingerprint.fromScreen` identifies a display by, in order of reliability: the stable per-display UUID (`CGDisplayCreateUUIDFromDisplayID`), EDID vendor/model/serial (`CGDisplayVendorNumber`/`CGDisplayModelNumber`/`CGDisplaySerialNumber` — CoreGraphics, *not* the Intel-era `IODisplayConnect` IOKit class, which does not exist on Apple Silicon), `localizedName`, and size. `matches(patternData:)` checks `uuid` first because it is the only key that separates two otherwise identical panels. DisplayLink (USB virtual) displays expose no EDID — CoreGraphics returns `kDisplayVendorIDUnknown`/`kDisplayProductIDGeneric`/`0`, which are normalized to `nil`, so `uuid` is the only thing that pins a workspace to a specific DisplayLink panel, e.g. `1 = { uuid = "..." }` in `[monitors]` (the sub-table spelling `[monitors.1.fingerprint]` also parses, but the settings GUI refuses to edit that row). Fingerprint `width`/`height` are in **points**, the same unit as `%{monitor-width}`/`%{monitor-height}`. Read the values to write into a fingerprint from `aerospork list-monitors --format '%{monitor-fingerprint}'`.
 
 **Thread-Per-Application**: Accessibility API calls for each app run on separate threads to avoid blocking.
 
@@ -266,7 +269,7 @@ Two channels, and the distinction matters:
   `.notice` / `.error` / `.fault`, which the unified log **persists**, so `log show --last 1h
   --predicate 'subsystem == "com.wbs.aerospork"'` answers a bug report after the fact. Because it is
   unconditional it must stay **cheap and rare**: the startup record, config loaded/rejected, config warnings,
-  socket lifecycle, a second copy exiting, CLI commands that exited non-zero, focus AeroSpork moved on
+  hotkeys that failed to register, socket lifecycle, a second copy exiting, CLI commands that exited non-zero, focus AeroSpork moved on
   its own (`session`).
   Never per-refresh, never per-window.
 - **`debugLog`** (`Common/util/commonUtil.swift`) — verbose tracing, `@autoclosure` so the message is

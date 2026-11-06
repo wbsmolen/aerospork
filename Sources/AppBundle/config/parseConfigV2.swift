@@ -8,9 +8,9 @@ import TOMLKit
 // lines in `parseConfig`, and it means every existing test still describes real behavior.
 //
 // v2 is a strict SUPERSET of v1 -- every v1 key still parses. That is not politeness, it is what
-// keeps the settings GUI safe: `ConfigurationWriter` emits `[mode.<name>.binding]` and
-// `[[on-window-detected]]`, so a v2 file that has been edited by the GUI is a MIXTURE of both
-// spellings and has to keep loading.
+// keeps the settings GUI safe: `ConfigurationWriter` adds v2 sections beside the v1 lines it leaves
+// alone, and writes `[[on-window-detected]]` for any rule the shorthand can't express, so a file that
+// has been edited by the GUI can be a MIXTURE of both spellings and has to keep loading.
 
 /// Top-level keys that exist only in v2. Their presence is what identifies the schema.
 let configV2RootKeys: [String] = ["mod", "workspaces", "keys", "monitors", "on-window"]
@@ -19,9 +19,9 @@ let configV2RootKeys: [String] = ["mod", "workspaces", "keys", "monitors", "on-w
 ///
 /// * any v2 key present                    => v2
 /// * only `[mode.*]`                       => v1
-/// * both                                  => v2. The GUI appends `[mode.main.binding]` to whatever
-///                                            file it is handed, so this is a shape we CREATE. v2
-///                                            keeps honouring `[mode.*]`, so nothing is lost.
+/// * both                                  => v2. The GUI adds `[keys]` beside a `[mode.*]` it is
+///                                            leaving alone, so this is a shape we CREATE. v2 keeps
+///                                            honouring `[mode.*]`, so nothing is lost.
 /// * neither (empty file, or scalars only) => v1. Binding generation is opt-in: silence must not
 ///                                            invent thirty bindings for a config that never asked.
 func isConfigV2(_ table: TOMLTable) -> Bool { configV2RootKeys.contains { table[$0] != nil } }
@@ -76,7 +76,7 @@ func workspaceKeyNotation(_ name: String) -> String? {
 ///
 /// Layering, weakest first: generated -> `[keys]` -> `[mode.*]`. "Anything in `[keys]` overrides a
 /// generated binding with the same key" is the rule that keeps the defaults from trapping anyone,
-/// and `[mode.*]` sits on top because that is what the settings GUI writes.
+/// and `[mode.*]` sits on top so an older file's explicit binding keeps winning.
 @MainActor func applyConfigV2(_ rawTable: TOMLTable, _ config: inout Config, _ errors: inout [TomlParseError]) {
     let mapping = config.keyMapping.resolve()
     var modes: [String: Mode] = [:]

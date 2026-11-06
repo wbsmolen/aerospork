@@ -43,8 +43,7 @@ final class UIRenderSmokeTest: XCTestCase {
 
     private func loadedViewModel() -> ConfigurationViewModel {
         let vm = ConfigurationViewModel()
-        vm.loadBindings(fromText: Self.v2)
-        vm.loadWindowRules(fromText: Self.v2)
+        vm.load(fromText: Self.v2)
         vm.markLoaded()
         return vm
     }
@@ -89,8 +88,8 @@ final class UIRenderSmokeTest: XCTestCase {
         let vm = loadedViewModel()
         render(GeneralSettingsTab(viewModel: vm), "General (default visibility)")
 
-        vm.showMenuBarIcon = false
-        vm.showDockIcon = false
+        vm.settings.general.showMenuBarIcon = false
+        vm.settings.general.showDockIcon = false
         XCTAssertTrue(vm.appVisibility.dockIconIsForced, "precondition: the forced-Dock branch")
         render(GeneralSettingsTab(viewModel: vm), "General (both icons off)")
     }

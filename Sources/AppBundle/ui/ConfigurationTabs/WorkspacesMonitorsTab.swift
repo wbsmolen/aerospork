@@ -179,7 +179,7 @@ struct WorkspacesMonitorsTab: View {
     private func pinMenu(_ monitor: ConfigurationViewModel.MonitorRow) -> some View {
         let token = monitor.uuid ?? monitor.name
         let unpinned = viewModel.unpinnedDefinedWorkspaces
-        let movable = viewModel.assignments.filter {
+        let movable = viewModel.settings.assignments.filter {
             !$0.workspace.isEmpty && viewModel.monitorRow(forToken: $0.monitor)?.id != monitor.id
         }
         return Menu("Pin a workspace here") {
@@ -228,7 +228,7 @@ struct WorkspacesMonitorsTab: View {
         VStack(alignment: .leading, spacing: 0) {
             PanelHeader("Workspace assignments", "arrow.triangle.branch")
 
-            if viewModel.assignments.isEmpty {
+            if viewModel.settings.assignments.isEmpty {
                 ContentUnavailableViewCompat(
                     icon: "arrow.triangle.branch",
                     title: "No assignments",
@@ -238,7 +238,7 @@ struct WorkspacesMonitorsTab: View {
                 )
             } else {
                 let knownMonitorTokens = knownTokens
-                Table(viewModel.assignments, selection: $selection) {
+                Table(viewModel.settings.assignments, selection: $selection) {
                     // Neither of the two data columns has anywhere for a click to land: both are
                     // filled edge to edge by a control that claims the mouseDown before the Table's
                     // own row-selection handler ever sees it. This column carries no control, so a
@@ -336,11 +336,10 @@ struct WorkspacesMonitorsTab: View {
         _ keyPath: WritableKeyPath<ConfigurationViewModel.WorkspaceAssignmentRow, String>,
     ) -> Binding<String> {
         Binding(
-            get: { viewModel.assignments.first { $0.id == id }?[keyPath: keyPath] ?? "" },
+            get: { viewModel.settings.assignments.first { $0.id == id }?[keyPath: keyPath] ?? "" },
             set: { newValue in
-                guard let i = viewModel.assignments.firstIndex(where: { $0.id == id }) else { return }
-                viewModel.assignments[i][keyPath: keyPath] = newValue
-                viewModel.markAsModified()
+                guard let i = viewModel.settings.assignments.firstIndex(where: { $0.id == id }) else { return }
+                viewModel.settings.assignments[i][keyPath: keyPath] = newValue
                 viewModel.scheduleAutoSave()
             },
         )

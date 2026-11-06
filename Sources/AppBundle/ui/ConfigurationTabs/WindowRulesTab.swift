@@ -52,7 +52,7 @@ struct WindowRulesTab: View {
     @State private var selection: ConfigurationViewModel.WindowRuleRow.ID?
 
     private var selectedIndex: Int? {
-        selection.flatMap { id in viewModel.windowRules.firstIndex { $0.id == id } }
+        selection.flatMap { id in viewModel.settings.windowRules.firstIndex { $0.id == id } }
     }
 
     var body: some View {
@@ -83,7 +83,7 @@ struct WindowRulesTab: View {
 
     @ViewBuilder
     private var rulesTable: some View {
-        if viewModel.windowRules.isEmpty {
+        if viewModel.settings.windowRules.isEmpty {
             ContentUnavailableViewCompat(
                 icon: "macwindow",
                 title: "No window rules",
@@ -92,7 +92,7 @@ struct WindowRulesTab: View {
                 action: { addRule() },
             )
         } else {
-            Table(viewModel.windowRules, selection: $selection) {
+            Table(viewModel.settings.windowRules, selection: $selection) {
                 TableColumn("Matches") { rule in matchCell(rule) }
                 TableColumn("Run") { rule in Text(rule.run).font(.system(.body, design: .monospaced)) }
             }
@@ -130,7 +130,7 @@ struct WindowRulesTab: View {
                     LabeledContent("App ID") {
                         HStack(spacing: 8) {
                             SettingsField("App ID", prompt: "com.apple.finder", text: field(i, \.appId))
-                            Button("Choose app…") { chooseApplication(for: viewModel.windowRules[i].id) }
+                            Button("Choose app…") { chooseApplication(for: viewModel.settings.windowRules[i].id) }
                                 .fixedSize()
                         }
                     }
@@ -157,7 +157,7 @@ struct WindowRulesTab: View {
                 }
 
                 Section {
-                    let guided = parseGuidedWindowAction(viewModel.windowRules[i].run)
+                    let guided = parseGuidedWindowAction(viewModel.settings.windowRules[i].run)
                     if guided.isCustom {
                         HStack(spacing: 8) {
                             Badge("custom", tone: .muted, help: "This command contains actions the guided controls cannot represent.")
@@ -180,10 +180,9 @@ struct WindowRulesTab: View {
                         SettingsField("Command", prompt: "move-node-to-workspace 3", text: field(i, \.run))
                     }
                     Toggle("Keep checking later rules", isOn: Binding(
-                        get: { viewModel.windowRules[i].checkFurtherCallbacks },
+                        get: { viewModel.settings.windowRules[i].checkFurtherCallbacks },
                         set: {
-                            viewModel.windowRules[i].checkFurtherCallbacks = $0
-                            viewModel.markAsModified()
+                            viewModel.settings.windowRules[i].checkFurtherCallbacks = $0
                             viewModel.scheduleAutoSave()
                         },
                     ))
@@ -204,15 +203,13 @@ struct WindowRulesTab: View {
     }
 
     private func addRule() {
-        viewModel.windowRules.append(.init())
-        viewModel.markAsModified()
-        selection = viewModel.windowRules.last?.id
+        viewModel.settings.windowRules.append(.init())
+        selection = viewModel.settings.windowRules.last?.id
     }
 
     private func removeRule() {
         guard let selection else { return }
-        viewModel.windowRules.removeAll { $0.id == selection }
-        viewModel.markAsModified()
+        viewModel.settings.windowRules.removeAll { $0.id == selection }
         viewModel.scheduleAutoSave()
         self.selection = nil
     }
@@ -236,11 +233,10 @@ struct WindowRulesTab: View {
 
     private func field(_ i: Int, _ keyPath: WritableKeyPath<ConfigurationViewModel.WindowRuleRow, String>) -> Binding<String> {
         Binding(
-            get: { viewModel.windowRules.indices.contains(i) ? viewModel.windowRules[i][keyPath: keyPath] : "" },
+            get: { viewModel.settings.windowRules.indices.contains(i) ? viewModel.settings.windowRules[i][keyPath: keyPath] : "" },
             set: { newValue in
-                guard viewModel.windowRules.indices.contains(i) else { return }
-                viewModel.windowRules[i][keyPath: keyPath] = newValue
-                viewModel.markAsModified()
+                guard viewModel.settings.windowRules.indices.contains(i) else { return }
+                viewModel.settings.windowRules[i][keyPath: keyPath] = newValue
                 viewModel.scheduleAutoSave()
             },
         )
@@ -249,21 +245,20 @@ struct WindowRulesTab: View {
     private func startupTiming(_ i: Int) -> Binding<String> {
         Binding(
             get: {
-                guard viewModel.windowRules.indices.contains(i) else { return "any" }
-                return switch viewModel.windowRules[i].duringStartup {
+                guard viewModel.settings.windowRules.indices.contains(i) else { return "any" }
+                return switch viewModel.settings.windowRules[i].duringStartup {
                     case true?: "startup"
                     case false?: "runtime"
                     case nil: "any"
                 }
             },
             set: { value in
-                guard viewModel.windowRules.indices.contains(i) else { return }
-                viewModel.windowRules[i].duringStartup = switch value {
+                guard viewModel.settings.windowRules.indices.contains(i) else { return }
+                viewModel.settings.windowRules[i].duringStartup = switch value {
                     case "startup": true
                     case "runtime": false
                     default: nil
                 }
-                viewModel.markAsModified()
                 viewModel.scheduleAutoSave()
             },
         )
@@ -272,12 +267,12 @@ struct WindowRulesTab: View {
     private func guidedLayout(_ i: Int) -> Binding<GuidedWindowAction.Layout> {
         Binding(
             get: {
-                guard viewModel.windowRules.indices.contains(i) else { return .unchanged }
-                return parseGuidedWindowAction(viewModel.windowRules[i].run).layout
+                guard viewModel.settings.windowRules.indices.contains(i) else { return .unchanged }
+                return parseGuidedWindowAction(viewModel.settings.windowRules[i].run).layout
             },
             set: { layout in
-                guard viewModel.windowRules.indices.contains(i) else { return }
-                var action = parseGuidedWindowAction(viewModel.windowRules[i].run)
+                guard viewModel.settings.windowRules.indices.contains(i) else { return }
+                var action = parseGuidedWindowAction(viewModel.settings.windowRules[i].run)
                 guard !action.isCustom else { return }
                 action.layout = layout
                 setRun(i, composeGuidedWindowAction(action))
@@ -288,12 +283,12 @@ struct WindowRulesTab: View {
     private func guidedWorkspace(_ i: Int) -> Binding<String> {
         Binding(
             get: {
-                guard viewModel.windowRules.indices.contains(i) else { return "" }
-                return parseGuidedWindowAction(viewModel.windowRules[i].run).workspace
+                guard viewModel.settings.windowRules.indices.contains(i) else { return "" }
+                return parseGuidedWindowAction(viewModel.settings.windowRules[i].run).workspace
             },
             set: { workspace in
-                guard viewModel.windowRules.indices.contains(i) else { return }
-                var action = parseGuidedWindowAction(viewModel.windowRules[i].run)
+                guard viewModel.settings.windowRules.indices.contains(i) else { return }
+                var action = parseGuidedWindowAction(viewModel.settings.windowRules[i].run)
                 guard !action.isCustom else { return }
                 action.workspace = workspace.trimmingCharacters(in: .whitespaces)
                 setRun(i, composeGuidedWindowAction(action))
@@ -302,9 +297,8 @@ struct WindowRulesTab: View {
     }
 
     private func setRun(_ i: Int, _ command: String) {
-        guard viewModel.windowRules.indices.contains(i) else { return }
-        viewModel.windowRules[i].run = command
-        viewModel.markAsModified()
+        guard viewModel.settings.windowRules.indices.contains(i) else { return }
+        viewModel.settings.windowRules[i].run = command
         viewModel.scheduleAutoSave()
     }
 
@@ -319,9 +313,8 @@ struct WindowRulesTab: View {
         let complete: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url, let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
             Task { @MainActor in
-                guard let i = viewModel.windowRules.firstIndex(where: { $0.id == ruleID }) else { return }
-                viewModel.windowRules[i].appId = bundleID
-                viewModel.markAsModified()
+                guard let i = viewModel.settings.windowRules.firstIndex(where: { $0.id == ruleID }) else { return }
+                viewModel.settings.windowRules[i].appId = bundleID
                 viewModel.scheduleAutoSave()
             }
         }
