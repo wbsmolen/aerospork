@@ -90,4 +90,13 @@ final class TerminationCoverageTest: XCTestCase {
         let attempt = try XCTUnwrap(body.range(of: "do {"))
         XCTAssertLessThan(loop.lowerBound, attempt.lowerBound)
     }
+
+    /// A floating window is where the user put it, and centring it lost that on every restart.
+    func testQuittingLeavesAFloatingWindowWhereItIs() throws {
+        let body = try sourceBody("private func makeAllWindowsVisibleAndRestoreSize()", in: "Sources/AppBundle/util/appBundleUtil.swift", length: 1000)
+        let floating = try XCTUnwrap(body.range(of: "if window.isFloating {"))
+        let centring = try XCTUnwrap(body.range(of: "centredOnMonitor"))
+        XCTAssertLessThan(floating.lowerBound, centring.lowerBound)
+        XCTAssertTrue(body.contains("window.unparkedTopLeftCorner"))
+    }
 }

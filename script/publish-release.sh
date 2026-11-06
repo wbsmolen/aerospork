@@ -195,6 +195,14 @@ test -n "$sparkle_bin" || { echo "Sparkle tools not found; run a build first" > 
     "$appcast_workdir"
 cp "$appcast_workdir/appcast.xml" updates-site/appcast.xml
 
+# Explicitly, and checked. generate_appcast writes the feed unsigned, silently, if it has no key, and a
+# client that requires a signature then offers nothing at all.
+"$sparkle_bin/sign_update" updates-site/appcast.xml
+if ! "$sparkle_bin/sign_update" --verify updates-site/appcast.xml > /dev/null 2>&1; then
+    echo "!!! The appcast's own signature does not verify !!!" > /dev/stderr
+    exit 1
+fi
+
 # The signature has to verify against the asset GitHub actually serves, not the local copy. A wrong
 # enclosure URL, a re-zipped artifact or a mismatched key all show up here and nowhere else.
 signature="$(grep -m1 -o 'edSignature="[^"]*"' updates-site/appcast.xml | sed 's/edSignature="//; s/"$//')"
@@ -209,6 +217,20 @@ fi
 # documentation always matches the newest published build. Token handling and its subscription
 # gotcha live in the script.
 ./script/deploy-site.sh
+
+# What clients get has to be what was signed. A single changed byte between here and them, from a CDN
+# rewriting XML or a stale deploy, and every copy that requires a signature stops offering updates.
+served_feed="$appcast_workdir/served-appcast.xml"
+feed_is_served=false
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    curl -fsS -o "$served_feed" "https://aerospork.app/appcast.xml?published=$build_version" || true
+    if cmp -s "$served_feed" updates-site/appcast.xml; then feed_is_served=true; break; fi
+    sleep 15
+done
+if ! "$feed_is_served" || ! "$sparkle_bin/sign_update" --verify "$served_feed" > /dev/null 2>&1; then
+    echo "!!! The feed being served is not the signed one. Clients that require a signature offer no updates until it is !!!" > /dev/stderr
+    exit 1
+fi
 
 ################
 ### THE CASK ###

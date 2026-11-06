@@ -200,7 +200,12 @@ enum ConfigurationWriter {
         // rewrites blank lines the user wrote themselves, which is precisely the do-no-harm
         // invariant this writer exists to keep.
         var result = lines.joined(separator: usesCRLF ? "\r\n" : "\n")
-        if base.hasSuffix("\n"), !result.hasSuffix("\n") { result += usesCRLF ? "\r\n" : "\n" }
+        if base.last?.isNewline == true {
+            if result.last?.isNewline != true { result += usesCRLF ? "\r\n" : "\n" }
+        } else {
+            // Removing a block leaves the blank line in front of it behind.
+            while result.last?.isNewline == true { result.removeLast() }
+        }
         return result
     }
 

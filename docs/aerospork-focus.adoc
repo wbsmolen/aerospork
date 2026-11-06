@@ -46,7 +46,8 @@ Defines the behavior when requested to cross the `<boundary>`. +
 The default is: `stop`
 
 --window-id <window-id>::
-Focus the window with specified `<window-id>`
+Focus the window with specified `<window-id>`.
+A minimized window, or a window of a hidden app, is brought back first.
 
 --dfs-index <dfs-index>::
 Focus window by its index, based on a depth-first search (DFS) of the window within the workspace tree.

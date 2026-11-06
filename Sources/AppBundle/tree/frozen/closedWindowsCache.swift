@@ -21,7 +21,7 @@ struct FrozenMonitor: Sendable {
 
 struct FrozenWorkspace: Sendable {
     let name: String
-    let monitor: FrozenMonitor // todo drop this property, once monitor to workspace assignment migrates to TreeNode
+    let monitor: FrozenMonitor
     let rootTilingNode: FrozenContainer
     let floatingWindows: [FrozenWindow]
     let macosUnconventionalWindows: [FrozenWindow]
@@ -80,13 +80,7 @@ struct FrozenWorkspace: Sendable {
         for frozenWindow in frozenWorkspace.macosUnconventionalWindows { // Will get fixed by normalizations
             MacWindow.get(byId: frozenWindow.id)?.bindAsFloatingWindow(to: workspace)
         }
-        let prevRoot = workspace.rootTilingContainer // Save prevRoot into a variable to avoid it being garbage collected earlier than needed
-        let potentialOrphans = prevRoot.allLeafWindowsRecursive
-        prevRoot.unbindFromParent()
-        restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST)
-        for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
-            try await window.relayoutWindow(on: workspace, forceTile: true)
-        }
+        try await restoreTilingTree(of: workspace, from: frozenWorkspace.rootTilingNode) { MacWindow.get(byId: $0) }
     }
 
     for monitor in closedWindowsCache.monitors {
@@ -97,29 +91,44 @@ struct FrozenWorkspace: Sendable {
     return true
 }
 
-@discardableResult
+/// Rebuilds `workspace`'s tiling tree from `frozen` with the windows `windows` can find. Anything else that
+/// was on the workspace stays on it, placed like any new window.
 @MainActor
-private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonLeafTreeNodeObject, index: Int) -> Bool {
+func restoreTilingTree(of workspace: Workspace, from frozen: FrozenContainer, windows: (UInt32) -> Window?) async throws {
+    let mru = workspace.mostRecentWindowRecursive
+    let prevRoot = workspace.rootTilingContainer // Save prevRoot into a variable to avoid it being garbage collected earlier than needed
+    let potentialOrphans = prevRoot.allLeafWindowsRecursive
+    prevRoot.unbindFromParent()
+    restoreTreeRecursive(frozenContainer: frozen, parent: workspace, windows)
+    for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
+        try await window.relayoutWindow(on: workspace, forceTile: true)
+    }
+    // Rebinding raises every window it touches, and this isn't anybody choosing one.
+    mru?.markAsMostRecentChild()
+}
+
+@MainActor
+private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonLeafTreeNodeObject, _ windows: (UInt32) -> Window?) {
     let container = TilingContainer(
         parent: parent,
         adaptiveWeight: frozenContainer.weight,
         frozenContainer.orientation,
         frozenContainer.layout,
-        index: index,
+        index: INDEX_BIND_LAST,
     )
-
-    for (index, child) in frozenContainer.children.enumerated() {
+    for child in frozenContainer.children {
         switch child {
             case .window(let w):
-                // Stop the loop if can't find the window, because otherwise all the subsequent windows will have incorrect index
-                guard let window = MacWindow.get(byId: w.id) else { return false }
-                window.bind(to: container, adaptiveWeight: w.weight, index: index)
+                // A window that isn't here is skipped, and the rest keep their order around it. This
+                // used to stop at the first one, stranding everything after it.
+                windows(w.id)?.bind(to: container, adaptiveWeight: w.weight, index: INDEX_BIND_LAST)
             case .container(let c):
-                // There is no reason to continue
-                if !restoreTreeRecursive(frozenContainer: c, parent: container, index: index) { return false }
+                // Not an empty one, which would hold an empty tile until the next normalization.
+                if c.allWindowIds.contains(where: { windows($0) != nil }) {
+                    restoreTreeRecursive(frozenContainer: c, parent: container, windows)
+                }
         }
     }
-    return true
 }
 
 // Consider the following case:

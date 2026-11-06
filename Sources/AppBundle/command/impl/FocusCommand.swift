@@ -5,6 +5,8 @@ struct FocusCommand: Command {
     let args: FocusCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
+        // First, because a minimized window hangs off a global container: resolving a target fails on it.
+        if case .windowId(let windowId) = args.target { try await Window.get(byId: windowId)?.exitMacosMinimizedOrHidden() }
         guard let target = args.resolveTargetOrReportError(env, io) else {
             return false
         }
@@ -111,10 +113,17 @@ struct FocusCommand: Command {
     // left the earlier windows detached when a later read threw, and a detached window crashes later on
     // "already unbound".
     var _targets: [(window: Window, center: CGPoint, parent: TilingContainer, index: Int)] = []
+    let root = workspace.rootTilingContainer
+    let hasNoTilingWindows = root.allLeafWindowsRecursive.isEmpty
     for window in workspace.floatingWindows {
-        let center = try await window.getCenter() // todo bug: we shouldn't access ax api here. What if the window was moved but it wasn't committed to ax yet?
+        // Through the app's own thread, so after any frame write already queued for this window.
+        let center = try await window.getCenter()
         guard let center else { continue }
-        // todo bug: what if there are no tiling windows on the workspace?
+        // Nothing to sit beside. In order among themselves, since the loop below binds in reverse.
+        if hasNoTilingWindows {
+            _targets.append((window, center, root, 0))
+            continue
+        }
         guard let target = center.coerceIn(rect: workspace.workspaceMonitor.visibleRectPaddedByOuterGaps)?
             .findIn(tree: workspace.rootTilingContainer, virtual: true) else { continue }
         guard let targetCenter = try await target.getCenter() else { continue }

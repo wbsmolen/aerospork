@@ -47,7 +47,7 @@ final class TestWindow: Window, CustomStringConvertible {
     @MainActor override var isTransparent: Bool { transparent }
 
     @MainActor var axRectFails = false
-    @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
+    @MainActor override func getAxRect() async throws -> Rect? {
         if axRectFails { throw CancellationError() }
         return _rect
     }

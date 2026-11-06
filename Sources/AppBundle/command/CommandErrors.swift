@@ -7,6 +7,8 @@ import Common
 let noWindowIsFocused = "No window is focused"
 
 /// Error message for attempting to move unconventional macOS windows
+/// Parked off screen, so its frame says nothing, and keeping the result on the monitor would bring it into view.
+let floatingWindowIsParked = "This floating window's workspace isn't on screen, so it has no position or size to change from"
 let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimized windows and windows of hidden apps isn't yet supported. This behavior is subject to change"
 
 /// Tip message for --fail-if-noop flag

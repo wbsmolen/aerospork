@@ -13,15 +13,5 @@ struct FrozenWorld {
 private func collectAllWindowIds(workspace: FrozenWorkspace) -> [UInt32] {
     workspace.floatingWindows.map { $0.id } +
         workspace.macosUnconventionalWindows.map { $0.id } +
-        collectAllWindowIdsRecursive(node: .container(workspace.rootTilingNode))
-}
-
-private func collectAllWindowIdsRecursive(node: FrozenTreeNode) -> [UInt32] {
-    switch node {
-        case .window(let w): [w.id]
-        case .container(let c):
-            c.children.reduce(into: [UInt32]()) { partialResult, elem in
-                partialResult += collectAllWindowIdsRecursive(node: elem)
-            }
-    }
+        workspace.rootTilingNode.allWindowIds
 }

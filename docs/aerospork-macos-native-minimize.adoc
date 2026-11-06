@@ -19,6 +19,8 @@ aerospork macos-native-minimize [-h|--help] [--window-id <window-id>]
 // tag::body[]
 {manpurpose}
 
+With `--window-id` naming a window that is already minimized, it brings the window back.
+
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 

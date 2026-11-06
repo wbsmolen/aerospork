@@ -69,4 +69,37 @@ final class WindowDetectionRetryTest: XCTestCase {
             XCTAssertLessThan(shield.lowerBound, rules.lowerBound, "\(file): window rules run before the shield")
         }
     }
+
+    /// A rule runs once, when a window first appears. Running it again after a restart undid a move made
+    /// by hand since, so a window AeroSpork remembers only runs the rules that ask for startup.
+    func testARememberedWindowOnlyRunsRulesThatAskForStartup() async throws {
+        setUpWorkspacesForTests()
+        var startupOnly = WindowDetectedCallbackMatcher()
+        startupOnly.duringAeroSporkStartup = true
+        config.onWindowDetected = [
+            WindowDetectedCallback(rawRun: [parseCommand("move-node-to-workspace everyTime").cmdOrDie]),
+            WindowDetectedCallback(matcher: startupOnly, rawRun: [parseCommand("move-node-to-workspace startup").cmdOrDie]),
+        ]
+        let remembered = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer)
+        let new = TestWindow.new(id: 2, parent: focus.workspace.rootTilingContainer)
+
+        try await $_isStartup.withValue(true) {
+            try await tryOnWindowDetected(remembered, onlyStartupRules: true)
+            try await tryOnWindowDetected(new)
+        }
+
+        assertEquals(remembered.nodeWorkspace?.name, "startup")
+        assertEquals(new.nodeWorkspace?.name, "everyTime")
+        config.onWindowDetected = []
+    }
+
+    /// A status bar asks what is on screen all the time, and that isn't anyone changing a layout.
+    func testOnlyQueriesLeaveARestoreRunning() {
+        for query in ["list-windows --all", "list-workspaces --all", "list-monitors", "list-apps", "config --major-keys"] {
+            XCTAssertTrue(parseCommand(query).cmdOrDie.isQuery, query)
+        }
+        for change in ["move left", "layout tiles", "workspace 1", "resize width +1"] {
+            XCTAssertFalse(parseCommand(change).cmdOrDie.isQuery, change)
+        }
+    }
 }

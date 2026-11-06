@@ -174,6 +174,17 @@ final class RefreshSchedulerTest: XCTestCase {
         XCTAssertFalse(source.contains("var name: String? { nsApp.localizedName }"))
     }
 
+    /// An app that turns regular without launching or activating. The sweep is how it gets noticed.
+    func testASweepOnlyReportsAppsItDidNotKnow() throws {
+        let app = NSRunningApplication.current
+        try XCTSkipIf(app.activationPolicy == .regular, "this runner is already regular")
+        MacApp.noteAppChanged(app) // not regular, so not known
+        defer { MacApp.noteAppChanged(app) }
+
+        XCTAssertTrue(MacApp.noteRegularApps([app]))
+        XCTAssertFalse(MacApp.noteRegularApps([app]))
+    }
+
     func testOneWindowListAnswersForEveryWindowItNames() throws {
         let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
         let shortcut = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key) { return true }"))

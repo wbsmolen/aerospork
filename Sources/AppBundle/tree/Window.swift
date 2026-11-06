@@ -23,7 +23,7 @@ class Window: TreeNode, Hashable {
         super.init(parent: parent, adaptiveWeight: adaptiveWeight, index: index)
     }
 
-    @MainActor static func get(byId windowId: UInt32) -> Window? { // todo make non optional
+    @MainActor static func get(byId windowId: UInt32) -> Window? {
         isUnitTest
             ? Workspace.all.flatMap { $0.allLeafWindowsRecursive }.first(where: { $0.windowId == windowId })
             : MacWindow.allWindowsMap[windowId]
@@ -34,10 +34,10 @@ class Window: TreeNode, Hashable {
 
     /// The app answered a resize to `asked` with the larger `got`: it will not go that small. Returns
     /// whether anything was learned, i.e. whether the tiles need re-splitting. Comes back down through
-    /// `noteCurrentSize`, or by `balance-sizes` or `flatten-workspace-tree` forgetting it: a minimum still
-    /// true is learned again on the next layout.
-    /// ponytail: otherwise never lowered, because probing below it on a timer would make a window with a
-    /// real minimum flinch.
+    /// `noteCurrentSize`, or by being forgotten when `layoutTiles` sees the row change or `balance-sizes` or
+    /// `flatten-workspace-tree` run: a minimum still true is learned again on the next layout. Not on a
+    /// timer, because asking for less than a real minimum makes the window flinch, and at those moments
+    /// the tiles are moving anyway.
     @MainActor
     func noteRefusedSize(asked: CGSize, got: CGSize) -> Bool {
         let old = observedMinSize ?? .zero
@@ -79,7 +79,7 @@ class Window: TreeNode, Hashable {
     func macosNativeState() async throws -> (fullscreen: Bool, minimized: Bool) {
         let full = try await isMacosFullscreen
         return (full, full ? false : (try await isMacosMinimized))
-    } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
+    }
     /// Is this window's app hidden (cmd-H)? A member rather than `macAppUnsafe.nsApp.isHidden` at the
     /// call site so `normalizeLayoutReason`'s hidden-app branch is reachable from a test double.
     @MainActor
@@ -94,6 +94,10 @@ class Window: TreeNode, Hashable {
     func getAxRect() async throws -> Rect? { die("Not implemented") }
     @MainActor
     func getCenter() async throws -> CGPoint? { try await getAxRect()?.center }
+
+    /// No-ops here, because a test double has no native state to change.
+    func setNativeMinimized(_ value: Bool) {}
+    func unhideApp() {}
 
     func setAxTopLeftCorner(_ point: CGPoint) { die("Not implemented") }
     func setAxFrameBlocking(_ topLeft: CGPoint?, _ size: CGSize?) async throws { die("Not implemented") }

@@ -36,7 +36,7 @@ func resetManipulatedWithMouseIfPossible() async throws {
 }
 
 @MainActor
-private func resizeWithMouse(_ window: Window) async throws { // todo cover with tests
+func resizeWithMouse(_ window: Window) async throws {
     resetClosedWindowsCache()
     guard let parent = window.parent else { return }
     switch parent.cases {

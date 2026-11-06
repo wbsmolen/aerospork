@@ -469,6 +469,22 @@ final class ConfigTest: XCTestCase {
         assertEquals(ConfigurationWriter.render(baseText: edited, from: vm), base)
     }
 
+    /// Adding a section and removing it left a final newline behind on a file that had none.
+    func testAddingASectionAndRemovingItLeavesTheFileAsItWas() {
+        let base = "accordion-padding = 30\n\n[monitors]\n1 = 'main'"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: base)
+        vm.markLoaded()
+
+        vm.settings.windowRules.append(.init(appId: "com.apple.mail", run: "layout floating"))
+        let added = ConfigurationWriter.render(baseText: base, from: vm)
+        XCTAssertTrue(added.contains("com.apple.mail"), added)
+        vm.didWrite(added)
+
+        vm.settings.windowRules.removeAll()
+        assertEquals(ConfigurationWriter.render(baseText: added, from: vm), base)
+    }
+
     func testGapsThatDifferKeepTheLongSpelling() {
         let vm = ConfigurationViewModel()
         vm.settings.gaps.innerHorizontal = 1

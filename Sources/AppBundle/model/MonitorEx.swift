@@ -11,7 +11,6 @@ extension Monitor {
         )
     }
 
-    /// todo make 1-based
     /// 0-based index
     var monitorId: Int? {
         let sorted = sortedMonitors

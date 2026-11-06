@@ -6,8 +6,12 @@ struct MacosNativeMinimizeCommand: Command {
     let args: MacosNativeMinimizeCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
-        // resolveTargetOrReportError on already minimized windows will alwyas fail
-        // It would be easier if minimized windows were part of the workspace in tree hierarchy
+        // A minimized window hangs off a global container, so resolving a target fails on it. Only
+        // `--window-id` can name one, and for that one this command is the way back.
+        if let windowId = args.windowId, let window = Window.get(byId: windowId), case .macosMinimizedWindowsContainer? = window.parent?.cases {
+            try await window.exitMacosMinimizedOrHidden()
+            return true
+        }
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         guard let window = requireWindow(from: target, io) else { return false }
         let newState: Bool = try await !window.isMacosMinimized
@@ -25,7 +29,7 @@ struct MacosNativeMinimizeCommand: Command {
             window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
             return true
         } else { // unminimize
-            return io.err("The command is uncapable of unminimizing windows yet. Sorry") // dead code. should never be possible, see the comment above
+            return true
         }
     }
 }

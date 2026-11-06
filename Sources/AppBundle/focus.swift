@@ -114,10 +114,21 @@ extension Window {
         if let focus = toLiveFocusOrNil() {
             return setFocus(to: focus)
         } else {
-            // todo We should also exit-native-hidden/unminimize[/exit-native-fullscreen?] window if we want to fix ID-B6E178F2
-            //      and retry to focus the window. Otherwise, it's not possible to focus minimized/hidden windows
             return false
         }
+    }
+
+    /// Brings a window back from the Dock or from a hidden app, so it can be focused. A minimized window
+    /// hangs off a global container, so it has no workspace to be focused on until then.
+    @MainActor func exitMacosMinimizedOrHidden() async throws {
+        guard let parent, case .macos(let prevParentKind, let prevWorkspaceName) = layoutReason else { return }
+        switch parent.cases {
+            case .macosMinimizedWindowsContainer: setNativeMinimized(false)
+            case .macosHiddenAppsWindowsContainer: unhideApp()
+            default: return
+        }
+        let workspace = prevWorkspaceName.map { Workspace.get(byName: $0) } ?? focus.workspace
+        try await exitMacOsNativeUnconventionalState(window: self, prevParentKind: prevParentKind, workspace: workspace)
     }
 
     @MainActor func toLiveFocusOrNil() -> LiveFocus? { visualWorkspace.map { LiveFocus(windowOrNil: self, workspace: $0) } }
@@ -128,10 +139,7 @@ extension Workspace {
     }
 
     func toLiveFocus() -> LiveFocus {
-        // todo unfortunately mostRecentWindowRecursive may recursively reach empty rootTilingContainer
-        //      while floating or macos unconventional windows might be presented.
-        //      This should be addressed when robust handling for floating/special windows is implemented.
-        if let wd = mostRecentWindowRecursive ?? anyLeafWindowRecursive {
+        if let wd = mostRecentWindowRecursive {
             LiveFocus(windowOrNil: wd, workspace: self)
         } else {
             LiveFocus(windowOrNil: nil, workspace: self) // emptyWorkspace
@@ -199,7 +207,6 @@ extension Workspace {
     let workspaceChange = hasFocusedWorkspaceChanged
         ? _prevFocusedWorkspaceName.map { (from: $0, to: frozenFocus.workspaceName) }
         : nil
-    // todo potential optimization: don't run runSession if we are already in runSession
     runDetached("onFocusChangedCallbacks") {
         // The session is tagged with the first applicable event; the tag is only used for logging
         // and for `isStartup`, and none of these three are startup events.

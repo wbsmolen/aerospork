@@ -43,8 +43,6 @@ final class MacApp: AbstractApp {
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
     /*conforms*/ var bundlePath: String? { nsApp.bundleURL?.path }
 
-    // todo think if it's possible to fold this global mutable state into the tree
-    //      and make deinitialization automatic in deinit
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     /// Registrations currently in flight. Not private: the tests drive the park/unpark paths of
     /// `awaitRegistration` through it, without needing a real app.
@@ -231,7 +229,6 @@ final class MacApp: AbstractApp {
         }
     }
 
-    // todo merge together with detectNewWindows
     @MainActor
     func getFocusedWindow() async throws -> Window? {
         if MacApp.timedOutThisPass.contains(pid) { throw NativeFocusUnknown() }
@@ -467,12 +464,34 @@ final class MacApp: AbstractApp {
     /// walking every running process with it on the main actor was 87% of a refresh and most of the
     /// app's idle CPU.
     ///
-    /// ponytail: an app that turns regular without launching or activating (an agent that opens a window
-    /// in the background) is picked up when it is next activated. Re-seed on a slow timer if that matters.
+    /// `startRegularAppSweep` catches the one thing the notifications don't say: an app that turns regular
+    /// without launching or activating, like an agent opening a window in the background.
     @MainActor private static var regularApps: [pid_t: NSRunningApplication] = Dictionary(
         NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.map { ($0.processIdentifier, $0) },
         uniquingKeysWith: { _, newest in newest },
     )
+
+    /// Adds any apps not known to be regular, and says whether there were any. Add-only: a sweep is older
+    /// than whatever the notifications have said since, and one that turned back is merely asked for
+    /// windows it doesn't have.
+    @MainActor static func noteRegularApps(_ apps: [NSRunningApplication]) -> Bool {
+        let new = apps.filter { regularApps[$0.processIdentifier] == nil }
+        for app in new { regularApps[app.processIdentifier] = app }
+        return !new.isEmpty
+    }
+
+    /// Every 30 seconds, off the main thread: each app it asks about is a round trip to LaunchServices.
+    static func startRegularAppSweep() {
+        Task.detached(priority: .utility) {
+            while !Task.isCancelled {
+                try await Task.sleep(for: .seconds(30))
+                let regular = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+                await MainActor.run {
+                    if noteRegularApps(regular) { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
+                }
+            }
+        }
+    }
 
     /// One app launched, activated, unhid or terminated.
     @MainActor static func noteAppChanged(_ nsApp: NSRunningApplication) {
