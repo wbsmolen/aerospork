@@ -1,11 +1,52 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>AeroSpork</title>
         <link>https://aerospork.app/appcast.xml</link>
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
+        <item>
+            <title>1.3.2</title>
+            <pubDate>Fri, 06 Nov 2026 12:12:55 -0600</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:version>1.3.2</sparkle:version>
+            <sparkle:shortVersionString>1.3.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>A restart now brings back your whole layout, floating windows can be moved and resized from the keyboard, and updates require a signed feed.</p>
+<h3>Upgrade notes</h3>
+<ul>
+<li>A window rule no longer runs again on a window that was already open when AeroSpork restarted, because that could undo a move you made by hand. Rules with <code>if.during-aerospork-startup = true</code> still do.</li>
+<li>AeroSpork now refuses an update feed that isn&#x27;t signed. The feed at aerospork.app is, so nothing changes unless you serve your own.</li>
+</ul>
+<h3>A restart keeps everything</h3>
+<ul>
+<li>Nested containers, each container&#x27;s layout and orientation, and which windows are fullscreen in AeroSpork all come back, on top of the order and sizes 1.3.1 added. It doesn&#x27;t matter which app answers first.</li>
+<li>A floating window stays where you put it when AeroSpork quits, instead of moving to the center of its monitor. That holds on a hidden workspace too, and after a crash.</li>
+<li>A minimized window keeps its place across any number of restarts, not just the first.</li>
+<li>An app that answers late still gets its place back, until you change a layout. From then on a late window goes wherever a new one would, so it can&#x27;t undo what you just did.</li>
+</ul>
+<h3>Floating windows</h3>
+<ul>
+<li><code>move</code> moves a floating window by 50 points and stops at the edge of its monitor. <code>--boundaries all-monitors-outer-frame</code> takes it on to the next monitor.</li>
+<li><code>resize</code> resizes a floating window. <code>smart</code> changes its width and <code>smart-opposite</code> its height, and it stays on its monitor.</li>
+<li>Directional <code>focus</code> works on a workspace that has only floating windows. It used to find nothing.</li>
+<li>Switching to a workspace with only floating windows focuses the most recent one, not whichever came first.</li>
+</ul>
+<h3>Other fixes</h3>
+<ul>
+<li><code>focus --window-id</code> brings back a minimized window or a window of a hidden app, and <code>macos-native-minimize --window-id</code> unminimizes one. Both used to do nothing.</li>
+<li><code>move-mouse</code> after another command in the same binding goes to where the window is now, not where it was.</li>
+<li>A learned minimum window size is asked about again whenever the windows in its row change, so one that has since come down no longer stays. An accordion&#x27;s minimum now counts its padding, so windows in one no longer overlap their neighbours by it.</li>
+<li>An app that turns into a regular app without launching or activating, like a background agent opening a window, is noticed within 30 seconds rather than whenever it is next activated.</li>
+<li>Adding a section to a config with no final newline and removing it leaves the file as it was.</li>
+<li><code>resize</code> on a window in an accordion says why it can&#x27;t, rather than claiming the window is floating.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.2/AeroSpork-1.3.2.zip" length="6926281" type="application/octet-stream" sparkle:edSignature="MGSRvQrhU/rBzgBj/tHjbwvT5NdO0HFKLhRAG9SAEQQp8300xHA11NElY8iYi1Kf3Bs0eiVcP+7FC3x9nQjbDA=="/>
+        </item>
         <item>
             <title>1.3.1</title>
             <pubDate>Fri, 06 Nov 2026 11:09:00 -0600</pubDate>
@@ -25,7 +66,7 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 <li>A refresh no longer asks LaunchServices for AeroSpork&#x27;s own activation policy or for each app&#x27;s name.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.1/AeroSpork-1.3.1.zip" length="6853814" type="application/octet-stream" sparkle:edSignature="oCk6Sl4ULNx01QuFD2TYaTGsdldghWh5hm/ROB+O5lJY0za+c30tZQXhIN0C4piJRt567DounySY71rfObP6Aw=="></enclosure>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.1/AeroSpork-1.3.1.zip" length="6853814" type="application/octet-stream" sparkle:edSignature="oCk6Sl4ULNx01QuFD2TYaTGsdldghWh5hm/ROB+O5lJY0za+c30tZQXhIN0C4piJRt567DounySY71rfObP6Aw=="/>
         </item>
         <item>
             <title>1.3.0</title>
@@ -104,73 +145,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 <li>Remembering windows across a restart no longer mistakes another process named WindowServer for the real one, or gives up if the process list grows while it reads it.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.0/AeroSpork-1.3.0.zip" length="6844567" type="application/octet-stream" sparkle:edSignature="TPd3a01cN7HX6AuaVQV0TueapDLwfHtv/P5UOa0qa8PNoIlU9xNKdeE3rXhlUq3Aq9lTDnGjyntZC9FMzcpTCw=="></enclosure>
-        </item>
-        <item>
-            <title>1.2.0</title>
-            <pubDate>Sun, 13 Sep 2026 17:32:28 -0500</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.2.0</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<p>Fixes focus moving to another window when an app is slow to respond (<a href="https://github.com/wbsmolen/aerospork/issues/39">#39</a>), and several problems with configs migrated from AeroSpace (<a href="https://github.com/wbsmolen/aerospork/issues/40">#40</a>).</p>
-<h2>Upgrade notes</h2>
-<ul>
-<li>Every workspace named in <code>workspaces</code> (with or without <code>mod</code>), in <code>persistent-workspaces</code>, or pinned to a monitor now exists even while empty. The default config declares <code>1-9</code>, so all nine appear in <code>list-workspaces --all</code>, the menu bar and <code>workspace next</code>/<code>prev</code> from launch. A workspace reached only through a binding is still created when you switch to it and released once empty.</li>
-<li>Starting AeroSpork while it is already running prints &quot;AeroSpork is already running&quot; and exits. Debug and release builds can still run side by side.</li>
-<li>AeroSpork no longer manages its own windows, so the settings window is never tiled or moved to a workspace.</li>
-<li><code>config-version</code>, <code>auto-reload-config</code>, <code>on-mode-changed</code> and <code>focus-follows-mouse</code> are reported and ignored. Previously any of them made AeroSpork reject the whole config and run its default.</li>
-</ul>
-<h2>Focus and unresponsive apps</h2>
-<ul>
-<li>A window whose app is slow to answer Accessibility requests is no longer treated as closed. Previously it was dropped, focus moved to another window, and the window could come back on a different workspace.</li>
-<li>Focus moves after a window closes only if that window was focused. If macOS moves focus to another workspace because of the close, AeroSpork brings it back.</li>
-<li>A late answer from a busy app no longer pulls you back across a workspace switch.</li>
-<li>A minimized window comes back on its own workspace rather than the one you are on.</li>
-<li>While an app is hung, a workspace switch waits about a second for it, not a second per window.</li>
-<li><code>killall AeroSpork</code> exits within 10 seconds even when AeroSpork itself is stuck.</li>
-</ul>
-<h2>Window rules</h2>
-<ul>
-<li>A rule applies without clicking the window when the app was still starting, or when the window first looked like a popup.</li>
-<li>A rule&#x27;s command list always runs to the end. Previously a refresh at the wrong moment could stop it after <code>layout tiling</code>.</li>
-</ul>
-<h2>Callbacks</h2>
-<ul>
-<li><code>exec-and-forget</code> run from <code>on-focused-workspace-changed</code> now receives <code>AEROSPORK_FOCUSED_WORKSPACE</code> and <code>AEROSPORK_PREV_WORKSPACE</code>, so the documented replacement for <code>exec-on-workspace-change</code> works.</li>
-</ul>
-<h2>Settings</h2>
-<ul>
-<li>Settings comes to the front when opened from the menu, with <code>aerospork open-settings</code>, or by opening AeroSpork again from Finder or Spotlight.</li>
-<li>A change made just before closing the window is saved instead of dropped.</li>
-<li>A saved change takes effect on screen immediately.</li>
-<li>The General pane says which settings apply only to new workspaces, and that turning off a normalization does not undo earlier changes.</li>
-</ul>
-<h2>Coming from AeroSpace</h2>
-<ul>
-<li><code>persistent-workspaces</code> is supported.</li>
-<li>When only an AeroSpace config exists, AeroSpork says that it is running its default config.</li>
-<li>A string <code>if</code> in <code>[[on-window-detected]]</code> is rejected with an error that names the table form.</li>
-<li>A command that still uses <code>AEROSPACE_*</code> variables or the <code>aerospace</code> CLI loads with a warning naming the line.</li>
-<li>The guide has a new &quot;Coming from AeroSpace&quot; section.</li>
-</ul>
-<h2>Troubleshooting</h2>
-<ul>
-<li>AeroSpork logs a startup record with its version and whether verbose tracing is on, and logs focus changes it makes on its own under the <code>session</code> category.</li>
-<li>The troubleshooting guide and bug report template give the right log subsystem for release builds and explain how to capture a verbose trace.</li>
-</ul>
-<p>Universal (arm64 + x86_64), signed with a Developer ID, notarized and stapled.</p>
-<h2>Install</h2>
-<pre>
-brew install --cask wbsmolen/tap/aerospork
-</pre>
-<p>Or download <code>aerospork-v1.2.0.zip</code>, move <code>aerospork-v1.2.0/AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when prompted. For the CLI, symlink the installed copy: <code>ln -s /Applications/AeroSpork.app/Contents/MacOS/aerospork-cli /usr/local/bin/aerospork</code>.</p>
-<p><code>AeroSpork-1.2.0.zip</code> is the Sparkle update archive: the same app without the CLI, man pages or licence files. It exists for the updater. Use the versioned zip for a manual install.</p>
-]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.2.0/AeroSpork-1.2.0.zip" length="6788074" type="application/octet-stream" sparkle:edSignature="UQc2nYG5f0JqX1NmBXbas3K+d2t6bI06pldKCLQ+wJv9vwwbIWet6/VuBw5klpAtWEHfEirbXkChRg6wo14MBQ=="></enclosure>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.0/AeroSpork-1.3.0.zip" length="6844567" type="application/octet-stream" sparkle:edSignature="TPd3a01cN7HX6AuaVQV0TueapDLwfHtv/P5UOa0qa8PNoIlU9xNKdeE3rXhlUq3Aq9lTDnGjyntZC9FMzcpTCw=="/>
         </item>
     </channel>
-</rss><!-- sparkle-signatures:
-edSignature: o6TcR3P+8fbcvcuTxjmM78Wuo4k/LebZH+afprgScjAIOnY11zVNToKLp5RIfyeKrY9/jsbVOjGUpsCEaNO9DQ==
-length: 17649
+</rss>
+<!-- sparkle-signatures:
+edSignature: SyvsKsUwsHtzLuXdcaH2dYqiZXm12HusiiClD8FBjLKABDt38DYOF59WjpXFS19pNABIN5xEIYP+D/1d+YWZAA==
+length: 15754
 -->
