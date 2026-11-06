@@ -601,6 +601,13 @@ private struct KeyRecorderField: View {
             window?.makeFirstResponder(nil)
         }
 
+        /// Made once and kept, never asked for while drawing. In a debug build on macOS 27 a fresh system font
+        /// was now and then a broken object. CoreText raised an exception copying the attributes, which nothing
+        /// here can catch, so it took the app down within a few pane switches. With a row per binding, every
+        /// redraw of this pane asked.
+        private static let promptFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        private static let notationFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+
         override func draw(_ dirtyRect: NSRect) {
             let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
             (recording ? NSColor.controlAccentColor.withAlphaComponent(0.14) : NSColor.textBackgroundColor).setFill()
@@ -616,9 +623,7 @@ private struct KeyRecorderField: View {
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineBreakMode = .byTruncatingTail
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: displayed.isEmpty
-                    ? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-                    : NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+                .font: displayed.isEmpty ? Self.promptFont : Self.notationFont,
                 .foregroundColor: displayed.isEmpty ? NSColor.placeholderTextColor : NSColor.labelColor,
                 .paragraphStyle: paragraph,
             ]

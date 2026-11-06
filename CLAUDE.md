@@ -145,7 +145,9 @@ from the GUI.
 > `ContentUnavailableViewCompat`, `SectionLabel`, `Badge`, `StatusLabel`, `Banner`,
 > `CopyButton`, `SettingsField`. A pane uses what is there rather than growing its own. `CodeEditor` is
 > not shared: only Raw TOML has one, so it lives in `RawTomlTab.swift`. Status symbols and tints come
-> from `StatusLabel.Kind` / `Banner.Kind`, never string literals in a pane.
+> from `StatusLabel.Kind` / `Banner.Kind`, never string literals in a pane. A section footer is a
+> `SettingsHint`: a plain `Text` there comes out right-aligned at full brightness, and only in a real settings
+> window, so off-screen renders don't show it.
 > `UIChromeConsistencyTest` enforces both rules. `dev-docs/architecture.md` explains why they exist.
 
 **In-app updates**: `ui/Updater.swift` wraps `SPUStandardUpdaterController`. Two things about it
@@ -182,6 +184,12 @@ tree from the file on every arrival, so apps can answer in any order and normali
 container in between, until the user changes a layout (`stopRestoringLayouts`). It shares `restoreTilingTree` and
 the `Frozen*` types with the lock-screen cache. `restoreState` puts back what isn't the tree. A rule doesn't run
 again on a remembered window unless it says `if.during-aerospork-startup = true`.
+
+**Away windows**: a window macOS takes out of the tiles (minimized, hidden with its app, native fullscreen), or one
+not back yet after a restart, stays in `TilingContainer.awayWindows` and comes back to its place at its share of the
+split, in any order. Leave through `leaveTilesForMacos`, come back through `takeAwaySlot`. Places are "what preceded
+it", not indexes, which go stale as windows open and close. A frozen tree includes away windows, so places outlive
+restarts, and a container holding one isn't flattened (an empty one still goes, handing its away windows up).
 
 The key is the `CGWindowID` and nothing else. It comes from a monotonic counter owned by
 **WindowServer**, so it is stable across a restart of *this* process and meaningless afterwards. The
@@ -364,6 +372,10 @@ CI strategy, and the DisplayLink testing story.
 
 ## Common Gotchas
 
+- Never create an `NSFont` inside drawing code. In a debug build on macOS 27 a fresh system font was now and then a
+  broken object, and CoreText raised an exception nothing in Swift can catch, killing the whole window manager within
+  a few pane switches. A release build survived the same stress, but keep fonts in a `static let` regardless.
+  `testDrawingCodeDoesNotAskForFonts` pins the two places that draw text by hand
 - Always use MainActor for tree operations and window management
 - The tree structure is mutable and requires careful synchronization
 - Window IDs come from private `_AXUIElementGetWindow` API

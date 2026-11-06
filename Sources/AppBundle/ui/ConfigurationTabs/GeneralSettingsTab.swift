@@ -19,7 +19,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Startup & behaviour", "power")
             } footer: {
-                Text("Automatically unhiding macOS hidden apps undoes ⌘H so a hidden window keeps tiling. Moving workspaces on monitor connect puts each one back on the monitor you pinned it to; off, a workspace stays wherever it landed when that monitor disappeared.")
+                SettingsHint("Automatically unhiding macOS hidden apps undoes ⌘H so a hidden window keeps tiling. Moving workspaces on monitor connect puts each one back on the monitor you pinned it to; off, a workspace stays wherever it landed when that monitor disappeared.")
             }
 
             Section {
@@ -35,7 +35,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Menu bar & Dock", "menubar.rectangle")
             } footer: {
-                Text(viewModel.appVisibility.dockIconIsForced
+                SettingsHint(viewModel.appVisibility.dockIconIsForced
                     ? "Both icons off would leave nothing visible that leads into Settings, so the Dock icon is kept. Opening AeroSpork again, or `aerospork open-settings`, also opens this window."
                     : "AeroSpork has no window of its own, so these two icons are the quickest way back into Settings. Opening AeroSpork again, or `aerospork open-settings`, also opens this window.")
             }
@@ -58,7 +58,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Layout", "rectangle.split.3x1")
             } footer: {
-                Text("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
+                SettingsHint("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
             }
 
             Section {
@@ -67,7 +67,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Normalization", "wand.and.stars")
             } footer: {
-                Text("Housekeeping applied after every layout change. Turning one off leaves the tree as it is; it does not undo earlier changes. Turn both off if you want the tree to stay exactly as you built it.")
+                SettingsHint("Housekeeping applied after every layout change. Turning one off leaves the tree as it is; it does not undo earlier changes. Turn both off if you want the tree to stay exactly as you built it.")
             }
 
             Section {
@@ -79,7 +79,7 @@ struct GeneralSettingsTab: View {
             } header: {
                 SectionLabel("Keyboard", "keyboard")
             } footer: {
-                Text("How the key names in your bindings map to physical keys. `alt-h` means the key labelled H on this layout.")
+                SettingsHint("How the key names in your bindings map to physical keys. `alt-h` means the key labelled H on this layout.")
             }
 
             // Was a permanently visible menu bar row plus a "Copy version to clipboard" row below

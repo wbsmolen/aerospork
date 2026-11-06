@@ -26,7 +26,7 @@ struct MacosNativeMinimizeCommand: Command {
             if let parent = window.parent {
                 window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: window.nodeWorkspace?.name)
             }
-            window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+            window.leaveTilesForMacos(macosMinimizedWindowsContainer, adaptiveWeight: 1)
             return true
         } else { // unminimize
             return true

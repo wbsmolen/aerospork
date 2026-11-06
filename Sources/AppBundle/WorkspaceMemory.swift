@@ -227,11 +227,15 @@ enum WorkspaceMemory {
         return workspace
     }
 
-    /// Where a remembered window binds: `default`, unless it was floating. Not a window that now looks
-    /// like a popup, whatever it was before. Its place in the tiles comes from `restoreLayout`.
+    /// Where a remembered window binds: floating if it was, or the place it kept, or `default`. Not a window
+    /// that now looks like a popup, whatever it was before. `restoreLayout` then rebuilds the tree, while it
+    /// still may.
     static func restoredBinding(of id: UInt32, on workspace: Workspace, default data: BindingData) -> BindingData {
-        guard placements[String(id)]?.isFloating == true, data.parent is TilingContainer else { return data }
-        return BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        guard data.parent is TilingContainer else { return data }
+        if placements[String(id)]?.isFloating == true {
+            return BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        }
+        return workspace.rootTilingContainer.takeAwaySlot(of: id) ?? data
     }
 
     static func restoreState(of window: Window) {
@@ -345,8 +349,10 @@ enum WorkspaceMemory {
         var windows: [String: WindowEntry] = [:]
         var workspaceScreens: [String: Int] = [:]
         var trees: [String: FrozenContainer] = [:]
-        for workspace in Workspace.all where !workspace.rootTilingContainer.allLeafWindowsRecursive.isEmpty {
-            trees[workspace.name] = FrozenContainer(workspace.rootTilingContainer)
+        for workspace in Workspace.all {
+            // By what it names, not what is tiled: cmd-H can leave every window on a workspace away.
+            let tree = FrozenContainer(workspace.rootTilingContainer)
+            if !tree.allWindowIds.isEmpty { trees[workspace.name] = tree }
         }
         for window in MacWindow.allWindows {
             guard let name = rememberedWorkspaceName(of: window) else { continue }
@@ -373,6 +379,8 @@ enum WorkspaceMemory {
     /// and the monitor list is rebuilt on every access, so this is only reached when `cheapKey`
     /// says something actually changed.
     private static func fullState(_ key: CheapKey) -> State {
+        let alive = windowServerWindowIds()
+        if !isUnitTest { for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { !alive.contains($0) } } }
         var monitors = workspaceMonitors(for: Set(key.workspaceScreens.keys))
         // Keep the remembered monitor for any workspace this snapshot cannot see yet. Dropping it
         // would leave a restored window with its workspace and no monitor, which is precisely the
@@ -386,7 +394,7 @@ enum WorkspaceMemory {
         }
         return State(
             session: session(),
-            windows: key.windows.merging(unclaimedWindows(alive: windowServerWindowIds())) { live, _ in live },
+            windows: key.windows.merging(unclaimedWindows(alive: alive)) { live, _ in live },
             workspaceMonitors: monitors,
             visibleWorkspaces: key.visibleWorkspaces,
             trees: key.trees,

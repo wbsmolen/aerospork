@@ -39,6 +39,7 @@ struct ResizeCommand: Command {
         guard let parent else { return io.err(target.windowOrNil == nil ? noWindowIsFocused : "This window isn't in a tiles layout, so it has no size of its own to change") }
         guard let orientation else { return false }
         guard let node else { return false }
+        target.workspace.denominateWeightsInPoints()
         let diff: CGFloat = switch args.units.val {
             case .set(let unit): CGFloat(unit) - node.getWeight(orientation)
             case .add(let unit): CGFloat(unit)

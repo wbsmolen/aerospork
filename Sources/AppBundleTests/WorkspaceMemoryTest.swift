@@ -727,6 +727,7 @@ final class WorkspaceMemoryTest: XCTestCase {
     /// container with one window in it, and promotes one that is alone at the top to be the root.
     func testATreeSurvivesBeingFlattenedBetweenArrivals() async throws {
         setUpWorkspacesOnTheseMonitors()
+        config.enableNormalizationFlattenContainers = true // tests run with it off
         for order: [UInt32] in [[2, 3, 1, 4], [3, 4, 1, 2], [2, 1, 3, 4]] {
             writeTree(nested(self), windows: [1, 2, 3, 4])
             let workspace = Workspace.get(byName: "A")
@@ -903,6 +904,48 @@ final class WorkspaceMemoryTest: XCTestCase {
         )
         XCTAssertNotEqual(container(.h, w(1)), container(.v, w(1)))
         XCTAssertNotEqual(container(.h, w(1)), container(.h, layout: .accordion, w(1)))
+    }
+
+    /// Not registered until it's unminimized, so it isn't in the live tree. Its place has to survive being
+    /// written back out, or a second restart loses it. Unminimizing it after the user has changed a layout
+    /// has to find it too, when the tree is no longer being rebuilt.
+    func testAWindowAwayAcrossTwoRestartsKeepsItsPlace() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.h, weight: 1, w(1), w(2), w(3)), windows: [1, 2, 3])
+        let workspace = Workspace.get(byName: "A")
+        try await arrive([3, 1], on: workspace)
+        assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId), [1, 3])
+        WorkspaceMemory.invalidateChangeCheckForTests()
+        WorkspaceMemory.save()
+        WorkspaceMemory.waitForWrites()
+
+        // The second restart.
+        workspace.rootTilingContainer.unbindFromParent()
+        WorkspaceMemory.load()
+        try await arrive([3, 1], on: workspace)
+        WorkspaceMemory.stopRestoringLayouts()
+
+        let root = workspace.rootTilingContainer
+        let fallback = BindingData(parent: root, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        let place = WorkspaceMemory.restoredBinding(of: 2, on: workspace, default: fallback)
+        TestWindow.new(id: 2, parent: place.parent).bind(to: place.parent, adaptiveWeight: place.adaptiveWeight, index: place.index)
+
+        assertEquals(root.allLeafWindowsRecursive.map(\.windowId), [1, 2, 3])
+    }
+
+    /// cmd-H can leave nothing tiled on a workspace, which is no reason to forget where everything goes.
+    func testAWorkspaceWithEveryWindowAwayKeepsItsTree() throws {
+        setUpWorkspacesOnTheseMonitors()
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        window.leaveTilesForMacos(workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER)
+
+        WorkspaceMemory.save()
+        WorkspaceMemory.waitForWrites()
+
+        let saved = try JSONDecoder().decode(WorkspaceMemory.State.self, from: Data(contentsOf: WorkspaceMemory.fileUrl))
+        assertEquals(saved.trees?["A"]?.allWindowIds, [1])
     }
 
     /// A minimized window isn't in its app's window list, so nothing registers it until it's unminimized.

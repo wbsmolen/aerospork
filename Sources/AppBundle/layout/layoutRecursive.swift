@@ -168,7 +168,41 @@ extension TreeNode {
     }
 }
 
+extension Workspace {
+    /// Puts weights in points, which is what `resize` deals in. Layout does this as it goes, but a workspace
+    /// that has never been on screen has never been laid out, so its weights are still 1 each: `resize
+    /// width 500` then left that window 500 times the size of its siblings.
+    @MainActor
+    func denominateWeightsInPoints() {
+        let rect = workspaceMonitor.visibleRectPaddedByOuterGaps
+        rootTilingContainer.denominateWeights(width: rect.width, height: rect.height)
+    }
+}
+
 extension TilingContainer {
+    @MainActor
+    fileprivate func scaleChildren(to size: CGFloat) {
+        let sum = CGFloat(children.sumOfDouble { $0.getWeight(orientation) })
+        for child in children {
+            // `sum <= 0` needs `resize` to have driven every weight to zero or below. There is no
+            // ratio left to preserve then, so split evenly -- which is what the additive spread also
+            // did when it started from a sum of zero.
+            child.setWeight(orientation, sum > 0 ? child.getWeight(orientation) * size / sum : size / CGFloat(children.count))
+        }
+    }
+
+    @MainActor
+    fileprivate func denominateWeights(width: CGFloat, height: CGFloat) {
+        let isTiles = layout == .tiles
+        if isTiles { scaleChildren(to: orientation == .h ? width : height) }
+        for case let child as TilingContainer in children {
+            child.denominateWeights(
+                width: isTiles && orientation == .h ? child.getWeight(.h) : width,
+                height: isTiles && orientation == .v ? child.getWeight(.v) : height,
+            )
+        }
+    }
+
     @MainActor
     fileprivate func layoutTiles(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         var point = point
@@ -191,13 +225,7 @@ extension TilingContainer {
         // weight and handed the AX API a negative size, i.e. a window that silently vanished. See
         // LayoutRecursiveTest.testNarrowerMonitorScalesInsteadOfCollapsingSmallWindows.
         let size = orientation == .h ? width : height
-        let sum = CGFloat(children.sumOfDouble { $0.getWeight(orientation) })
-        for child in children {
-            // `sum <= 0` needs `resize` to have driven every weight to zero or below. There is no
-            // ratio left to preserve then, so split evenly -- which is what the additive spread also
-            // did when it started from a sum of zero.
-            child.setWeight(orientation, sum > 0 ? child.getWeight(orientation) * size / sum : size / CGFloat(children.count))
-        }
+        scaleChildren(to: size)
         // TRADEOFF: still a write-back from what is a render pass, but a harmless one -- it lands on
         // the same weights it just computed, so it converges in one pass and repeated layouts of an
         // unchanged tree agree to ~1 ULP (`Σ w * size / sum` doesn't re-sum to `size` exactly in

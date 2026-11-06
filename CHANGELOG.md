@@ -2,6 +2,17 @@
 
 Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for earlier releases are on the [releases page](https://github.com/wbsmolen/aerospork/releases).
 
+## 1.3.3 (2026-11-06)
+
+A window macOS hides now comes back to its own place, and Settings is safer and easier to read.
+
+### Fixes
+
+- A window you minimize, hide with cmd-H or put in native fullscreen comes back to its own place at its own size, instead of next to whichever window was most recent. Hiding an app with several windows no longer reorders them. That holds across any number of restarts while the window is away.
+- `resize` on a workspace that has never been on screen now works in points. `resize width 500` used to leave that window almost the whole monitor when the workspace was first shown.
+- Section footers throughout Settings are left-aligned and muted like the rest of the hints, instead of right-aligned at full brightness.
+- Settings keeps the fonts it draws with instead of asking for them on every redraw. Asking could crash the Keys pane in development builds on macOS 27. It wasn't reproduced in a release build, but a crash there takes the window manager with it.
+
 ## 1.3.2 (2026-11-06)
 
 A restart now brings back your whole layout, floating windows can be moved and resized from the keyboard, and updates require a signed feed.
