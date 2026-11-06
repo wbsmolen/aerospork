@@ -37,14 +37,24 @@ final class MoveMouseCommandTest: XCTestCase {
     /// A workspace that HAS a window is unaffected -- the fallback must not swallow the normal path.
     func testAWindowIsStillPreferredOverTheMonitor() async throws {
         let workspace = Workspace.get(byName: "occupied")
-        TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         XCTAssertTrue(workspace.focusWorkspace())
         assertEquals(focus.windowOrNil?.windowId, 1)
+        let rect = Rect(topLeftX: 10, topLeftY: 10, width: 100, height: 100)
+        window.lastAppliedLayoutPhysicalRect = rect
 
-        // No layout has run and TestWindow answers no AX rect, so the window path reports its own
-        // failure. What matters is that it took the WINDOW path, not the monitor fallback.
-        let r = try await runMoveMouse("window-force-center")
-        XCTAssertFalse(r.stderr.joined().contains(noWindowIsFocused), r.stderr.joined())
+        // The rect, not the command: this one posts a real mouse event.
+        let chosen = try await windowSubjectRectOrReportError(focus, CmdIo(stdin: .emptyStdin))
+        assertEquals(chosen?.topLeftCorner, rect.topLeftCorner)
+    }
+
+    /// `move left; move-mouse window-lazy-center` went to the old spot, because the rect comes from layout
+    /// and nothing had laid out the first command yet. In the source because the command moves the real mouse.
+    func testASequenceIsLaidOutBeforeTheWindowsRectIsRead() throws {
+        let body = try sourceBody("func run(_ env: CmdEnv", in: "Sources/AppBundle/command/impl/MoveMouseCommand.swift", length: 800)
+        let layout = try XCTUnwrap(body.range(of: "try await layoutWorkspaces()"))
+        let read = try XCTUnwrap(body.range(of: "windowSubjectRectOrReportError"))
+        XCTAssertLessThan(layout.lowerBound, read.lowerBound)
     }
 
     private func runMoveMouse(_ target: String) async throws -> CmdResult {

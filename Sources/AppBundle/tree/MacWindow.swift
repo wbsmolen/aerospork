@@ -4,6 +4,11 @@ import Common
 final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
+    /// Where a parked window goes when it is shown again, as a share of its monitor. Nil unless parked.
+    var parkedPosition: CGPoint? {
+        get { prevUnhiddenProportionalPositionInsideWorkspaceRect }
+        set { prevUnhiddenProportionalPositionInsideWorkspaceRect = newValue }
+    }
     let registeredAt = Date()
     /// Where a window that first looks like a popup goes once it turns out not to be one: the user may
     /// have switched away by the time the re-check notices.
@@ -39,17 +44,23 @@ final class MacWindow: Window {
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
-        if remembered != nil { data = WorkspaceMemory.restoredBinding(of: windowId, on: workspace, default: data) }
+        let isRemembered = remembered != nil
+        if isRemembered { data = WorkspaceMemory.restoredBinding(of: windowId, on: workspace, default: data) }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
         window.workspaceNameAtRegistration = workspace.name
+        if isRemembered { WorkspaceMemory.restoreState(of: window) }
 
         // Committed: from here the window is registered, and no refresh looks at it as new again. So
         // the rest runs to the end even if this refresh is cancelled; see `shieldedFromCancellation`.
         try await shieldedFromCancellation {
             try await debugWindowsIfRecording(window)
+            if isRemembered, window.parent is TilingContainer { try await WorkspaceMemory.restoreLayout(of: workspace) }
             if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
-                try await tryOnWindowDetected(window)
+                // A rule runs once, when a window first appears, and this one appeared before the restart.
+                // Running it again would undo a move made by hand since. `during-aerospork-startup = true`
+                // is a request to run at startup, so those still do.
+                try await tryOnWindowDetected(window, onlyStartupRules: isRemembered)
             }
         }
         // A window that arrives looking like a popup is re-checked by `validateStillPopups` -- but only
@@ -68,12 +79,12 @@ final class MacWindow: Window {
     }
 
     @MainActor
-    func isWindowHeuristic() async throws -> Bool { // todo cache
+    func isWindowHeuristic() async throws -> Bool {
         try await macApp.isWindowHeuristic(windowId)
     }
 
     @MainActor
-    func isDialogHeuristic() async throws -> Bool { // todo cache
+    func isDialogHeuristic() async throws -> Bool {
         try await macApp.isDialogHeuristic(windowId)
     }
 
@@ -91,8 +102,12 @@ final class MacWindow: Window {
         macApp.setNativeFullscreen(windowId, value)
     }
 
-    func setNativeMinimized(_ value: Bool) {
+    override func setNativeMinimized(_ value: Bool) {
         macApp.setNativeMinimized(windowId, value)
+    }
+
+    override func unhideApp() {
+        macApp.nsApp.unhide()
     }
 
     // skipClosedWindowsCache is an optimization when it's definitely not necessary to cache closed window.
@@ -153,7 +168,6 @@ final class MacWindow: Window {
         macApp.closeAndUnregisterAxWindow(windowId)
     }
 
-    // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
     func hideInCorner(on visibleRect: Rect, otherMonitors: [Rect]) async throws {
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent
@@ -173,22 +187,28 @@ final class MacWindow: Window {
         }
     }
 
+    /// Where this window belongs once it is no longer parked.
+    @MainActor
+    var unparkedTopLeftCorner: CGPoint? {
+        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect, let nodeWorkspace else { return nil }
+        let workspaceRect = nodeWorkspace.workspaceMonitor.rect
+        return workspaceRect.topLeftCorner + CGPoint(
+            x: workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x,
+            y: workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y,
+        )
+    }
+
     @MainActor
     func unhideFromCorner() {
-        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return }
-        guard let nodeWorkspace else { return } // hiding only makes sense for workspace windows
+        guard prevUnhiddenProportionalPositionInsideWorkspaceRect != nil else { return }
+        guard nodeWorkspace != nil else { return } // hiding only makes sense for workspace windows
         guard let parent else { return }
 
         switch getChildParentRelation(child: self, parent: parent) {
             // Just a small optimization to avoid unnecessary AX calls for non floating windows
             // Tiling windows should be unhidden with layoutRecursive anyway
             case .floatingWindow:
-                let workspaceRect = nodeWorkspace.workspaceMonitor.rect
-                let pointInsideWorkspace = CGPoint(
-                    x: workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x,
-                    y: workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y,
-                )
-                setAxTopLeftCorner(workspaceRect.topLeftCorner + pointInsideWorkspace)
+                if let unparkedTopLeftCorner { setAxTopLeftCorner(unparkedTopLeftCorner) }
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
                  .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
         }
@@ -272,20 +292,21 @@ private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, w
 }
 
 @MainActor
-func tryOnWindowDetected(_ window: Window) async throws {
+func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async throws {
     guard let parent = window.parent else { return }
     switch parent.cases {
         case .tilingContainer, .workspace, .macosMinimizedWindowsContainer,
              .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
-            try await onWindowDetected(window)
+            try await onWindowDetected(window, onlyStartupRules: onlyStartupRules)
         case .macosPopupWindowsContainer:
             break
     }
 }
 
 @MainActor
-private func onWindowDetected(_ window: Window) async throws {
-    for callback in config.onWindowDetected where try await callback.matches(window) {
+private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async throws {
+    let rules = config.onWindowDetected.filter { !onlyStartupRules || $0.matcher.duringAeroSporkStartup == true }
+    for callback in rules where try await callback.matches(window) {
         _ = try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
         if !callback.checkFurtherCallbacks {
             return

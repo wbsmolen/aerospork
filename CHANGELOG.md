@@ -2,6 +2,38 @@
 
 Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for earlier releases are on the [releases page](https://github.com/wbsmolen/aerospork/releases).
 
+## 1.3.2 (2026-11-06)
+
+A restart now brings back your whole layout, floating windows can be moved and resized from the keyboard, and updates require a signed feed.
+
+### Upgrade notes
+
+- A window rule no longer runs again on a window that was already open when AeroSpork restarted, because that could undo a move you made by hand. Rules with `if.during-aerospork-startup = true` still do.
+- AeroSpork now refuses an update feed that isn't signed. The feed at aerospork.app is, so nothing changes unless you serve your own.
+
+### A restart keeps everything
+
+- Nested containers, each container's layout and orientation, and which windows are fullscreen in AeroSpork all come back, on top of the order and sizes 1.3.1 added. It doesn't matter which app answers first.
+- A floating window stays where you put it when AeroSpork quits, instead of moving to the center of its monitor. That holds on a hidden workspace too, and after a crash.
+- A minimized window keeps its place across any number of restarts, not just the first.
+- An app that answers late still gets its place back, until you change a layout. From then on a late window goes wherever a new one would, so it can't undo what you just did.
+
+### Floating windows
+
+- `move` moves a floating window by 50 points and stops at the edge of its monitor. `--boundaries all-monitors-outer-frame` takes it on to the next monitor.
+- `resize` resizes a floating window. `smart` changes its width and `smart-opposite` its height, and it stays on its monitor.
+- Directional `focus` works on a workspace that has only floating windows. It used to find nothing.
+- Switching to a workspace with only floating windows focuses the most recent one, not whichever came first.
+
+### Other fixes
+
+- `focus --window-id` brings back a minimized window or a window of a hidden app, and `macos-native-minimize --window-id` unminimizes one. Both used to do nothing.
+- `move-mouse` after another command in the same binding goes to where the window is now, not where it was.
+- A learned minimum window size is asked about again whenever the windows in its row change, so one that has since come down no longer stays. An accordion's minimum now counts its padding, so windows in one no longer overlap their neighbours by it.
+- An app that turns into a regular app without launching or activating, like a background agent opening a window, is noticed within 30 seconds rather than whenever it is next activated.
+- Adding a section to a config with no final newline and removing it leaves the file as it was.
+- `resize` on a window in an accordion says why it can't, rather than claiming the window is floating.
+
 ## 1.3.1 (2026-11-06)
 
 Fixes a crash when removing a window rule in Settings, and brings back window order and sizes after a restart.

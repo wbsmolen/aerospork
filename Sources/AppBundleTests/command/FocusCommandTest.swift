@@ -2,7 +2,6 @@
 import Common
 import XCTest
 
-// todo write tests
 //
 // test 1
 //     horizontal
@@ -40,6 +39,74 @@ final class FocusCommandTest: XCTestCase {
 
         XCTAssertTrue(readable.parent === workspace)
         XCTAssertTrue(unreadable.parent === workspace)
+    }
+
+    /// With nothing tiled, directional focus found nothing to place them beside and did nothing.
+    func testFloatingWindowsAloneCanBeFocusedByDirection() async throws {
+        let workspace = Workspace.get(byName: name)
+        let left = TestWindow.new(id: 1, parent: workspace, rect: Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100))
+        let middle = TestWindow.new(id: 2, parent: workspace, rect: Rect(topLeftX: 500, topLeftY: 0, width: 100, height: 100))
+        let right = TestWindow.new(id: 3, parent: workspace, rect: Rect(topLeftX: 1000, topLeftY: 0, width: 100, height: 100))
+        check(left.focusWindow())
+
+        _ = try await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(focus.windowOrNil?.windowId, 2)
+        _ = try await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(focus.windowOrNil?.windowId, 3)
+
+        for window in [left, middle, right] { XCTAssertTrue(window.parent === workspace, "\(window) stayed tiled") }
+    }
+
+    /// An empty root can be the most recent child while a floating window sits beside it.
+    func testTheMostRecentWindowIsFoundPastAnEmptyRoot() {
+        let workspace = Workspace.get(byName: name)
+        let floating = TestWindow.new(id: 1, parent: workspace)
+        workspace.rootTilingContainer.markAsMostRecentChild()
+
+        assertEquals(workspace.mostRecentWindowRecursive?.windowId, floating.windowId)
+    }
+
+    func testAMinimizedWindowCanBeFocused() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: macosMinimizedWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name)
+
+        try await window.exitMacosMinimizedOrHidden()
+
+        XCTAssertTrue(window.nodeWorkspace === workspace)
+        assertEquals(window.layoutReason, .standard)
+        XCTAssertTrue(window.focusWindow())
+        assertEquals(focus.windowOrNil?.windowId, 1)
+    }
+
+    /// Through the command, because resolving a target fails on a minimized window, and it has to be
+    /// brought back before that. Found live: the method alone passed and the command still failed.
+    func testTheCommandBringsAMinimizedWindowBackBeforeResolvingIt() throws {
+        let body = try sourceBody("func run(_ env: CmdEnv", in: "Sources/AppBundle/command/impl/FocusCommand.swift", length: 600)
+        let bringBack = try XCTUnwrap(body.range(of: "exitMacosMinimizedOrHidden()"))
+        let resolve = try XCTUnwrap(body.range(of: "resolveTargetOrReportError"))
+        XCTAssertLessThan(bringBack.lowerBound, resolve.lowerBound)
+    }
+
+    func testAWindowOfAHiddenAppCanBeFocused() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace.macOsNativeHiddenAppsWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .workspace, prevWorkspaceName: workspace.name)
+
+        try await window.exitMacosMinimizedOrHidden()
+
+        XCTAssertTrue(window.parent === workspace, "it was floating before it was hidden")
+        assertEquals(window.layoutReason, .standard)
+    }
+
+    func testAnOrdinaryWindowIsLeftAlone() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let parent = window.parent
+
+        try await window.exitMacosMinimizedOrHidden()
+
+        XCTAssertTrue(window.parent === parent)
     }
 
     func testParse() {

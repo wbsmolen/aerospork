@@ -57,21 +57,16 @@ enum WorkspaceMemory {
         /// Checked against the live window's app, so an id reused within one WindowServer session by
         /// a different application is a no-op rather than a misplacement.
         let bundleId: String?
-        /// Position among the workspace's tiled windows, left to right. All three of these are nil in a
-        /// file written by an older version.
+        /// Position and share of the split, as 1.3.1 wrote them. `State.trees` replaced both, so these are
+        /// only ever read, from a file of that version. See `flatTree`.
         var index: Int? = nil
-        /// Its share of a workspace's top-level split, in points. Nil inside a nested container, because
-        /// nesting isn't rebuilt and that number means nothing at the top level.
-        /// ponytail: a flat restore. Rebuild nested containers and their layouts if anyone misses them.
         var weight: CGFloat? = nil
         var isFloating: Bool? = nil
-
-        /// Layout re-splits weights on every pass and they wobble in their last bits, so a plain comparison
-        /// would rewrite the file on every refresh. See `layoutTiles`.
-        static func == (a: WindowEntry, b: WindowEntry) -> Bool {
-            a.workspace == b.workspace && a.bundleId == b.bundleId && a.index == b.index && a.isFloating == b.isFloating
-                && abs((a.weight ?? 0) - (b.weight ?? 0)) < 1
-        }
+        /// Where a floating window of a hidden workspace goes back to, as a share of its monitor. Only the
+        /// tree knows this, and a crash leaves the window parked, so its frame says nothing.
+        var parkedAt: CGPoint? = nil
+        var isFullscreen: Bool? = nil
+        var noOuterGapsInFullscreen: Bool? = nil
     }
 
     struct State: Codable, Equatable, Sendable {
@@ -82,6 +77,9 @@ enum WorkspaceMemory {
         let workspaceMonitors: [String: MonitorFingerprint]
         /// The workspaces on screen. Optional because a file written by an older version has none.
         var visibleWorkspaces: [String]? = nil
+        /// Each workspace's tiling tree: the order of its windows, their sizes, what is nested in what, and
+        /// each container's layout. Optional because a file written by an older version has none.
+        var trees: [String: FrozenContainer]? = nil
     }
 
     /// Overridable so tests do not read or delete the real file. The default sits beside the CLI
@@ -153,9 +151,11 @@ enum WorkspaceMemory {
     }
 
     private static var restored: State?
-    /// Every entry as it was loaded. `restored` spends an entry when its window comes back, but the windows
-    /// still to come need to know where the ones already back belong.
+    /// Every entry as it was loaded. `restored` spends an entry when its window comes back, but its state
+    /// is still read after that.
     private static var placements: [String: WindowEntry] = [:]
+    /// Empty once the user has changed a layout. See `restoreLayout`.
+    private static var trees: [String: FrozenContainer] = [:]
     /// `save()` before `load()` would persist an empty tree over a good file. That window is
     /// milliseconds wide -- a signal between `initTerminationHandler` and `load` -- but it costs one
     /// Bool to close.
@@ -182,6 +182,7 @@ enum WorkspaceMemory {
     static func load() {
         restored = nil
         placements = [:]
+        trees = [:]
         lastWritten = nil
         isLoaded = true
         guard let data = try? Data(contentsOf: fileUrl),
@@ -201,6 +202,7 @@ enum WorkspaceMemory {
         }
         restored = state
         placements = state.windows
+        trees = state.trees ?? [:]
         debugLog("WorkspaceMemory: restored \(state.windows.count) windows")
     }
 
@@ -225,19 +227,55 @@ enum WorkspaceMemory {
         return workspace
     }
 
-    /// Where a remembered window goes on its workspace: in front of the first window already back that
-    /// stood after it, so the order comes out right whichever app answers first. `default` for a window
-    /// that isn't an ordinary one, like a popup, whatever it was before.
+    /// Where a remembered window binds: `default`, unless it was floating. Not a window that now looks
+    /// like a popup, whatever it was before. Its place in the tiles comes from `restoreLayout`.
     static func restoredBinding(of id: UInt32, on workspace: Workspace, default data: BindingData) -> BindingData {
-        guard let entry = placements[String(id)], data.parent is TilingContainer else { return data }
-        if entry.isFloating == true { return BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST) }
-        guard let own = entry.index else { return data }
+        guard placements[String(id)]?.isFloating == true, data.parent is TilingContainer else { return data }
+        return BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    }
+
+    static func restoreState(of window: Window) {
+        guard let entry = placements[String(window.windowId)] else { return }
+        window.isFullscreen = entry.isFullscreen == true
+        window.noOuterGapsInFullscreen = entry.noOuterGapsInFullscreen == true
+        if let parkedAt = entry.parkedAt { (window as? MacWindow)?.parkedPosition = parkedAt }
+    }
+
+    /// Puts a workspace's tiling tree back, with whichever of its windows are back so far.
+    ///
+    /// On every arrival, because apps answer in any order and some much later than others. Rebuilt whole
+    /// from the file each time, so the result doesn't depend on that order, or on normalization having
+    /// flattened a half-filled container in between. A window on the workspace that the tree doesn't name
+    /// stays on it, and one that has gone elsewhere is left where it went.
+    ///
+    /// Only until the user changes a layout (`stopRestoringLayouts`). A window arriving after that goes
+    /// where any new window goes, rather than undoing what they just did.
+    static func restoreLayout(of workspace: Workspace) async throws {
         let root = workspace.rootTilingContainer
-        let next = root.children.firstIndex { child in
-            guard let window = child as? Window, let other = placements[String(window.windowId)]?.index else { return false }
-            return other > own
+        guard let tree = trees[workspace.name] ?? flatTree(of: workspace.name, like: root) else { return }
+        let windows = Dictionary(root.allLeafWindowsRecursive.map { ($0.windowId, $0) }, uniquingKeysWith: { first, _ in first })
+        try await restoreTilingTree(of: workspace, from: tree) { windows[$0] }
+    }
+
+    static func stopRestoringLayouts() {
+        trees = [:]
+        for key in placements.keys { placements[key]?.index = nil }
+    }
+
+    /// What a file from 1.3.1 says about a tree: order and sizes, nothing nested. Only for the update from
+    /// that version, whose file has no `trees`.
+    private static func flatTree(of name: String, like root: TilingContainer) -> FrozenContainer? {
+        let tiled = placements.compactMap { id, entry -> (index: Int, window: FrozenWindow)? in
+            guard entry.workspace == name, let index = entry.index, let windowId = UInt32(id) else { return nil }
+            return (index, FrozenWindow(id: windowId, weight: entry.weight ?? WEIGHT_AUTO))
         }
-        return BindingData(parent: root, adaptiveWeight: entry.weight ?? WEIGHT_AUTO, index: next ?? INDEX_BIND_LAST)
+        if tiled.isEmpty { return nil }
+        return FrozenContainer(
+            children: tiled.sorted { $0.index < $1.index }.map { .window($0.window) },
+            layout: root.layout,
+            orientation: root.orientation,
+            weight: 1,
+        )
     }
 
     /// Puts every monitor back on the workspace it showed, and the rest back on their monitors.
@@ -300,26 +338,25 @@ enum WorkspaceMemory {
         let windows: [String: WindowEntry]
         let workspaceScreens: [String: Int]
         let visibleWorkspaces: [String]
+        let trees: [String: FrozenContainer]
     }
 
     private static func cheapKey() -> CheapKey {
         var windows: [String: WindowEntry] = [:]
         var workspaceScreens: [String: Int] = [:]
-        var tileOrder: [UInt32: Int] = [:]
-        for workspace in Workspace.all {
-            for (index, window) in workspace.rootTilingContainer.allLeafWindowsRecursive.enumerated() {
-                tileOrder[window.windowId] = index
-            }
+        var trees: [String: FrozenContainer] = [:]
+        for workspace in Workspace.all where !workspace.rootTilingContainer.allLeafWindowsRecursive.isEmpty {
+            trees[workspace.name] = FrozenContainer(workspace.rootTilingContainer)
         }
         for window in MacWindow.allWindows {
             guard let name = rememberedWorkspaceName(of: window) else { continue }
-            let root = window.nodeWorkspace?.rootTilingContainer
             windows[String(window.windowId)] = WindowEntry(
                 workspace: name,
                 bundleId: window.macApp.bundleId,
-                index: tileOrder[window.windowId],
-                weight: root.flatMap { window.parent === $0 ? window.getWeight($0.orientation) : nil },
                 isFloating: window.isFloating ? true : nil,
+                parkedAt: window.isFloating ? window.parkedPosition : nil,
+                isFullscreen: window.isFullscreen ? true : nil,
+                noOuterGapsInFullscreen: window.noOuterGapsInFullscreen ? true : nil,
             )
             if workspaceScreens[name] == nil, let workspace = Workspace.existing(byName: name) {
                 workspaceScreens[name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
@@ -329,7 +366,7 @@ enum WorkspaceMemory {
         for workspace in visible where workspaceScreens[workspace.name] == nil {
             workspaceScreens[workspace.name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
         }
-        return CheapKey(windows: windows, workspaceScreens: workspaceScreens, visibleWorkspaces: visible.map(\.name))
+        return CheapKey(windows: windows, workspaceScreens: workspaceScreens, visibleWorkspaces: visible.map(\.name), trees: trees)
     }
 
     /// The full state. `MonitorFingerprint.fromScreen` is four CoreGraphics round trips per monitor
@@ -347,7 +384,29 @@ enum WorkspaceMemory {
                 }
             }
         }
-        return State(session: session(), windows: key.windows, workspaceMonitors: monitors, visibleWorkspaces: key.visibleWorkspaces)
+        return State(
+            session: session(),
+            windows: key.windows.merging(unclaimedWindows(alive: windowServerWindowIds())) { live, _ in live },
+            workspaceMonitors: monitors,
+            visibleWorkspaces: key.visibleWorkspaces,
+            trees: key.trees,
+        )
+    }
+
+    /// Remembered windows that haven't come back but still exist.
+    ///
+    /// A minimized window isn't in its app's window list, so after a restart nothing registers it until it
+    /// is unminimized. It gets its place back then, but leaving it out of the file lost that place at the
+    /// next restart. Ids are never reused within a session, so one that is gone is gone for good.
+    static func unclaimedWindows(alive: Set<UInt32>) -> [String: WindowEntry] {
+        restored?.windows.filter { UInt32($0.key).map(alive.contains) == true } ?? [:]
+    }
+
+    /// Only when something changed, like the rest of `fullState`. Not under test, where a real window's id
+    /// could match a made-up one.
+    private static func windowServerWindowIds() -> Set<UInt32> {
+        guard !isUnitTest, let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] else { return [] }
+        return Set(list.compactMap { ($0[kCGWindowNumber] as? Int).map(UInt32.init) })
     }
 
     /// The fingerprint of each named workspace's monitor.
@@ -405,6 +464,8 @@ enum WorkspaceMemory {
                 workspaceScreens: key.workspaceScreens,
                 // What a cold start shows until `restoreVisibleWorkspaces` runs is not worth remembering.
                 visibleWorkspaces: remembered.visibleWorkspaces ?? key.visibleWorkspaces,
+                // Half a tree, with the windows back so far. The whole one is still what happens next.
+                trees: remembered.trees ?? key.trees,
             )
         }
         guard key != lastWritten else { return }
@@ -449,6 +510,7 @@ enum WorkspaceMemory {
     static func resetForTests() {
         restored = nil
         placements = [:]
+        trees = [:]
         lastWritten = nil
         isLoaded = false
         isFrozen = false

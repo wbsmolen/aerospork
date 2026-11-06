@@ -126,15 +126,11 @@ targets:
         # generate_appcast writes is signed. It is the installed build that enforces this, so it
         # starts with the update after the first build that has it.
         SUVerifyUpdateBeforeExtraction: true
-        # SURequireSignedFeed is deliberately NOT set. The feed is unsigned today, and a build that
-        # has this key refuses any feed without a valid signature: for 20 days it reports an error
-        # and offers nothing, and after that only a degraded mode. generate_appcast only signs once an
-        # archive in the feed has the key or the feed is already signed, and silently writes it
-        # unsigned if it has no private key. So the first signed feed would ship in the same release
-        # as the first client that demands one, unverified: publish-release.sh checks the enclosure's
-        # signature, not the feed's. Editing updates-site/appcast.xml afterwards, as 1.2.0 did, breaks
-        # the signature too. To turn it on: `sign_update` the current feed, deploy it, verify what is
-        # served with `sign_update --verify`, make publish-release.sh do the same, and only then set it.
+        # A build refuses a feed without a valid signature: for 20 days it reports an error and offers
+        # nothing, and after that only a degraded mode. So publish-release.sh signs the feed and checks
+        # what is served before it finishes, and updates-site/appcast.xml can't be edited by hand any
+        # more, which breaks the signature. To change it, re-sign with `sign_update` and redeploy.
+        SURequireSignedFeed: true
     entitlements:
       path: resources/aerospork.entitlements
       properties:

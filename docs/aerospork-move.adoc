@@ -19,6 +19,9 @@ aerospork move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [
 // tag::body[]
 {manpurpose}. See the "Examples" section for more details.
 
+A floating window moves 50 points in that direction and stops at the edge of its monitor. Once it is at the
+edge, `--boundaries all-monitors-outer-frame` takes it to the next monitor.
+
 Deprecated name: `move-through`
 
 // =========================================================== Options

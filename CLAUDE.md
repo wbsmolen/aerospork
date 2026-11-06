@@ -157,6 +157,10 @@ with its own XPC helpers in `Contents/Frameworks`, so the release script signs n
 deepest-first before sealing the bundle, copies with `cp -R` to keep the framework's symlinks, and
 checks that every nested Mach-O is independently signed rather than rejecting nested code outright.
 
+The feed is signed too, and `SURequireSignedFeed` makes a build refuse one that isn't, so **never edit
+`updates-site/appcast.xml` by hand**: re-sign with `sign_update` and redeploy. A wrong signature doesn't fail
+loudly. Clients report an error for 20 days and offer nothing. `publish-release.sh` checks what is served.
+
 **Workspace memory across a restart**: `WorkspaceMemory.swift` persists window -> workspace, plus
 the monitor each workspace was on, to `~/Library/Caches/<bundle-id>/workspace-memory.json`, mode
 `0600`. Deliberately not `/tmp` like the CLI socket: the socket is a rendezvous point whose security
@@ -173,9 +177,11 @@ planted in a world-writable directory decides where another user's windows go.
 
 Every first registration asks, not only startup, so an app that answers late still gets its windows back; an
 entry is spent once used. `restoreVisibleWorkspaces` puts each monitor back on what it showed, except the
-focused monitor, which keeps what focus adopted from macOS. `restoredBinding` puts a window back in its place
-among those already back, at its share of the split, or floating. The restore is flat: nested containers and a
-workspace's own layout aren't rebuilt.
+focused monitor, which keeps what focus adopted from macOS. `restoreLayout` rebuilds a workspace's whole tiling
+tree from the file on every arrival, so apps can answer in any order and normalization can flatten a half-filled
+container in between, until the user changes a layout (`stopRestoringLayouts`). It shares `restoreTilingTree` and
+the `Frozen*` types with the lock-screen cache. `restoreState` puts back what isn't the tree. A rule doesn't run
+again on a remembered window unless it says `if.during-aerospork-startup = true`.
 
 The key is the `CGWindowID` and nothing else. It comes from a monotonic counter owned by
 **WindowServer**, so it is stable across a restart of *this* process and meaningless afterwards. The

@@ -132,6 +132,12 @@ private func makeAllWindowsVisibleAndRestoreSize() async {
     for (_, window) in MacWindow.allWindowsMap {
         // One at a time: an app that fails to answer must not leave every later window off screen.
         do {
+            // A floating window is already where the user put it, so a restart keeps it there. If its
+            // workspace is hidden it goes back to that spot rather than the monitor's centre.
+            if window.isFloating {
+                if let spot = window.unparkedTopLeftCorner { try await window.setAxFrameBlocking(spot, nil) }
+                continue
+            }
             let monitorVisibleRect = try await monitorToRestore(window).visibleRect
             let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
             try await window.setAxFrameBlocking(centredOnMonitor(monitorVisibleRect, windowSize), windowSize)

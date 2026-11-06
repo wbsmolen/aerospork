@@ -14,7 +14,7 @@ let sessionGate = FifoGate()
 @MainActor
 func runRefreshSession(
     _ event: RefreshSessionEvent,
-    screenIsDefinitelyUnlocked: Bool, // todo rename
+    screenIsDefinitelyUnlocked: Bool,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     refreshScheduler.request(RefreshRequest(
@@ -85,6 +85,13 @@ func runSession<T>(
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             resetClosedWindowsCache()
+            // The ways a user changes a layout, for which see `WorkspaceMemory.restoreLayout`. A click isn't
+            // one, a drag is `.ax`, and `.socketServer` is decided by the command, because a status bar
+            // asking what is on screen isn't one either.
+            switch event {
+                case .hotkeyBinding, .menuBarButton, .ax, .resetManipulatedWithMouse: WorkspaceMemory.stopRestoringLayouts()
+                default: break
+            }
             MacApp.timedOutThisPass = []
 
             try await syncFocusFromMacOs()
@@ -249,7 +256,7 @@ func hideSpot(for size: CGSize, on v: Rect, otherMonitors: [Rect], sliver: CGFlo
 }
 
 @MainActor
-private func layoutWorkspaces() async throws {
+func layoutWorkspaces() async throws {
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.compactMap { $0 as? MacWindow }.forEach { $0.unhideFromCorner() }

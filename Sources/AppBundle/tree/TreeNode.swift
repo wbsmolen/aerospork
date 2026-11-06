@@ -18,7 +18,7 @@ class TreeNode: Equatable, AeroAny {
     // - move-mouse command
     var lastAppliedLayoutPhysicalRect: Rect? = nil // with real inner gaps
     final var unboundStacktrace: String? = nil
-    var isBound: Bool { parent != nil } // todo drop, once unbound nodes are impossible to construct
+    var isBound: Bool { parent != nil }
 
     @MainActor
     init(parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -94,10 +94,6 @@ class TreeNode: Equatable, AeroAny {
         newParent._children.insert(self, at: index != INDEX_BIND_LAST ? index : newParent._children.count)
         _parent = newParent
         unboundStacktrace = nil
-        // todo consider disabling automatic mru propogation
-        // 1. "floating windows" in FocusCommand break the MRU because of that :(
-        // 2. Misbehaved apps that abuse real window as popups https://github.com/wbsmolen/aerospork/issues/106 (the
-        //    last appeared window, is not necessarily the one that has the focus)
         markAsMostRecentChild()
 
         return result
@@ -201,32 +197,13 @@ class TreeNode: Equatable, AeroAny {
     }
 
     var mostRecentWindowRecursive: Window? {
-        // Iterative approach to avoid deep recursion
-        var current: TreeNode? = self
-        var depth = 0
-        let maxDepth = 100
-
-        while let node = current, depth < maxDepth {
-            if let window = node as? Window {
-                return window
-            }
-            current = node.mostRecentChild
-            depth += 1
+        if let window = self as? Window { return window }
+        // Every child in turn, not just the most recent: that can be an empty root container while a
+        // floating window sits beside it.
+        for child in _mruChildren {
+            if let window = child.mostRecentWindowRecursive { return window }
         }
         return nil
-    }
-
-    var anyLeafWindowRecursive: Window? {
-        // Early exit for windows
-        if let window = self as? Window {
-            return window
-        }
-
-        // Early exit for empty containers
-        if children.isEmpty { return nil }
-
-        // Use first(where:) for early exit on first found window
-        return children.lazy.compactMap { $0.anyLeafWindowRecursive }.first
     }
 
     // Doesn't contain at least one window

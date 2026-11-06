@@ -49,6 +49,7 @@ class GlobalObserver {
     static func initObserver() {
         // Otherwise the first wake reads as a changed monitor set, and rebalances workspaces.
         lastMonitorSignature = monitorSetSignature()
+        MacApp.startRegularAppSweep()
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif)
@@ -65,9 +66,6 @@ class GlobalObserver {
         }
 
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
-            // todo reduce number of refreshSession in the callback
-            //  resetManipulatedWithMouseIfPossible might call its own refreshSession
-            //  The end of the callback calls refreshSession
             runDetached("didActivateApp") {
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 resetClosedWindowsCache()

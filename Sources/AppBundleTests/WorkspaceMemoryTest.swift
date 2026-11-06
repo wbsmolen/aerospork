@@ -677,56 +677,185 @@ final class WorkspaceMemoryTest: XCTestCase {
         XCTAssertFalse(source.contains(".layout = "), "startup is deciding a workspace's layout again, over `default-root-container-layout`")
     }
 
-    // MARK: - Order, sizes and floating
+    // MARK: - The whole arrangement
 
-    /// Binds windows the way registration does, in the order their apps happened to answer.
-    private func register(_ ids: [UInt32], on workspace: Workspace) {
+    private func w(_ id: UInt32, _ weight: CGFloat = 100) -> FrozenTreeNode { .window(FrozenWindow(id: id, weight: weight)) }
+
+    private func container(_ orientation: Orientation, layout: Layout = .tiles, weight: CGFloat = 100, _ children: FrozenTreeNode...) -> FrozenContainer {
+        FrozenContainer(children: children, layout: layout, orientation: orientation, weight: weight)
+    }
+
+    private func writeTree(_ tree: FrozenContainer, on workspace: String = "A", windows: [UInt32]) {
+        var saved = state(session: WorkspaceMemory.session(), windows: Dictionary(uniqueKeysWithValues: windows.map {
+            (String($0), WorkspaceMemory.WindowEntry(workspace: workspace, bundleId: "b"))
+        }))
+        saved.trees = [workspace: tree]
+        write(saved)
+        WorkspaceMemory.load()
+    }
+
+    /// One window at a time, the way registration does it, in the order their apps happened to answer.
+    /// `normalizing` is what a refresh does between two windows that arrive in different passes.
+    private func arrive(_ ids: [UInt32], on workspace: Workspace, normalizing: Bool = false) async throws {
         for id in ids {
-            let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-            let data = WorkspaceMemory.restoredBinding(of: id, on: workspace, default: fallback)
-            TestWindow.new(id: id, parent: data.parent, adaptiveWeight: data.adaptiveWeight).also {
-                $0.bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
-            }
+            TestWindow.new(id: id, parent: workspace.rootTilingContainer)
+            try await WorkspaceMemory.restoreLayout(of: workspace)
+            if normalizing { workspace.normalizeContainers() }
         }
     }
 
-    func testWindowsComeBackInTheirOrderWhicheverAppAnswersFirst() {
+    private let nested: (WorkspaceMemoryTest) -> FrozenContainer = { test in
+        test.container(.h, weight: 1, test.w(1), .container(test.container(.v, test.w(2), test.w(3))), test.w(4))
+    }
+
+    func testATreeComesBackWhicheverAppAnswersFirst() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        for order: [UInt32] in [[1, 2, 3, 4], [4, 3, 2, 1], [3, 1, 4, 2], [2, 4, 1, 3]] {
+            writeTree(nested(self), windows: [1, 2, 3, 4])
+            let workspace = Workspace.get(byName: "A")
+            workspace.rootTilingContainer.unbindFromParent()
+
+            try await arrive(order, on: workspace)
+
+            assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([
+                .window(1), .v_tiles([.window(2), .window(3)]), .window(4),
+            ]), additionalMsg: "arrival order \(order)")
+        }
+    }
+
+    /// Windows that answer in different passes have a normalization between them, which flattens a
+    /// container with one window in it, and promotes one that is alone at the top to be the root.
+    func testATreeSurvivesBeingFlattenedBetweenArrivals() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        for order: [UInt32] in [[2, 3, 1, 4], [3, 4, 1, 2], [2, 1, 3, 4]] {
+            writeTree(nested(self), windows: [1, 2, 3, 4])
+            let workspace = Workspace.get(byName: "A")
+            workspace.rootTilingContainer.unbindFromParent()
+
+            try await arrive(order, on: workspace, normalizing: true)
+
+            assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([
+                .window(1), .v_tiles([.window(2), .window(3)]), .window(4),
+            ]), additionalMsg: "arrival order \(order)")
+        }
+    }
+
+    func testAWindowThatNeverComesBackLeavesNoGap() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.h, weight: 1, w(1), .container(container(.v, w(2), w(3))), w(4)), windows: [1, 2, 3, 4])
+        let workspace = Workspace.get(byName: "A")
+
+        try await arrive([4, 1], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .window(4)]))
+    }
+
+    func testAWorkspaceKeepsItsLayoutAndOrientation() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.v, layout: .accordion, weight: 1, w(1), w(2)), windows: [1, 2])
+        let workspace = Workspace.get(byName: "A")
+
+        try await arrive([2, 1], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .v_accordion([.window(1), .window(2)]))
+    }
+
+    func testWindowsComeBackAtTheirSizes() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.h, weight: 1, w(1, 1584), w(2, 941), w(3, 1317)), windows: [1, 2, 3])
+        let workspace = Workspace.get(byName: "A")
+
+        try await arrive([3, 2, 1], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.children.map { $0.getWeight(.h) }, [1584, 941, 1317])
+    }
+
+    /// Something the tree doesn't name, like a window that opened during the restart, stays and is tiled.
+    func testAWindowNotInTheTreeIsKept() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.h, weight: 1, w(1), w(3)), windows: [1, 3])
+        let workspace = Workspace.get(byName: "A")
+
+        try await arrive([3, 9, 1], on: workspace)
+
+        let root = workspace.rootTilingContainer
+        assertEquals(Set(root.allLeafWindowsRecursive.map(\.windowId)), [1, 3, 9])
+        let order = root.allLeafWindowsRecursive.map(\.windowId).filter { $0 != 9 }
+        assertEquals(order, [1, 3])
+    }
+
+    /// A window that has gone elsewhere since isn't pulled back.
+    func testRestoringDoesNotReachIntoOtherWorkspaces() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.h, weight: 1, w(1), w(2)), windows: [1, 2])
+        let elsewhere = Workspace.get(byName: "elsewhere")
+        let moved = TestWindow.new(id: 2, parent: elsewhere.rootTilingContainer)
+
+        try await arrive([1], on: Workspace.get(byName: "A"))
+
+        XCTAssertTrue(moved.nodeWorkspace === elsewhere)
+    }
+
+    /// Once the user has changed a layout, a late arrival must not undo it.
+    func testALateWindowDoesNotUndoWhatTheUserDid() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        writeTree(container(.h, weight: 1, w(1), w(2), w(3)), windows: [1, 2, 3])
+        let workspace = Workspace.get(byName: "A")
+        try await arrive([3, 1], on: workspace)
+
+        WorkspaceMemory.stopRestoringLayouts()
+        swapWindows(Window.get(byId: 1)!, Window.get(byId: 3)!) // what they did
+        try await arrive([2], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId), [3, 1, 2])
+    }
+
+    /// End to end: what `save` writes is what a restart rebuilds.
+    func testWhatIsSavedIsWhatComesBack() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        let root = workspace.rootTilingContainer
+        TestWindow.new(id: 1, parent: root)
+        let accordion = TilingContainer(parent: root, adaptiveWeight: 300, .v, .accordion, index: INDEX_BIND_LAST)
+        TestWindow.new(id: 2, parent: accordion)
+        TestWindow.new(id: 3, parent: accordion)
+        WorkspaceMemory.save()
+        WorkspaceMemory.waitForWrites()
+
+        root.unbindFromParent()
+        WorkspaceMemory.load()
+        try await arrive([3, 2, 1], on: workspace)
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([
+            .window(1), .v_accordion([.window(2), .window(3)]),
+        ]))
+        assertEquals(workspace.rootTilingContainer.children[1].getWeight(.h), 300)
+    }
+
+    func testAFileFromBeforeTreesStillLoads() throws {
+        let json = #"{"session":"\#(WorkspaceMemory.session())","windows":{"42":{"workspace":"A","bundleId":"b"}},"workspaceMonitors":{}}"#
+        try Data(json.utf8).write(to: WorkspaceMemory.fileUrl)
+        WorkspaceMemory.load()
+        assertEquals(WorkspaceMemory.workspace(forWindowId: 42, bundleId: "b"), "A")
+    }
+
+    /// 1.3.1 wrote order and size per window. The update from it should keep both.
+    func testAFileFrom131KeepsOrderAndSizes() async throws {
         setUpWorkspacesOnTheseMonitors()
         write(state(session: WorkspaceMemory.session(), windows: [
-            "1": .init(workspace: "A", bundleId: "b", index: 0),
-            "2": .init(workspace: "A", bundleId: "b", index: 1),
-            "3": .init(workspace: "A", bundleId: "b", index: 2),
+            "1": .init(workspace: "A", bundleId: "b", index: 0, weight: 2267),
+            "2": .init(workspace: "A", bundleId: "b", index: 1, weight: 1426),
+            "3": .init(workspace: "A", bundleId: "b", index: 2, weight: 1426),
         ]))
         WorkspaceMemory.load()
         let workspace = Workspace.get(byName: "A")
 
-        register([3, 1, 2], on: workspace)
+        try await arrive([3, 1, 2], on: workspace)
 
-        assertEquals(workspace.rootTilingContainer.children.map { ($0 as! Window).windowId }, [1, 2, 3])
-    }
-
-    func testAWindowNotInTheFileDoesNotDisturbTheOrder() {
-        setUpWorkspacesOnTheseMonitors()
-        write(state(session: WorkspaceMemory.session(), windows: [
-            "1": .init(workspace: "A", bundleId: "b", index: 0),
-            "3": .init(workspace: "A", bundleId: "b", index: 1),
-        ]))
-        WorkspaceMemory.load()
-        let workspace = Workspace.get(byName: "A")
-
-        register([3, 9, 1], on: workspace)
-
-        assertEquals(workspace.rootTilingContainer.children.map { ($0 as! Window).windowId }, [1, 3, 9])
-    }
-
-    func testAWindowComesBackAtItsSize() {
-        setUpWorkspacesOnTheseMonitors()
-        write(state(session: WorkspaceMemory.session(), windows: ["1": .init(workspace: "A", bundleId: "b", index: 0, weight: 2267)]))
-        WorkspaceMemory.load()
-        let workspace = Workspace.get(byName: "A")
-        let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-
-        assertEquals(WorkspaceMemory.restoredBinding(of: 1, on: workspace, default: fallback).adaptiveWeight, 2267)
+        let root = workspace.rootTilingContainer
+        assertEquals(root.allLeafWindowsRecursive.map(\.windowId), [1, 2, 3])
+        assertEquals(root.children.map { $0.getWeight(root.orientation) }, [2267, 1426, 1426])
     }
 
     func testAFloatingWindowComesBackFloating() {
@@ -740,33 +869,65 @@ final class WorkspaceMemoryTest: XCTestCase {
     }
 
     /// Whatever it was before, a window that looks like a popup now stays one until proven otherwise.
-    func testAPopupIsNotPutBackInTheTiles() {
+    func testAPopupIsNotMadeFloating() {
         setUpWorkspacesOnTheseMonitors()
-        write(state(session: WorkspaceMemory.session(), windows: ["1": .init(workspace: "A", bundleId: "b", index: 0)]))
+        write(state(session: WorkspaceMemory.session(), windows: ["1": .init(workspace: "A", bundleId: "b", isFloating: true)]))
         WorkspaceMemory.load()
         let popup = BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
 
         XCTAssertTrue(WorkspaceMemory.restoredBinding(of: 1, on: Workspace.get(byName: "A"), default: popup).parent === macosPopupWindowsContainer)
     }
 
-    /// A file from before this was added has none of the three, and a window goes where it always went.
-    func testAnOlderFileLeavesTheWindowWhereItWouldHaveGone() throws {
+    func testAFullscreenWindowComesBackFullscreen() {
         setUpWorkspacesOnTheseMonitors()
-        let json = #"{"session":"\#(WorkspaceMemory.session())","windows":{"42":{"workspace":"A","bundleId":"b"}},"workspaceMonitors":{}}"#
-        try Data(json.utf8).write(to: WorkspaceMemory.fileUrl)
+        write(state(session: WorkspaceMemory.session(), windows: [
+            "1": .init(workspace: "A", bundleId: "b", isFullscreen: true, noOuterGapsInFullscreen: true),
+        ]))
         WorkspaceMemory.load()
-        let workspace = Workspace.get(byName: "A")
-        let fallback = BindingData(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: 7)
+        let window = TestWindow.new(id: 1, parent: Workspace.get(byName: "A").rootTilingContainer)
 
-        assertEquals(WorkspaceMemory.restoredBinding(of: 42, on: workspace, default: fallback).index, 7)
+        WorkspaceMemory.restoreState(of: window)
+
+        XCTAssertTrue(window.isFullscreen)
+        XCTAssertTrue(window.noOuterGapsInFullscreen)
     }
 
     /// Layout re-splits weights on every pass and they wobble in their last bits. If that counted as a
     /// change, the file would be rewritten on every refresh.
     func testAWeightOnlyWobblingIsNotAChange() {
-        let entry = WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 0, weight: 1426.5)
-        XCTAssertEqual(entry, WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 0, weight: 1426.5000000001))
-        XCTAssertNotEqual(entry, WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 0, weight: 1500))
-        XCTAssertNotEqual(entry, WorkspaceMemory.WindowEntry(workspace: "A", bundleId: "b", index: 1, weight: 1426.5))
+        XCTAssertEqual(FrozenWindow(id: 1, weight: 1426.5), FrozenWindow(id: 1, weight: 1426.5000000001))
+        XCTAssertNotEqual(FrozenWindow(id: 1, weight: 1426.5), FrozenWindow(id: 1, weight: 1500))
+        XCTAssertEqual(
+            container(.h, w(1, 1426.5)),
+            container(.h, w(1, 1426.5000000001)),
+        )
+        XCTAssertNotEqual(container(.h, w(1)), container(.v, w(1)))
+        XCTAssertNotEqual(container(.h, w(1)), container(.h, layout: .accordion, w(1)))
+    }
+
+    /// A minimized window isn't in its app's window list, so nothing registers it until it's unminimized.
+    /// Its entry has to outlive that, or a second restart loses its place.
+    func testAWindowThatHasNotComeBackKeepsItsEntryWhileItExists() {
+        write(state(session: WorkspaceMemory.session(), windows: [
+            "1": .init(workspace: "A", bundleId: "b"),
+            "2": .init(workspace: "B", bundleId: "b"),
+        ]))
+        WorkspaceMemory.load()
+        _ = WorkspaceMemory.restoredWorkspace(forWindowId: 1, bundleId: "b") // came back: the snapshot has it now
+
+        assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1, 2]), ["2": .init(workspace: "B", bundleId: "b")])
+        assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1]), [:]) // closed, so gone for good
+    }
+
+    /// The other half of the quit fix: a dragged floating window, on a monitor that isn't the first.
+    func testDraggingAFloatingWindowToAnotherMonitorTakesItThere() async throws {
+        setUpWorkspacesOnTheseMonitors()
+        let left = testMonitors[0].activeWorkspace
+        let right = testMonitors[1].activeWorkspace
+        let window = LayoutTestWindow.new(id: 1, parent: left, axRect: Rect(topLeftX: 3900, topLeftY: 100, width: 400, height: 300))
+
+        try await moveWithMouse(window)
+
+        XCTAssertTrue(window.parent === right)
     }
 }

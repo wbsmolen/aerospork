@@ -41,7 +41,8 @@ shell itself anyway. Do not rely on it to contain anything; getting around it is
 Reports about any of the above are in scope. So are signing, notarization and update-channel
 problems: updates are verified against an EdDSA public key in the app's Info.plist before they are
 unpacked, and a way to make it accept an update signed by another key would be a serious finding. The
-feed itself is not signed; it is served over HTTPS, and it can only offer what that key has signed.
+feed is signed with the same key and a build refuses one that isn't, so whoever can serve the feed
+still can't offer an old version.
 
 ## Out of scope
 

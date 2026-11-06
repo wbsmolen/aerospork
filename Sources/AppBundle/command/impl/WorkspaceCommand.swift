@@ -5,7 +5,7 @@ import Foundation
 struct WorkspaceCommand: Command {
     let args: WorkspaceCmdArgs
 
-    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool { // todo refactor
+    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         let focusedWs = target.workspace
         let workspaceName: String

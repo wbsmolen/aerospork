@@ -7,6 +7,9 @@ struct MoveMouseCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let mouse = mouseLocation
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
+        // What the commands before this one in a sequence did hasn't been laid out yet, and the window's
+        // rect comes from layout. `move left; move-mouse window-lazy-center` went to the old spot.
+        if args.mouseTarget.val == .windowLazyCenter || args.mouseTarget.val == .windowForceCenter { try await layoutWorkspaces() }
         switch args.mouseTarget.val {
             case .windowLazyCenter:
                 guard let rect = try await windowSubjectRectOrReportError(target, io) else { return false }
@@ -56,8 +59,6 @@ private func moveMouse(_ io: CmdIo, _ point: CGPoint) -> Bool {
 /// except when switching to an empty workspace.
 @MainActor
 func windowSubjectRectOrReportError(_ target: LiveFocus, _ io: CmdIo) async throws -> Rect? {
-    // todo bug it's bad that we operate on the "ax physical" state directly. command seq won't work correctly
-    //      focus <direction> command has the similar problem
     let monitorRect = target.workspace.workspaceMonitor.rect
     guard let window: Window = target.windowOrNil else {
         return monitorRect

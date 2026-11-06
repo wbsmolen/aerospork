@@ -90,4 +90,77 @@ final class MinimumSizeTest: XCTestCase {
         _ = try await FlattenWorkspaceTreeCommand(args: FlattenWorkspaceTreeCmdArgs(rawArgs: [])).run(.defaultEnv, .emptyStdin)
         assertNil(window.observedMinSize)
     }
+
+    /// A child gives up twice the padding to the ones peeking past it, so its tile has to allow for that.
+    func testAnAccordionsMinimumIncludesItsPadding() async throws {
+        config.accordionPadding = 30
+        let root = focus.workspace.rootTilingContainer
+        let other = LayoutTestWindow.new(id: 0, parent: root)
+        let accordion = TilingContainer(parent: root, adaptiveWeight: 1, .h, .accordion, index: INDEX_BIND_LAST)
+        let wide = LayoutTestWindow.new(id: 1, parent: accordion)
+        LayoutTestWindow.new(id: 2, parent: accordion)
+        _ = wide.noteRefusedSize(asked: CGSize(width: 300, height: 1080), got: CGSize(width: 1000, height: 1080))
+
+        try await focus.workspace.layoutWorkspace()
+
+        assertEquals(other.singleAppliedFrame().width, 1920 - 1060)
+    }
+
+    func testAChangedRowAsksAgain() async throws {
+        let workspace = focus.workspace
+        let root = workspace.rootTilingContainer
+        let window = LayoutTestWindow.new(id: 0, parent: root)
+        LayoutTestWindow.new(id: 1, parent: root)
+        _ = window.noteRefusedSize(asked: CGSize(width: 300, height: 1080), got: CGSize(width: 1000, height: 1080))
+
+        try await workspace.layoutWorkspace()
+        try await workspace.layoutWorkspace()
+        XCTAssertNotNil(window.observedMinSize, "the same row laid out again has no reason to ask")
+
+        LayoutTestWindow.new(id: 2, parent: root)
+        try await workspace.layoutWorkspace()
+        assertNil(window.observedMinSize)
+    }
+
+    func testAReorderedRowDoesNotAskAgain() async throws {
+        let workspace = focus.workspace
+        let root = workspace.rootTilingContainer
+        let window = LayoutTestWindow.new(id: 0, parent: root)
+        let other = LayoutTestWindow.new(id: 1, parent: root)
+        _ = window.noteRefusedSize(asked: CGSize(width: 300, height: 1080), got: CGSize(width: 1000, height: 1080))
+        try await workspace.layoutWorkspace()
+
+        swapWindows(window, other)
+        try await workspace.layoutWorkspace()
+
+        XCTAssertNotNil(window.observedMinSize)
+    }
+
+    func testDraggingAnEdgeTakesFromTheWindowsOnThatSide() async throws {
+        let workspace = focus.workspace
+        let root = workspace.rootTilingContainer
+        let windows = (0 ..< 3).map { LayoutTestWindow.new(id: UInt32($0), parent: root) }
+        try await workspace.layoutWorkspace()
+        defer { currentlyManipulatedWithMouseWindowId = nil }
+
+        windows[2].axRect = Rect(topLeftX: 1280 - 300, topLeftY: 0, width: 940, height: 1080)
+        try await resizeWithMouse(windows[2])
+
+        assertEquals(windows.map { $0.getWeight(.h) }, [640 - 150, 640 - 150, 940])
+        assertEquals(currentlyManipulatedWithMouseWindowId, 2)
+    }
+
+    func testDraggingBelowALearnedMinimumLowersIt() async throws {
+        let workspace = focus.workspace
+        let root = workspace.rootTilingContainer
+        let windows = (0 ..< 2).map { LayoutTestWindow.new(id: UInt32($0), parent: root) }
+        _ = windows[1].noteRefusedSize(asked: CGSize(width: 300, height: 1080), got: CGSize(width: 1200, height: 1080))
+        try await workspace.layoutWorkspace()
+        defer { currentlyManipulatedWithMouseWindowId = nil }
+
+        windows[1].axRect = Rect(topLeftX: 1320, topLeftY: 0, width: 600, height: 1080)
+        try await resizeWithMouse(windows[1])
+
+        assertEquals(windows[1].observedMinSize, CGSize(width: 600, height: 0))
+    }
 }

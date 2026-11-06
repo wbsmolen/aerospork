@@ -2,7 +2,7 @@ import AppKit
 import Common
 
 extension Workspace {
-    @MainActor // todo can be dropped in future Swift versions?
+    @MainActor
     func layoutWorkspace() async throws {
         if isEffectivelyEmpty { return }
         let rect = workspaceMonitor.visibleRectPaddedByOuterGaps
@@ -24,7 +24,7 @@ extension Workspace {
 }
 
 extension TreeNode {
-    @MainActor // todo can be dropped in future Swift versions?
+    @MainActor
     fileprivate func layoutRecursive(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         let physicalRect = Rect(topLeftX: point.x, topLeftY: point.y, width: width, height: height)
         switch nodeCases {
@@ -83,7 +83,7 @@ private struct LayoutContext {
 }
 
 extension Window {
-    @MainActor // todo can be dropped in future Swift versions?
+    @MainActor
     fileprivate func layoutFloatingWindow(_ context: LayoutContext) async throws {
         let workspace = context.workspace
         let rect = try await getAxRect()
@@ -105,7 +105,7 @@ extension Window {
         }
     }
 
-    @MainActor // todo can be dropped in future Swift versions?
+    @MainActor
     fileprivate func layoutFullscreen(_ context: LayoutContext) {
         let monitorRect = noOuterGapsInFullscreen
             ? context.workspace.workspaceMonitor.visibleRect
@@ -117,7 +117,7 @@ extension Window {
 /// `point`, moved just enough that a window of `size` there stays on the monitor. Only for a window
 /// bigger than its tile: grown from its top-left it would hang off the edge -- onto the next monitor,
 /// which is another workspace's screen.
-private func keptInside(_ monitor: Rect, _ point: CGPoint, _ size: CGSize) -> CGPoint {
+func keptInside(_ monitor: Rect, _ point: CGPoint, _ size: CGSize) -> CGPoint {
     CGPoint(
         x: max(monitor.minX, min(point.x, monitor.maxX - size.width)),
         y: max(monitor.minY, min(point.y, monitor.maxY - size.height)),
@@ -156,10 +156,12 @@ extension TreeNode {
             case .tilingContainer(let container):
                 let mins = container.children.map { $0.minimumSize(orientation, innerGap: innerGap) }
                 if mins.allSatisfy({ $0 == 0 }) { return 0 }
-                // ponytail: accordion padding isn't counted, so a min-size window in one can still overlap by 2x padding.
-                return container.layout == .tiles && container.orientation == orientation
-                    ? mins.reduce(0, +) + innerGap * CGFloat(mins.count - 1)
-                    : mins.max() ?? 0
+                if container.orientation != orientation { return mins.max() ?? 0 }
+                return switch container.layout {
+                    case .tiles: mins.reduce(0, +) + innerGap * CGFloat(mins.count - 1)
+                    // A child gives up to twice the padding to the ones peeking out past it.
+                    case .accordion: (mins.max() ?? 0) + (mins.count > 1 ? 2 * CGFloat(config.accordionPadding) : 0)
+                }
             default:
                 return 0
         }
@@ -167,12 +169,19 @@ extension TreeNode {
 }
 
 extension TilingContainer {
-    @MainActor // todo can be dropped in future Swift versions?
+    @MainActor
     fileprivate func layoutTiles(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         var point = point
         var virtualPoint = virtual.topLeftCorner
 
         if children.isEmpty { return }
+        // The row changed, so its windows are being re-split anyway. That makes it the moment to ask again
+        // for less than a minimum on record, which may have come down since.
+        let members = Set(children.map { ObjectIdentifier($0) })
+        if let lastLaidOutChildren, lastLaidOutChildren != members {
+            for case let window as Window in children { window.observedMinSize = nil }
+        }
+        lastLaidOutChildren = members
         // Weights are denominated in points, so whenever the container's real size stops matching the
         // sum of its children's weights -- a different monitor, a new sibling, a workspace moved --
         // the children have to be re-denominated before they can be rendered. Do it *proportionally*:
@@ -233,7 +242,7 @@ extension TilingContainer {
         }
     }
 
-    @MainActor // todo can be dropped in future Swift versions?
+    @MainActor
     fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         guard let mruIndex: Int = mostRecentChild?.ownIndex else { return }
         // Inner gaps are deliberately ignored in accordion. Accordion children all occupy (nearly)

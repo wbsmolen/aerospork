@@ -329,6 +329,10 @@ if /usr/libexec/PlistBuddy -c "Print :SUEnableAutomaticChecks" .release/AeroSpor
     echo "!!! SUEnableAutomaticChecks is set in Info.plist: Sparkle will never ask to check for updates !!!"
     exit 1
 fi
+if test "$(/usr/libexec/PlistBuddy -c "Print :SURequireSignedFeed" .release/AeroSpork.app/Contents/Info.plist 2> /dev/null)" != "true"; then
+    echo "!!! SURequireSignedFeed is not on in Info.plist: anyone who can serve the feed can offer an old version !!!"
+    exit 1
+fi
 if test "$(/usr/libexec/PlistBuddy -c "Print :SUVerifyUpdateBeforeExtraction" .release/AeroSpork.app/Contents/Info.plist 2> /dev/null)" != true; then
     echo "!!! SUVerifyUpdateBeforeExtraction is not on in Info.plist: updates get unpacked before they are verified !!!"
     exit 1

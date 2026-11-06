@@ -4,7 +4,7 @@ import Common
 struct MoveCommand: Command {
     let args: MoveCmdArgs
 
-    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
+    func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         let direction = args.direction.val
 
         guard let target = args.resolveTargetOrReportError(env, io) else {
@@ -31,14 +31,48 @@ struct MoveCommand: Command {
                 } else {
                     return moveOut(window: currentWindow, direction: direction, io, args, env)
                 }
-            case .workspace: // floating window
-                return io.err("moving floating windows isn't yet supported") // todo
+            case .workspace(let workspace): // floating window
+                return try await moveFloating(currentWindow, on: workspace, direction, args, env, io)
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
                 return io.err(moveOutMacosUnconventionalWindow)
             case .macosPopupWindowsContainer:
                 return false // Impossible
         }
     }
+}
+
+/// How far `move` takes a floating window.
+private let floatingMoveStep: CGFloat = 50
+
+/// Keeps it on its monitor, which is another workspace's screen past the edge. At the edge
+/// `--boundaries all-monitors-outer-frame` carries it over, and otherwise it stays put.
+@MainActor private func moveFloating(
+    _ window: Window,
+    on workspace: Workspace,
+    _ direction: CardinalDirection,
+    _ args: MoveCmdArgs,
+    _ env: CmdEnv,
+    _ io: CmdIo,
+) async throws -> Bool {
+    guard workspace.isVisible else { return io.err(floatingWindowIsParked) }
+    guard let rect = try await window.getAxRect() else { return false }
+    let step = direction.isPositive ? floatingMoveStep : -floatingMoveStep
+    let moved = rect.topLeftCorner.addingOffset(direction.orientation, step)
+    let target = keptInside(workspace.workspaceMonitor.visibleRect, moved, rect.size)
+    if target != rect.topLeftCorner {
+        window.setAxTopLeftCorner(target)
+        return true
+    }
+    if args.boundaries == .allMonitorsOuterFrame,
+       let (monitors, index) = window.nodeMonitor?.findRelativeMonitor(inDirection: direction),
+       monitors.getOrNil(atIndex: index) != nil
+    {
+        let moveNodeToMonitorArgs = MoveNodeToMonitorCmdArgs(target: .direction(direction))
+            .copy(\.focusFollowsWindow, true)
+            .copy(\.windowId, args.windowId)
+        return MoveNodeToMonitorCommand(args: moveNodeToMonitorArgs).run(env, io)
+    }
+    return args.boundariesAction != .fail
 }
 
 @MainActor private func hitWorkspaceBoundaries(

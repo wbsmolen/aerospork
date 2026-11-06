@@ -5,7 +5,6 @@ struct ExecAndForgetCommand: Command {
     let args: ExecAndForgetCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
-        // todo shall exec-and-forget fork exec session?
         // It doesn't throw if exit code is non-zero
         Result { try execAndForgetProcess(args.bashScript, env).run() }.isSuccess
     }

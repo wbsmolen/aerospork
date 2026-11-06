@@ -7,7 +7,7 @@ import Common
 let windowIdEnvVar = "AEROSPORK_WINDOW_ID"
 let workspaceEnvVar = "AEROSPORK_WORKSPACE"
 
-struct CmdEnv: ConvenienceCopyable { // todo forward env from cli to server
+struct CmdEnv: ConvenienceCopyable {
     var windowId: UInt32?
     var workspaceName: String?
     var pwd: String?

@@ -9,6 +9,12 @@ protocol Command: AeroAny, Equatable, Sendable {
 }
 
 extension Command {
+    /// Only reads. The commands a status bar runs all the time.
+    var isQuery: Bool {
+        let kind = T.info.kind
+        return kind.rawValue.hasPrefix("list-") || kind == .config || kind == .debugWindows
+    }
+
     static func == (lhs: Self, rhs: Self) -> Bool {
         return lhs.args.equals(rhs.args)
     }

@@ -16,7 +16,7 @@ extension Thread {
     }
 
     @MainActor
-    func runInLoop<T>(_ body: @Sendable @escaping (RunLoopJob) throws -> T) async throws -> T { // todo try to convert to typed throws
+    func runInLoop<T>(_ body: @Sendable @escaping (RunLoopJob) throws -> T) async throws -> T {
         try checkCancellation()
         let job = RunLoopJob()
         return try await withTaskCancellationHandler {

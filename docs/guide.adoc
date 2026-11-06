@@ -542,6 +542,10 @@ of the floating window.
 
 That removes the need for a separate binding to focus floating windows.
 
+xref:commands.adoc#move[move] and xref:commands.adoc#resize[resize] work on floating windows too, and
+keep them on their monitor. Each monitor shows only its own workspace, so past its edge a window would be
+on another workspace's screen.
+
 [#emulation-of-virtual-workspaces]
 == Emulation of virtual workspaces
 
@@ -764,6 +768,8 @@ a|
 |===
 
 * `if.during-aerospork-startup = true` is useful if you want to do the initial app arrangement only on startup.
+This is the only kind of callback that runs on a window that was already open when AeroSpork restarted: that
+window has been through its callbacks, and running them again would undo anything you moved by hand since.
 
 * `if.during-aerospork-startup = false` is useful if you want to relaunch AeroSpork, but the callback has side effects that you don’t want to run on every relaunch.
 (e.g. the callback opens new windows)

@@ -1,10 +1,12 @@
 import AppKit
 import Common
 
-class TilingContainer: TreeNode, NonLeafTreeNodeObject { // todo consider renaming to GenericContainer
+class TilingContainer: TreeNode, NonLeafTreeNodeObject {
     fileprivate var _orientation: Orientation
     var orientation: Orientation { _orientation }
     var layout: Layout
+    /// See `layoutTiles`.
+    var lastLaidOutChildren: Set<ObjectIdentifier>?
 
     @MainActor
     init(parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, _ orientation: Orientation, _ layout: Layout, index: Int) {
@@ -55,7 +57,7 @@ extension TilingContainer {
     }
 }
 
-enum Layout: String {
+enum Layout: String, Codable {
     case tiles
     case accordion
 }

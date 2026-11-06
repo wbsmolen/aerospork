@@ -33,7 +33,8 @@ The second argument controls how much the size changes
 * If the `<number>` is prefixed with `-` then the dimension is decreased
 * If the `<number>` is prefixed with neither `+` nor `-` then the command changes the absolute value of the dimension
 
-`resize` on a floating window is not supported yet.
+On a floating window, `smart` changes width and `smart-opposite` changes height, since it has no parent to
+take an orientation from. The window stays on its monitor, and moves back onto it if it grows past the edge.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
