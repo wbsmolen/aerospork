@@ -2,6 +2,16 @@
 
 Notable changes to AeroSpork, newest first. This file starts at 1.2.0; notes for earlier releases are on the [releases page](https://github.com/wbsmolen/aerospork/releases).
 
+## 1.3.4 (2026-11-06)
+
+A window with native tabs now takes one tile, however many tabs it has.
+
+### Fixes
+
+- A window with native tabs takes one tile, however many tabs it has. Each tab used to take a tile of its own, so Finder, and any app using the macOS tab bar, opened a blank gap for every tab behind the one showing. The tile now keeps its place and size as you open, switch and close tabs, and a tab you move out to its own window gets its own tile.
+- A new tab goes where its window is, and doesn't run window rules, so a rule like `"com.apple.finder" = 'move-node-to-workspace 3'` can't pull one tab away from the rest.
+- Finder windows are tiled as soon as they open, instead of only once they have been focused.
+
 ## 1.3.3 (2026-11-06)
 
 A window macOS hides now comes back to its own place, and Settings is safer and easier to read.

@@ -87,6 +87,8 @@ class Window: TreeNode, Hashable {
     /// Drawn fully transparent by WindowServer; see `transparentWindowIds`. A member for the same reason.
     @MainActor
     var isTransparent: Bool { transparentWindowIds.contains(windowId) }
+    @MainActor
+    var isBackgroundTab: Bool { backgroundTabs[windowId] != nil }
     var isHiddenInCorner: Bool { die("Not implemented") }
     @MainActor
     func nativeFocus() { die("Not implemented") }
@@ -130,10 +132,11 @@ extension Window {
         bind(to: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     }
 
-    /// Into a container macOS decides about. If it was tiled, it keeps its place to come back to.
+    /// Into a container macOS decides about. If it was tiled, it keeps its place to come back to, unless it's a
+    /// background tab, whose place is wherever its group is by the time it's selected.
     @MainActor
     func leaveTilesForMacos(_ container: NonLeafTreeNodeObject, adaptiveWeight: CGFloat) {
-        (parent as? TilingContainer)?.noteAway(self)
+        if !isBackgroundTab { (parent as? TilingContainer)?.noteAway(self) }
         bind(to: container, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
     }
 

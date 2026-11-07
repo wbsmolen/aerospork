@@ -182,8 +182,20 @@ private func refresh() async throws {
         }
     }
 
+    // Only now. A selected tab that died above handed its tile on by what this said last time.
+    backgroundTabs = currentBackgroundTabs()
+
     // Garbage collect workspaces after apps, because workspaces contain apps.
     Workspace.garbageCollectUnusedWorkspaces()
+}
+
+@MainActor
+private func currentBackgroundTabs() -> [UInt32: UInt32] {
+    MacApp.allAppsMap.values.reduce(into: [:]) { $0.merge($1.backgroundTabsSeen) { first, _ in first } }.filter { tab, selected in
+        // A new window isn't registered while the mouse is down, and a tab holding the tile keeps it until
+        // whatever replaces it is. Others are out of the tiles already and stay out.
+        MacWindow.allWindowsMap[tab] != nil && (MacWindow.allWindowsMap[selected] != nil || MacWindow.allWindowsMap[tab]?.layoutReason != .standard)
+    }
 }
 
 func refreshObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: UnsafeMutableRawPointer?) {
@@ -276,8 +288,9 @@ func layoutWorkspaces() async throws {
         let monitor = workspace.workspaceMonitor
         let others = monitors.map(\.rect).filter { $0.topLeftCorner != monitor.rect.topLeftCorner }
         // Not a native fullscreen window: macOS ignores the move, so its frame never matches and it
-        // would be rewritten on every refresh, for as long as it stays fullscreen.
-        for window in workspace.allLeafWindowsRecursive where !(window.parent is MacosFullscreenWindowsContainer) {
+        // would be rewritten on every refresh, for as long as it stays fullscreen. Nor a background tab,
+        // which gets the group's frame back when it's selected, wherever it was put in the meantime.
+        for window in workspace.allLeafWindowsRecursive where !(window.parent is MacosFullscreenWindowsContainer) && !window.isBackgroundTab {
             try await (window as? MacWindow)?.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
         }
     }

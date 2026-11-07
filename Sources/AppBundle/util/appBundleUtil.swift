@@ -129,7 +129,7 @@ func monitorToRestore(_ window: Window) async throws -> Monitor {
 @MainActor
 private func makeAllWindowsVisibleAndRestoreSize() async {
     // Make all windows fullscreen before Quit
-    for (_, window) in MacWindow.allWindowsMap {
+    for (_, window) in MacWindow.allWindowsMap where !window.isBackgroundTab {
         // One at a time: an app that fails to answer must not leave every later window off screen.
         do {
             // A floating window is already where the user put it, so a restart keeps it there. If its

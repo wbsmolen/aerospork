@@ -55,12 +55,18 @@ final class MacWindow: Window {
         // the rest runs to the end even if this refresh is cancelled; see `shieldedFromCancellation`.
         try await shieldedFromCancellation {
             try await debugWindowsIfRecording(window)
-            if isRemembered, window.parent is TilingContainer { try await WorkspaceMemory.restoreLayout(of: workspace) }
+            // A tab beside known tabs is no new window, wherever a rule or the file would put one. It replaces
+            // the tab it opened from here and now, before any layout: `syncFocusFromMacOs` registers windows, and
+            // some refreshes lay out straight after that, which would squeeze the row for a frame.
+            let tabsBeside = try await macApp.knownTabsBeside(windowId)
+            if let tab = tabsBeside.compactMap({ MacWindow.allWindowsMap[$0] }).first(where: \.holdsTabPlace) { window.takePlace(of: tab) }
+            let isNewTab = !tabsBeside.isEmpty
+            if isRemembered, !isNewTab, window.parent is TilingContainer { try await WorkspaceMemory.restoreLayout(of: workspace) }
             if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
                 // A rule runs once, when a window first appears, and this one appeared before the restart.
                 // Running it again would undo a move made by hand since. `during-aerospork-startup = true`
                 // is a request to run at startup, so those still do.
-                try await tryOnWindowDetected(window, onlyStartupRules: isRemembered)
+                if !isNewTab { try await tryOnWindowDetected(window, onlyStartupRules: isRemembered) }
             }
         }
         // A window that arrives looking like a popup is re-checked by `validateStillPopups` -- but only
@@ -119,6 +125,7 @@ final class MacWindow: Window {
         }
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded(window: self) }
         for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { $0 == windowId } }
+        passTabPlaceOn()
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
         let focus = focus

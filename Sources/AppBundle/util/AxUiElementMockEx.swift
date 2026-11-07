@@ -139,6 +139,13 @@ extension AxUiElementMock {
             appBundleId == "com.apple.finder" && subrole == "Quick Look" // Finder preview (hit space) is a floating window
     }
 
+    /// The titles in this window's tab bar. Only the selected tab of a native tab group has one, and it can
+    /// have one with a single tab in it.
+    var tabTitles: [String]? {
+        guard let bar = get(Ax.childrenAttr)?.first(where: { $0.get(Ax.roleAttr) == kAXTabGroupRole }) else { return nil }
+        return bar.get(Ax.tabsAttr)?.map { $0.get(Ax.titleAttr) ?? "" }
+    }
+
     func getWindowType(axApp: AxUiElementMock, appBundleId: String?) -> AxUiElementWindowType {
         .new(
             isWindow: isWindowHeuristic(axApp: axApp, appBundleId: appBundleId),

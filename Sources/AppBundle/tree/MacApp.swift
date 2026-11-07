@@ -43,6 +43,10 @@ final class MacApp: AbstractApp {
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
     /*conforms*/ var bundlePath: String? { nsApp.bundleURL?.path }
 
+    /// This app's background tabs, each with the selected tab of its group, as of the last refresh. See
+    /// `backgroundTabs`, which `refresh` builds from these once it has collected the dead.
+    @MainActor fileprivate(set) var backgroundTabsSeen: [UInt32: UInt32] = [:]
+
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     /// Registrations currently in flight. Not private: the tests drive the park/unpark paths of
     /// `awaitRegistration` through it, without needing a real app.
@@ -166,7 +170,8 @@ final class MacApp: AbstractApp {
                 let axApp = AXUIElementCreateApplication(nsApp.processIdentifier)
                 _ = AXUIElementSetMessagingTimeout(axApp, axMessagingTimeout)
                 let observer = AXObserver.new(nsApp.processIdentifier, axNotified)
-                let subscription = observer.flatMap { AxSubscription.subscribe($0, axApp, [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification]) }
+                // Main as well as focused: selecting a native tab changes the main window and not the focused one.
+                let subscription = observer.flatMap { AxSubscription.subscribe($0, axApp, [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification]) }
                 let app: MacApp?
                 if let observer, let subscription {
                     CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
@@ -364,11 +369,18 @@ final class MacApp: AbstractApp {
 
     @MainActor
     func getAxRect(_ windowId: UInt32) async throws -> Rect? {
-        try await withWindow(windowId) { window, job in
-            guard let topLeftCorner = window.get(Ax.topLeftCornerAttr) else { return nil }
-            guard let size = window.get(Ax.sizeAttr) else { return nil }
-            return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
-        }
+        try await withWindow(windowId) { window, job in axRect(window) }
+    }
+
+    /// The known tabs beside this window, if it's a tab beside any, rather than a new window. They're the ones off
+    /// the list, which also tells it apart from a group first seen at startup, when no tab of it is known yet.
+    @MainActor
+    func knownTabsBeside(_ windowId: UInt32) async throws -> [UInt32] {
+        try await withWindow(windowId) { [axApp, windows, bundleId] window, job in
+            guard (window.tabTitles?.count ?? 0) > 1 else { return [] }
+            let listed = Set(listedWindows(axApp.threadGuarded, bundleId).map(\.windowId))
+            return windows.threadGuarded.keys.filter { !listed.contains($0) }
+        } ?? []
     }
 
     @MainActor
@@ -541,10 +553,11 @@ final class MacApp: AbstractApp {
             return []
         }
         guard let thread else { return [] }
-        let outcome = try await thread.runInLoop { [axObserver, windows, axApp] (job) -> (ids: [UInt32], timedOut: Bool) in
+        let previousTabs = backgroundTabsSeen
+        let outcome = try await thread.runInLoop { [axObserver, windows, axApp, bundleId] (job) -> (ids: [UInt32], tabs: [UInt32: UInt32], timedOut: Bool) in
             var result: [UInt32: AxWindow] = windows.threadGuarded
             let listStart = DispatchTime.now()
-            let listed = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
+            let listed = listedWindows(axApp.threadGuarded, bundleId)
             // Once one read has waited out the timeout the rest would too; keeping the window is what a
             // timed-out `isDestroyed()` answers anyway. See `timedOutThisPass`.
             var timedOut = isAxTimeout(since: listStart)
@@ -569,17 +582,20 @@ final class MacApp: AbstractApp {
                 }
             }
 
+            var tabs = previousTabs
             if !timedOut {
                 for (id, window) in listed {
                     try job.checkCancellation()
                     result.getOrRegisterAxWindow(windowId: id, window, axObserver.threadGuarded)
                 }
+                tabs = findBackgroundTabs(known: result, listed: listed, previously: previousTabs)
             }
 
             windows.threadGuarded = result
-            return (Array(result.keys), timedOut)
+            return (Array(result.keys), tabs, timedOut)
         }
         if outcome.timedOut { MacApp.timedOutThisPass.insert(pid) }
+        backgroundTabsSeen = outcome.tabs
         return outcome.ids
     }
 
@@ -638,6 +654,73 @@ private func isAxTimeout(since start: DispatchTime) -> Bool {
 /// single-digit milliseconds.
 func isAxTimeout(elapsedSeconds: Double) -> Bool {
     elapsedSeconds >= Double(axMessagingTimeout) * 0.9
+}
+
+/// An app's windows on the current macOS Space, and of a tab group only the selected tab.
+///
+/// Finder's `AXWindows` is empty on macOS 27 whatever it has open, so it was only ever seen through its focused
+/// window, and nothing showed which of its windows had left the screen.
+/// ponytail: Finder only, the one app on a whole Mac that answers this way. The second read would otherwise fall
+/// on every app without a window, on every refresh.
+private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?) -> [WindowIdAndAxUiElement] {
+    let listed = axApp.get(Ax.windowsAttr) ?? []
+    return listed.isEmpty && bundleId == "com.apple.finder" ? axApp.get(Ax.childWindowsAttr) ?? [] : listed
+}
+
+private func axRect(_ window: AXUIElement) -> Rect? {
+    guard let topLeftCorner = window.get(Ax.topLeftCornerAttr), let size = window.get(Ax.sizeAttr) else { return nil }
+    return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
+}
+
+/// Which of an app's windows are background tabs, each with the selected tab of its group.
+///
+/// macOS makes a tab a window of its own. Only the selected one of a group is on the app's list and has a tab
+/// bar; the others stay alive, off the list, with the frame they last had. So a window off the list is a
+/// background tab if the app is showing a tab bar with more than one tab in it. The reads only happen for an
+/// app with such a window, which is not most apps on most refreshes.
+///
+/// A window on another macOS Space is off the list too. It's out of sight either way, so taking it for a tab
+/// costs nothing but the tile it was holding open.
+private func findBackgroundTabs(known: [UInt32: AxWindow], listed: [WindowIdAndAxUiElement], previously: [UInt32: UInt32]) -> [UInt32: UInt32] {
+    let listedIds = Set(listed.map(\.windowId))
+    let unlisted = known.filter { !listedIds.contains($0.key) }
+    if unlisted.isEmpty { return [:] }
+    let bars = listed.compactMap { window in window.ax.tabTitles.flatMap { $0.count > 1 ? (window: window, titles: $0) : nil } }
+    let several = bars.count > 1
+    let groups = bars.map { TabGroup(selected: $0.window.windowId, titles: $0.titles, frame: several ? axRect($0.window.ax) : nil) }
+    var result: [UInt32: UInt32] = [:]
+    for (id, window) in unlisted {
+        // Not a Quick Look panel or the like, which can be open and off the list as well.
+        if !groups.isEmpty, window.ax.get(Ax.subroleAttr) == kAXStandardWindowSubrole {
+            let group = several
+                ? tabGroup(titled: window.ax.get(Ax.titleAttr), at: axRect(window.ax), among: groups)
+                : groups.first
+            result[id] = group?.selected
+        } else if let selected = previously[id], unlisted[selected] != nil {
+            result[id] = selected // The whole group is out of sight, so there's no tab bar to go by.
+        }
+    }
+    return result
+}
+
+struct TabGroup {
+    let selected: UInt32
+    let titles: [String]
+    let frame: Rect?
+}
+
+/// Which group a background tab is in, when an app has several. By its title on a tab bar, which most apps keep
+/// the same as the window's, though not Terminal. Among several or none of those, by frame: macOS hands a newly
+/// selected tab the group's frame, so a tab selected until just now has the same one. Frame alone misleads, since
+/// groups parked on a hidden workspace can all share one spot. A wrong answer moves a tile, it doesn't leave an
+/// empty one, so the last resort can afford to be a guess.
+func tabGroup(titled title: String?, at frame: Rect?, among groups: [TabGroup]) -> TabGroup? {
+    let named = groups.filter { group in title.map(group.titles.contains) == true }
+    let candidates = named.isEmpty ? groups : named
+    return candidates.first { group in
+        guard let a = group.frame, let b = frame else { return false }
+        return a.topLeftCorner == b.topLeftCorner && a.size == b.size
+    } ?? candidates.first
 }
 
 private class AxWindow {
