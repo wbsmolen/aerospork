@@ -3,6 +3,7 @@ import Common
 
 @MainActor
 func normalizeLayoutReason() async throws {
+    settleBackgroundTabs()
     let zeroAlpha = isUnitTest ? [] : windowIdsWithZeroAlpha().intersection(MacWindow.allWindowsMap.keys)
     if updateTransparentWindowIds(zeroAlpha: zeroAlpha, now: Date()) {
         scheduleFollowUpRefresh(after: 1.1, "transparencyRecheck") // nothing else re-checks once the grace is up
@@ -80,7 +81,7 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window], sta
         // re-read below off the hot path. `||` short-circuits, so the app is still only asked
         // whether it is hidden when the window is neither fullscreen nor minimized, same as before.
         let snapshotIsUnconventional = state.full || state.mini ||
-            (!config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden) || window.isTransparent
+            (!config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden) || window.isTransparent || window.isBackgroundTab
         let willMutate = switch window.layoutReason {
             case .standard: snapshotIsUnconventional
             case .macos: !snapshotIsUnconventional
@@ -96,7 +97,7 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window], sta
         let isMacosMinimized = fresh.minimized
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
             !config.automaticallyUnhideMacosHiddenApps && window.isMacosAppHidden
-        let isTransparent = !isMacosFullscreen && !isMacosMinimized && window.isTransparent
+        let isOutOfSight = !isMacosFullscreen && !isMacosMinimized && (window.isTransparent || window.isBackgroundTab)
         switch window.layoutReason {
             case .standard:
                 guard let parent = window.parent else { continue }
@@ -117,14 +118,14 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window], sta
                 } else if isMacosMinimized {
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
                     window.leaveTilesForMacos(macosMinimizedWindowsContainer, adaptiveWeight: 1)
-                } else if isMacosWindowOfHiddenApp || isTransparent {
-                    // A transparent window is parked with the hidden app's: it keeps its workspace,
-                    // and leaves the tiling as a window you cannot see should.
+                } else if isMacosWindowOfHiddenApp || isOutOfSight {
+                    // A transparent window or a background tab is parked with the hidden app's: it keeps
+                    // its workspace, and leaves the tiling as a window you cannot see should.
                     window.layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: prevWorkspaceName)
                     window.leaveTilesForMacos(workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER)
                 }
             case .macos(let prevParentKind, let prevWorkspaceName):
-                if !isMacosFullscreen && !isMacosMinimized && !isMacosWindowOfHiddenApp && !isTransparent {
+                if !isMacosFullscreen && !isMacosMinimized && !isMacosWindowOfHiddenApp && !isOutOfSight {
                     // Back to where it was, not to `workspace`. For the workspace-scoped pass the
                     // two agree; for the minimized pass, `workspace` is `focus.workspace`, which is
                     // how un-minimizing used to move a window between workspaces.
@@ -153,6 +154,73 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window], sta
                     restoreMru(mruBefore, movedWindow: window)
                 }
         }
+    }
+}
+
+/// Each background tab of a native tab group, with the selected tab of that group.
+///
+/// A tab group is one window to the user, and macOS makes each tab a window of its own. Tiled as such, every
+/// background tab held open a tile with nothing in it. So the selected tab holds the group's one tile, and the
+/// others wait out of the tiles, keeping no place of their own: when the selection moves, the new tab takes the
+/// old one's place and size exactly. Written by `refresh`, and by `takePlace` so the answer holds until then.
+@MainActor var backgroundTabs: [UInt32: UInt32] = [:]
+
+/// Gives each group's tile to its selected tab, before `_normalizeLayoutReason` takes the others out of the tiles.
+@MainActor
+func settleBackgroundTabs() {
+    for (tabId, selectedId) in backgroundTabs.sorted(by: { $0.key < $1.key }) {
+        guard let tab = Window.get(byId: tabId), let selected = Window.get(byId: selectedId), tab.isBound, selected.isBound else { continue }
+        // A selected tab that has a place of its own is two windows merged into one group: the other's tile closes.
+        if tab.holdsTabPlace, selected.layoutReason != .standard {
+            selected.takePlace(of: tab)
+        } else if tab.nodeWorkspace?.mostRecentWindowRecursive === tab {
+            selected.markAsMostRecentChild()
+        }
+        // A command moved the selected tab. The rest of the group go with it, or they'd keep the old workspace
+        // alive, with nothing on it to see.
+        if tab.parent is MacosHiddenAppsWindowsContainer, let workspace = selected.nodeWorkspace, tab.nodeWorkspace != workspace {
+            let mruBefore = workspace.mostRecentWindowRecursive
+            tab.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+            restoreMru(mruBefore, movedWindow: tab)
+        }
+    }
+}
+
+extension Window {
+    /// In the tiles or floating, where a background tab can't stay.
+    @MainActor var holdsTabPlace: Bool { layoutReason == .standard && (parent is TilingContainer || parent is Workspace) }
+
+    /// This is a tab of the same group as `tab`, and becomes the group's selected one: it goes where `tab` is, at
+    /// its size and with what else made that its place, and `tab` goes behind it.
+    @MainActor
+    func takePlace(of tab: Window) {
+        let wasFocused = focusedWindowId == tab.windowId
+        let mruBefore = tab.nodeWorkspace?.mostRecentWindowRecursive
+        swapWindows(tab, self)
+        swap(&layoutReason, &tab.layoutReason)
+        swap(&isFullscreen, &tab.isFullscreen)
+        swap(&noOuterGapsInFullscreen, &tab.noOuterGapsInFullscreen)
+        nodeWorkspace?.rootTilingContainer.forgetAway { $0 == self.windowId } // it has its place now
+        WorkspaceMemory.stopRestoringLayouts() // the file names the tab that held this place, and can't any more
+        // Where this was is a place too, if it just opened: a tile of its own, which has to go at once.
+        if tab.layoutReason == .standard, let workspace = nodeWorkspace {
+            tab.layoutReason = .macos(prevParentKind: tab.parent?.kind ?? .tilingContainer, prevWorkspaceName: workspace.name)
+            tab.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+        }
+        markAsMostRecentChild()
+        if wasFocused { _ = focusWindow() } else { restoreMru(mruBefore, movedWindow: tab) }
+        for (id, selected) in backgroundTabs where selected == tab.windowId { backgroundTabs[id] = windowId }
+        backgroundTabs[windowId] = nil
+        backgroundTabs[tab.windowId] = windowId
+    }
+
+    /// The selected tab of a group closed. macOS selects another, which needs its tile. Whichever tab this
+    /// picks, the next refresh sees which one macOS picked and moves the tile there.
+    @MainActor
+    func passTabPlaceOn() {
+        let heir = backgroundTabs.filter { $0.value == windowId }.keys.max().flatMap { Window.get(byId: $0) }
+        heir?.takePlace(of: self)
+        backgroundTabs[windowId] = nil
     }
 }
 

@@ -121,6 +121,8 @@ extension Window {
     /// Brings a window back from the Dock or from a hidden app, so it can be focused. A minimized window
     /// hangs off a global container, so it has no workspace to be focused on until then.
     @MainActor func exitMacosMinimizedOrHidden() async throws {
+        // A background tab: focusing it is what selects it, and the group has one tile either way.
+        if let selected = backgroundTabs[windowId].flatMap({ Window.get(byId: $0) }) { return takePlace(of: selected) }
         guard let parent, case .macos(let prevParentKind, let prevWorkspaceName) = layoutReason else { return }
         switch parent.cases {
             case .macosMinimizedWindowsContainer: setNativeMinimized(false)

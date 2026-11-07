@@ -127,6 +127,23 @@ enum Ax {
             return ($0.windowId, casted)
         } ?? [] },
     )
+    /// An app's windows going by its children, for an app whose `windowsAttr` says nothing. Its other
+    /// children are a menu bar and, for Finder, the desktop.
+    static let childWindowsAttr = ReadableAttrImpl<[WindowIdAndAxUiElement]>(
+        key: kAXChildrenAttribute,
+        getter: { ($0 as? NSArray)?.compactMap(windowOrNil).compactMap {
+            guard let casted = $0.ax.cast, casted.get(Ax.roleAttr) == kAXWindowRole else { return nil }
+            return ($0.windowId, casted)
+        } ?? [] },
+    )
+    static let childrenAttr = ReadableAttrImpl<[any AxUiElementMock]>(
+        key: kAXChildrenAttribute,
+        getter: { ($0 as? NSArray)?.compactMap { castToAxUiElementMock($0 as AnyObject) } ?? [] },
+    )
+    static let tabsAttr = ReadableAttrImpl<[any AxUiElementMock]>(
+        key: kAXTabsAttribute,
+        getter: { ($0 as? NSArray)?.compactMap { castToAxUiElementMock($0 as AnyObject) } ?? [] },
+    )
     static let focusedWindowAttr = ReadableAttrImpl<WindowIdAndAxUiElementMock>(
         key: kAXFocusedWindowAttribute,
         getter: windowOrNil,

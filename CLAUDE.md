@@ -191,6 +191,16 @@ split, in any order. Leave through `leaveTilesForMacos`, come back through `take
 it", not indexes, which go stale as windows open and close. A frozen tree includes away windows, so places outlive
 restarts, and a container holding one isn't flattened (an empty one still goes, handing its away windows up).
 
+**Native tabs**: macOS makes each tab a window of its own, with its own `CGWindowID`, but a tab group is one window
+to the user, so it takes one tile. Only the selected tab is on the app's list and has an `AXTabGroup` child; the
+others stay alive off the list, with a frame that goes stale until they're selected. `MacApp.findBackgroundTabs` reads
+that into `backgroundTabs` (tab -> selected tab), the others wait in the hidden-apps container keeping no place of
+their own, and `takePlace` moves the tile with the selection. Selecting a tab sends `AXMainWindowChanged` and not
+`AXFocusedWindowChanged`. A group minimized is the one time every tab is on the list. A new tab takes its tile at
+registration, not on the refresh after, because some refreshes lay out first and the row would squeeze for a frame.
+Finder's `AXWindows` is empty on macOS 27, so `listedWindows` reads its children: test against Finder itself, not
+only a throwaway `NSWindow` app, which lists normally.
+
 The key is the `CGWindowID` and nothing else. It comes from a monotonic counter owned by
 **WindowServer**, so it is stable across a restart of *this* process and meaningless afterwards. The
 generation token is therefore WindowServer's pid and start time, **not** `kern.boottime`: the counter
