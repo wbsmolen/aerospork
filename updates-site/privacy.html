@@ -48,8 +48,8 @@ anywhere, stored beyond what is described below, or shared with anyone.</p>
       migrated to the current one.</li>
   <li><code>~/Library/Caches/com.wbs.aerospork/workspace-memory.json</code>, readable only by your
       user account. It records which workspace each open window was on, along with the bundle
-      identifier of its application and an identifier for the monitor the workspace was on, so a
-      restart does not scatter your layout. It holds no window titles and no document contents.
+      identifier of its application, an identifier for the monitor the workspace was on, and the
+      layout of each workspace, so a restart does not scatter your layout. It holds no window titles and no document contents.
       Deleting it costs you one restart's worth of window placement.</li>
   <li>If AeroSpork hits an internal error, a report in
       <code>~/Library/Logs/com.wbs.aerospork/</code>, with the error, a stack trace and the app and
@@ -61,7 +61,7 @@ want them gone.</p>
 <h2>The update check</h2>
 <p>Automatic update checks are <strong>off</strong> when you install AeroSpork. It asks about them
 once, on its second launch, and nothing is requested until you either allow them or choose
-<strong>Check for Updates…</strong> yourself.</p>
+<strong>Check for updates…</strong> yourself.</p>
 <p>When a check does run, it is an ordinary HTTPS request to <code>aerospork.app</code> for a small
 file listing the current version. Like any web request, it necessarily tells this server your IP
 address, the time, and a user-agent string naming the app and its version. That is the whole of it:
@@ -99,7 +99,7 @@ history is in the
 so you can see exactly what changed and when.</p>
 
 <footer>
-  <p>Last updated 30 July 2026. Questions, or something here that does not match what you observe:
+  <p>Last updated 12 November 2026. Questions, or something here that does not match what you observe:
   <a href="https://github.com/wbsmolen/aerospork/issues">open an issue</a>. Security reports have
   their own route in <a href="https://github.com/wbsmolen/aerospork/blob/main/SECURITY.md">SECURITY.md</a>.</p>
   <p><a href="/">AeroSpork</a> · MIT licensed</p>

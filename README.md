@@ -43,7 +43,7 @@ What that turned into, in this codebase:
   Screen reconfiguration is also debounced, because a dock connects in several stages and fires the
   change notification more than once.
 - **The sluggishness** is two changes rather than a rewrite. Bursts of accessibility events coalesce
-  into one layout pass on a 50ms debounce (`util/RefreshDebouncer.swift`), and `MacApp.setFrame`
+  into one layout pass on a 50ms debounce (`util/RefreshScheduler.swift`), and `MacApp.setFrame`
   skips the AX write when a window already sits at its target frame, which matters over a
   DisplayLink link where every write repaints a framebuffer. I have not published speedup numbers;
   `dev-docs/performance.md` says which measurements exist and why the benchmark could not settle
@@ -134,12 +134,12 @@ behave the same way. Only the deltas are listed.
 | Notarized builds | ❌ | ✅ &nbsp;signed, notarized, stapled |
 | Third-party dependencies | 4 | **2** |
 | Config schema | one syntax | v2 shorthand, older syntax still parses |
-| Windows keep their workspace across a restart | ❌ | ✅ &nbsp;also their monitor |
+| Windows keep their workspace across a restart | ❌ | ✅ &nbsp;with their monitor and layout |
 | Command surface | **larger** | smaller |
 | Maturity | **public beta, larger community** | younger fork |
 
 <sub>Upstream column checked against
-<a href="https://github.com/nikitabobko/AeroSpace">nikitabobko/AeroSpace</a> <code>main</code> on 2026-07-29: its README
+AeroSpace <code>main</code> on 2026-07-29: its README
 says AeroSpace "will never provide a GUI for configuration" and that "it's not notarized", its
 <code>Package.swift</code> declares four dependencies, and its guide documents monitor patterns as
 main/secondary/number/regex only.</sub>
@@ -166,7 +166,8 @@ A fork, not a drop-in replacement. Configs and scripts need small edits.
   `AEROSPORK_WORKSPACE`. A config line that still uses them, or runs `aerospace`, loads with a warning
   naming the line.
 - `~/.aerospace.toml` (or `~/.config/aerospace/aerospace.toml`) is not read. With no AeroSpork config,
-  AeroSpork runs its default and says so; copy your file to `~/.aerospork.toml`.
+  AeroSpork runs its default config and writes a hint only to the log, so you see no message. Copy
+  your file to `~/.aerospork.toml`.
 - `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` are reported and
   ignored. `persistent-workspaces` works as in AeroSpace, and so does `workspaces`: listed workspaces
   always exist.
@@ -178,16 +179,21 @@ A fork, not a drop-in replacement. Configs and scripts need small edits.
 
 ## Installation
 
-Download the notarized universal (arm64 + x86_64) build from the
-[releases page](https://github.com/wbsmolen/aerospork/releases), move `AeroSpork.app` to
-`/Applications`, and grant Accessibility permission when prompted. A Homebrew cask is published at
-[`wbsmolen/tap`](https://github.com/wbsmolen/homebrew-tap):
+Install with Homebrew:
 
 ```bash
 brew install --cask wbsmolen/tap/aerospork
 ```
 
-Both the tap and this repository are public, so either route works without a GitHub account.
+Or download `aerospork-v<version>.zip`, the notarized universal (arm64 + x86_64) build, from the
+[releases page](https://github.com/wbsmolen/aerospork/releases), and move `AeroSpork.app` to
+`/Applications`.
+
+The first time you open AeroSpork, macOS asks for Accessibility permission, and AeroSpork quits.
+
+1. Open System Settings > Privacy & Security > Accessibility.
+2. Enable AeroSpork.
+3. Open AeroSpork again.
 
 What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -196,7 +202,7 @@ against an appcast served from
 [`aerospork.app/appcast.xml`](https://aerospork.app/appcast.xml). Updates are verified against an
 EdDSA public key in the app's Info.plist, so a build refuses anything it cannot verify. Automatic
 checking is off until you allow it, which AeroSpork asks about once, on its second launch;
-**Check for Updates…** in the menu bar checks on demand. There
+**Check for updates…** in the menu bar checks on demand. There
 is no App Store update path to inherit, because the Accessibility APIs this app is built on do not
 work in a sandbox.
 
@@ -237,7 +243,7 @@ alt-enter = "exec-and-forget open -na Ghostty"
 
 Run `aerospork list-monitors --format '%{monitor-fingerprint}'` to get the values to paste into
 `[monitors]`. Open the GUI from the menu bar icon, with **⌘,** while AeroSpork is frontmost, by
-opening AeroSpork again while it runs, or via `aerospork open-settings`, which is also valid in config
+opening AeroSpork again while it runs, or with `aerospork open-settings`, which is also valid in config
 and so bindable. Structured panes apply live on a 600ms debounce, and a change still pending when the
 window closes is saved; Raw TOML has an explicit Apply, because half-typed TOML is invalid most of
 the time.
@@ -256,25 +262,9 @@ aerospork list-monitors                     # connected displays and how they ar
 aerospork --help
 ```
 
-Troubleshooting: `aerospork config --config-path` prints the file actually loaded. A path inside the
-`.app` bundle means no user config is loaded, either because you have none or because yours failed to
-parse; `aerospork reload-config --dry-run` parses without applying and says which. `aerospork
---version` reports both client and server. Logs go to the unified log, with no files and nothing to
-enable:
-
-```bash
-log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compact
-```
-
-Use `com.wbs.aerospork.debug` for a debug build (the suffix names the build, not the log level),
-and add `AND category == "config"` to narrow. `category == "session"` records the focus changes
-AeroSpork made on its own initiative, and focus following macOS onto a workspace that was not on
-screen. Focus that follows a click is not recorded.
-
-`AEROSPORK_DEBUG_LOG=1` adds a verbose per-refresh trace. Those records are written at `.debug`
-level, which the unified log **does not persist**: `log stream --debug` sees them live, `log show`
-never will. Start the stream first, then reproduce. See *Troubleshooting and bug reports* in
-[the guide](docs/guide.adoc) for the full recipe and what to attach to a report.
+To report a bug, follow
+[Troubleshooting and bug reports](https://aerospork.app/docs/guide.html#troubleshooting) in the guide.
+It says how to check your config, collect the log and the error report, and what to attach.
 
 ## Development
 

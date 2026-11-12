@@ -1,1 +1,8 @@
 blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/wbsmolen/aerospork/blob/main/SECURITY.md
+    about: Do not open a public issue for a vulnerability. SECURITY.md says how to report one privately.
+  - name: Troubleshooting and bug reports
+    url: https://aerospork.app/docs/guide.html#troubleshooting
+    about: Check your config, collect the log, and see what a bug report needs.

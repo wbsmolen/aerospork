@@ -49,17 +49,20 @@ Integrity Protection.</p>
   </button>
 </div>
 <p>Or take a notarized build from the
-<a href="https://github.com/wbsmolen/aerospork/releases">releases page</a>, move
-<code>AeroSpork.app</code> to <code>/Applications</code>, and grant Accessibility permission when
-asked. macOS 13 or later, Apple silicon and Intel.</p>
+<a href="https://github.com/wbsmolen/aerospork/releases">releases page</a> and move
+<code>AeroSpork.app</code> to <code>/Applications</code>. macOS 13 or later, Apple silicon and
+Intel.</p>
+<p>The first time you open AeroSpork, macOS asks for Accessibility permission, and AeroSpork
+quits. Enable AeroSpork in System Settings &gt; Privacy &amp; Security &gt; Accessibility, then
+open AeroSpork again.</p>
 
 <h2>What you get</h2>
 <ul>
-  <li>Tree layout with tiles and accordion modes, driven from the keyboard or the CLI.</li>
+  <li>A layout tree with tiles and accordion layouts, driven from the keyboard or the CLI.</li>
   <li>Workspaces that switch instantly, because they are emulated rather than animated.</li>
   <li>Monitors matched by hardware UUID, so a workspace stays on the same physical panel across a
       redock — including DisplayLink displays, which report no EDID at all.</li>
-  <li>Windows return to the workspace they were on when AeroSpork restarts.</li>
+  <li>Windows return to their workspace, monitor and place in the layout when AeroSpork restarts.</li>
   <li>Plain-text TOML configuration, with a settings GUI that edits it without touching your
       comments.</li>
 </ul>
@@ -68,7 +71,7 @@ asked. macOS 13 or later, Apple silicon and Intel.</p>
 <p><a href="/docs/guide.html">The guide</a> covers configuration and troubleshooting;
 <a href="/docs/commands.html">the command reference</a> covers all 37 commands — 36 on the CLI,
 plus config-only <code>exec-and-forget</code> — which are also installed as man pages;
-<a href="/docs/goodies.html">goodies</a> collects the tricks that fit neither. The <a href="https://github.com/wbsmolen/aerospork">GitHub repository</a> explains how
+<a href="/docs/goodies.html">goodies</a> collects tips and recipes. The <a href="https://github.com/wbsmolen/aerospork">GitHub repository</a> explains how
 this fork differs from <a href="https://github.com/nikitabobko/AeroSpace">AeroSpace</a>, which it
 is built on.</p>
 
