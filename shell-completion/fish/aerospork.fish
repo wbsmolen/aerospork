@@ -1,44 +1,44 @@
-function _aerospork_47
-    set 1 $argv[1]
-    aerospork list-workspaces --monitor all --empty no
-end
-
-function _aerospork_50
-    set 1 $argv[1]
-    aerospork config --get mode --keys
-end
-
-function _aerospork_43
-    set 1 $argv[1]
-    aerospork list-windows --all --format '%{window-id}%{tab}%{app-name} - %{window-title}'
-end
-
-function _aerospork_54
+function _aerospork_57
     set 1 $argv[1]
     true
 end
 
-function _aerospork_38
+function _aerospork_19
     set 1 $argv[1]
     aerospork list-apps --format '%{app-bundle-id}%{tab}%{app-name}'
 end
 
-function _aerospork_55
+function _aerospork_20
     set 1 $argv[1]
     aerospork list-apps --format '%{app-pid}%{tab}%{app-name}'
 end
 
-function _aerospork_52
-    set 1 $argv[1]
-    aerospork list-monitors --format '%{monitor-id}%{tab}%{monitor-name}'
-end
-
-function _aerospork_22
+function _aerospork_58
     set 1 $argv[1]
     aerospork config --get mode --keys | xargs -I{} aerospork config --get mode.{}.binding --keys
 end
 
-function _aerospork_13
+function _aerospork_44
+    set 1 $argv[1]
+    aerospork config --get mode --keys
+end
+
+function _aerospork_60
+    set 1 $argv[1]
+    aerospork list-windows --all --format '%{window-id}%{tab}%{app-name} - %{window-title}'
+end
+
+function _aerospork_39
+    set 1 $argv[1]
+    aerospork list-monitors --format '%{monitor-id}%{tab}%{monitor-name}'
+end
+
+function _aerospork_53
+    set 1 $argv[1]
+    aerospork list-workspaces --all
+end
+
+function _aerospork_6
     set 1 $argv[1]
     aerospork config --major-keys
 end
@@ -172,100 +172,105 @@ function _aerospork
     set --local descriptions
 
     set --local literal_transitions
-    set literal_transitions[1] "set inputs 1 3 54 55 35 5 38 60 62 96 14 41 64 66 15 98 70 20 16 19 99 100 18 24 25 102 26 103 106 107 108 28 48 80 112 31 52 113 32 114; set tos 107 3 112 113 50 63 3 85 67 105 82 98 114 115 4 102 8 59 52 3 7 71 109 56 3 116 117 90 9 9 16 118 4 77 3 79 3 119 3 80"
-    set literal_transitions[2] "set inputs 77; set tos 3"
+    set literal_transitions[1] "set inputs 1 3 54 55 35 5 38 60 62 96 14 41 64 66 15 98 70 20 16 19 99 100 18 24 25 102 26 103 106 107 108 28 48 80 112 31 52 113 32 114; set tos 115 43 121 122 123 71 43 92 28 113 93 108 124 125 4 126 15 47 114 43 69 75 119 57 43 127 128 100 16 16 19 129 4 85 43 86 43 130 43 87"
+    set literal_transitions[2] "set inputs 11 109 82; set tos 3 3 3"
+    set literal_transitions[3] "set inputs 11 2 109 91 94 30 53 82; set tos 3 39 3 40 41 40 39 3"
     set literal_transitions[4] "set inputs 56; set tos 5"
-    set literal_transitions[6] "set inputs 67 79 105; set tos 7 7 7"
-    set literal_transitions[7] "set inputs 36 59 87 88 12 101 63; set tos 91 6 89 89 92 89 89"
-    set literal_transitions[8] "set inputs 49 12 78 117; set tos 9 10 9 9"
-    set literal_transitions[9] "set inputs 12; set tos 25"
-    set literal_transitions[12] "set inputs 81 65 12 34 50; set tos 32 27 33 74 34"
-    set literal_transitions[13] "set inputs 56 77; set tos 14 15"
-    set literal_transitions[15] "set inputs 56 77; set tos 14 15"
-    set literal_transitions[16] "set inputs 71 2 56 94 44 86 46 53 68; set tos 17 18 19 20 21 21 22 18 23"
-    set literal_transitions[18] "set inputs 71 2 56 94 44 86 46 53 68; set tos 17 37 19 38 21 21 22 37 23"
-    set literal_transitions[19] "set inputs 61 82; set tos 124 124"
-    set literal_transitions[21] "set inputs 94 2 53; set tos 73 3 3"
-    set literal_transitions[23] "set inputs 11 109 82; set tos 87 87 87"
-    set literal_transitions[27] "set inputs 81 65 12 50; set tos 27 27 26 34"
-    set literal_transitions[28] "set inputs 53 90 75; set tos 28 29 28"
-    set literal_transitions[30] "set inputs 53 75; set tos 30 30"
-    set literal_transitions[31] "set inputs 10 21 57 78 92 45 73 43 116 117; set tos 31 31 31 31 31 31 31 31 31 31"
-    set literal_transitions[32] "set inputs 81 65 12 50; set tos 32 27 33 34"
-    set literal_transitions[34] "set inputs 12 81 65; set tos 123 34 34"
-    set literal_transitions[36] "set inputs 78 117 49; set tos 9 9 9"
-    set literal_transitions[37] "set inputs 71 2 46 56 53 68 94; set tos 17 37 22 19 37 23 38"
-    set literal_transitions[39] "set inputs 12 65 69; set tos 40 39 39"
-    set literal_transitions[42] "set inputs 65 12 77 69; set tos 42 41 42 42"
-    set literal_transitions[44] "set inputs 10 21 57 78 92 45 73 43 116 117; set tos 31 31 31 31 31 31 31 31 31 31"
-    set literal_transitions[45] "set inputs 105 27 67 76; set tos 46 46 46 46"
-    set literal_transitions[46] "set inputs 36 59 87 88 101 29 63; set tos 72 45 48 48 48 46 48"
-    set literal_transitions[47] "set inputs 9 41; set tos 48 48"
-    set literal_transitions[48] "set inputs 36 59 29; set tos 47 66 48"
-    set literal_transitions[50] "set inputs 110 56 22 101 63 87 88 77; set tos 15 49 15 15 15 15 15 50"
-    set literal_transitions[51] "set inputs 58; set tos 52"
-    set literal_transitions[53] "set inputs 30 2 104 91 94 53; set tos 53 54 54 53 55 54"
-    set literal_transitions[54] "set inputs 30 2 91 94 53; set tos 53 54 53 55 54"
-    set literal_transitions[56] "set inputs 58; set tos 35"
-    set literal_transitions[57] "set inputs 77 69; set tos 57 57"
-    set literal_transitions[58] "set inputs 104 2 94 53 47 44; set tos 59 59 60 59 58 58"
-    set literal_transitions[59] "set inputs 2 94 53 47 44; set tos 59 60 59 58 58"
-    set literal_transitions[62] "set inputs 17 4 7 95; set tos 76 76 76 76"
-    set literal_transitions[63] "set inputs 65 12 34 50; set tos 63 64 65 65"
-    set literal_transitions[65] "set inputs 12 65; set tos 93 65"
-    set literal_transitions[66] "set inputs 105 27 67 76; set tos 48 48 48 48"
-    set literal_transitions[67] "set inputs 12 39; set tos 68 67"
-    set literal_transitions[70] "set inputs 12 65 69; set tos 69 70 70"
-    set literal_transitions[71] "set inputs 12 101 29 63 36 59 87 88 111; set tos 25 48 46 48 72 45 48 48 73"
-    set literal_transitions[72] "set inputs 9 41; set tos 46 46"
-    set literal_transitions[74] "set inputs 12 65; set tos 25 3"
-    set literal_transitions[75] "set inputs 87 88 110 101 22 63; set tos 2 2 2 2 2 2"
-    set literal_transitions[77] "set inputs 84 42 75 53 90 89; set tos 3 3 28 28 29 3"
-    set literal_transitions[78] "set inputs 81 65 12 34 50; set tos 27 27 26 74 34"
-    set literal_transitions[79] "set inputs 39; set tos 3"
-    set literal_transitions[80] "set inputs 110 101 22 63 87 88 77; set tos 2 2 2 2 2 2 75"
-    set literal_transitions[82] "set inputs 2 94 53 33; set tos 82 83 82 84"
-    set literal_transitions[84] "set inputs 104 2 94 53 33; set tos 82 82 83 82 84"
-    set literal_transitions[85] "set inputs 17 4 7 12 95; set tos 76 76 76 61 76"
-    set literal_transitions[86] "set inputs 51 65; set tos 86 86"
-    set literal_transitions[87] "set inputs 11 2 71 109 56 94 68 46 53 82; set tos 87 37 17 87 19 38 23 22 37 87"
-    set literal_transitions[89] "set inputs 12 36 59; set tos 88 128 120"
-    set literal_transitions[90] "set inputs 63 37 6 72 101 83; set tos 3 73 3 3 3 3"
-    set literal_transitions[91] "set inputs 9 41; set tos 7 7"
-    set literal_transitions[95] "set inputs 65; set tos 3"
-    set literal_transitions[97] "set inputs 110 12 22 101 63 87 88 65 77 69; set tos 42 96 42 42 42 42 42 97 97 97"
-    set literal_transitions[98] "set inputs 51 65 110 22 77; set tos 99 99 2 2 100"
-    set literal_transitions[99] "set inputs 65 51; set tos 99 99"
-    set literal_transitions[100] "set inputs 22 110; set tos 2 2"
-    set literal_transitions[102] "set inputs 110 12 22 101 63 87 88 65 77 69; set tos 42 101 42 42 42 42 42 102 97 102"
-    set literal_transitions[103] "set inputs 110 22 77 69; set tos 57 57 103 103"
-    set literal_transitions[104] "set inputs 87 88 101 63; set tos 3 3 3 3"
-    set literal_transitions[105] "set inputs 115; set tos 3"
-    set literal_transitions[107] "set inputs 65 40 13 23 74; set tos 108 95 95 95 95"
-    set literal_transitions[108] "set inputs 74 40 13 23; set tos 95 95 95 95"
-    set literal_transitions[109] "set inputs 65; set tos 94"
-    set literal_transitions[111] "set inputs 2 91 94 44 30 86 53 68; set tos 122 125 121 21 125 21 122 126"
-    set literal_transitions[112] "set inputs 87 88 12 101 63; set tos 3 3 106 3 3"
-    set literal_transitions[113] "set inputs 93 97; set tos 113 113"
-    set literal_transitions[114] "set inputs 10 92 12 21 57 78 45 73 43 116 117; set tos 31 31 43 31 31 31 31 31 31 31 31"
-    set literal_transitions[115] "set inputs 85; set tos 3"
-    set literal_transitions[116] "set inputs 2 91 94 44 30 86 53 68; set tos 111 125 110 21 125 21 111 126"
-    set literal_transitions[117] "set inputs 65 69 110 12 77 22; set tos 70 117 57 69 103 57"
-    set literal_transitions[118] "set inputs 65 34 8 50; set tos 129 95 3 95"
-    set literal_transitions[119] "set inputs 81 65 12 34 50; set tos 32 78 11 74 34"
-    set literal_transitions[120] "set inputs 67 79 105; set tos 89 89 89"
-    set literal_transitions[122] "set inputs 30 2 91 94 53 68; set tos 125 122 125 121 122 126"
-    set literal_transitions[124] "set inputs 71 2 61 56 94 46 53 82 68; set tos 17 37 124 19 38 22 37 124 23"
-    set literal_transitions[125] "set inputs 30 2 104 91 94 53 68; set tos 125 122 122 125 121 122 126"
-    set literal_transitions[126] "set inputs 11 109 82; set tos 130 130 130"
-    set literal_transitions[127] "set inputs 65 12 69; set tos 39 40 39"
-    set literal_transitions[128] "set inputs 9 41; set tos 89 89"
-    set literal_transitions[129] "set inputs 34 50; set tos 95 95"
-    set literal_transitions[130] "set inputs 11 2 109 91 94 30 53 82; set tos 130 54 130 53 55 53 54 130"
+    set literal_transitions[6] "set inputs 56 77; set tos 7 6"
+    set literal_transitions[9] "set inputs 12 77 69; set tos 8 9 9"
+    set literal_transitions[10] "set inputs 81 65 12 34 50; set tos 11 11 12 13 14"
+    set literal_transitions[11] "set inputs 81 65 12 50; set tos 11 11 12 14"
+    set literal_transitions[13] "set inputs 12 65; set tos 76 43"
+    set literal_transitions[14] "set inputs 12 81 65; set tos 53 14 14"
+    set literal_transitions[15] "set inputs 49 12 78 117; set tos 16 17 16 16"
+    set literal_transitions[16] "set inputs 12; set tos 76"
+    set literal_transitions[18] "set inputs 77 69; set tos 18 18"
+    set literal_transitions[19] "set inputs 71 2 56 94 44 86 46 53 68; set tos 20 21 22 23 24 24 25 21 26"
+    set literal_transitions[21] "set inputs 71 2 56 94 44 86 46 53 68; set tos 20 32 22 33 24 24 25 32 26"
+    set literal_transitions[22] "set inputs 82 61; set tos 31 31"
+    set literal_transitions[24] "set inputs 94 2 53; set tos 56 43 43"
+    set literal_transitions[26] "set inputs 11 109 82; set tos 109 109 109"
+    set literal_transitions[28] "set inputs 12 39; set tos 27 28"
+    set literal_transitions[30] "set inputs 81 65 12 34 50; set tos 131 11 132 13 14"
+    set literal_transitions[31] "set inputs 71 2 61 56 94 46 53 82 68; set tos 20 32 31 22 33 25 32 31 26"
+    set literal_transitions[32] "set inputs 71 2 46 56 53 68 94; set tos 20 32 25 22 32 26 33"
+    set literal_transitions[35] "set inputs 10 21 57 78 92 45 73 43 116 117; set tos 51 51 51 51 51 51 51 51 51 51"
+    set literal_transitions[36] "set inputs 53 90 75; set tos 36 37 36"
+    set literal_transitions[38] "set inputs 51 65; set tos 38 38"
+    set literal_transitions[39] "set inputs 30 2 91 94 53; set tos 40 39 40 41 39"
+    set literal_transitions[40] "set inputs 30 2 104 91 94 53; set tos 40 39 39 40 41 39"
+    set literal_transitions[42] "set inputs 87 88 101 63; set tos 43 43 43 43"
+    set literal_transitions[44] "set inputs 9 41; set tos 45 45"
+    set literal_transitions[45] "set inputs 12 36 59; set tos 66 44 67"
+    set literal_transitions[47] "set inputs 2 94 53 47 44; set tos 47 46 47 84 84"
+    set literal_transitions[48] "set inputs 65 12 34 50; set tos 48 49 50 50"
+    set literal_transitions[50] "set inputs 12 65; set tos 117 50"
+    set literal_transitions[51] "set inputs 10 21 57 78 92 45 73 43 116 117; set tos 51 51 51 51 51 51 51 51 51 51"
+    set literal_transitions[55] "set inputs 65 12 69; set tos 55 54 55"
+    set literal_transitions[57] "set inputs 58; set tos 59"
+    set literal_transitions[58] "set inputs 58; set tos 114"
+    set literal_transitions[60] "set inputs 105 27 67 76; set tos 61 61 61 61"
+    set literal_transitions[61] "set inputs 36 59 29; set tos 107 60 61"
+    set literal_transitions[62] "set inputs 22 110; set tos 63 63"
+    set literal_transitions[63] "set inputs 77; set tos 43"
+    set literal_transitions[65] "set inputs 12 65 69; set tos 64 65 65"
+    set literal_transitions[67] "set inputs 67 79 105; set tos 45 45 45"
+    set literal_transitions[68] "set inputs 67 79 105; set tos 69 69 69"
+    set literal_transitions[69] "set inputs 36 59 87 88 12 101 63; set tos 101 68 45 45 70 45 45"
+    set literal_transitions[71] "set inputs 65 12 34 50; set tos 48 72 50 50"
+    set literal_transitions[74] "set inputs 110 12 22 101 63 87 88 77 69; set tos 9 73 9 9 9 9 9 74 74"
+    set literal_transitions[75] "set inputs 12 101 29 63 36 59 87 88 111; set tos 76 61 77 61 78 79 61 61 56"
+    set literal_transitions[77] "set inputs 36 59 87 88 101 29 63; set tos 78 79 61 61 61 77 61"
+    set literal_transitions[78] "set inputs 9 41; set tos 77 77"
+    set literal_transitions[79] "set inputs 105 27 67 76; set tos 77 77 77 77"
+    set literal_transitions[80] "set inputs 51 65; set tos 80 80"
+    set literal_transitions[81] "set inputs 78 117 49; set tos 16 16 16"
+    set literal_transitions[83] "set inputs 30 2 91 94 53 68; set tos 135 83 135 82 83 2"
+    set literal_transitions[84] "set inputs 104 2 94 53 47 44; set tos 47 47 46 47 84 84"
+    set literal_transitions[85] "set inputs 84 42 75 53 90 89; set tos 43 43 36 36 37 43"
+    set literal_transitions[86] "set inputs 39; set tos 43"
+    set literal_transitions[87] "set inputs 110 101 22 63 87 88 77; set tos 63 63 63 63 63 63 88"
+    set literal_transitions[88] "set inputs 87 88 110 101 22 63; set tos 63 63 63 63 63 63"
+    set literal_transitions[89] "set inputs 17 4 7 95; set tos 90 90 90 90"
+    set literal_transitions[92] "set inputs 17 4 7 12 95; set tos 90 90 90 91 90"
+    set literal_transitions[93] "set inputs 2 94 53 33; set tos 93 94 93 95"
+    set literal_transitions[95] "set inputs 104 2 94 53 33; set tos 93 93 94 93 95"
+    set literal_transitions[96] "set inputs 56; set tos 5"
+    set literal_transitions[97] "set inputs 110 56 22 101 63 87 88 77; set tos 6 98 6 6 6 6 6 99"
+    set literal_transitions[99] "set inputs 110 101 56 22 63 87 88 77; set tos 6 6 98 6 6 6 6 99"
+    set literal_transitions[100] "set inputs 63 37 6 72 101 83; set tos 43 56 43 43 43 43"
+    set literal_transitions[101] "set inputs 9 41; set tos 69 69"
+    set literal_transitions[102] "set inputs 65 12 69; set tos 102 104 102"
+    set literal_transitions[103] "set inputs 65 12 69; set tos 65 64 65"
+    set literal_transitions[105] "set inputs 65 12 34 50; set tos 48 49 50 50"
+    set literal_transitions[107] "set inputs 9 41; set tos 61 61"
+    set literal_transitions[108] "set inputs 51 65 110 22 77; set tos 80 80 63 63 62"
+    set literal_transitions[109] "set inputs 11 2 71 109 56 94 68 46 53 82; set tos 109 32 20 109 22 33 26 25 32 109"
+    set literal_transitions[110] "set inputs 74 40 13 23; set tos 111 111 111 111"
+    set literal_transitions[111] "set inputs 65; set tos 43"
+    set literal_transitions[113] "set inputs 115; set tos 43"
+    set literal_transitions[115] "set inputs 65 40 13 23 74; set tos 110 111 111 111 111"
+    set literal_transitions[119] "set inputs 65; set tos 118"
+    set literal_transitions[120] "set inputs 110 22 77 69; set tos 18 18 120 120"
+    set literal_transitions[121] "set inputs 87 88 12 101 63; set tos 43 43 116 43 43"
+    set literal_transitions[122] "set inputs 93 97; set tos 122 122"
+    set literal_transitions[123] "set inputs 110 56 22 101 63 87 88 77; set tos 6 112 6 6 6 6 6 99"
+    set literal_transitions[124] "set inputs 10 92 12 21 57 78 45 73 43 116 117; set tos 51 51 34 51 51 51 51 51 51 51 51"
+    set literal_transitions[125] "set inputs 85; set tos 43"
+    set literal_transitions[126] "set inputs 110 12 22 101 63 87 88 65 77 69; set tos 9 133 9 9 9 9 9 102 74 126"
+    set literal_transitions[127] "set inputs 2 91 94 44 30 86 53 68; set tos 136 135 137 24 135 24 136 2"
+    set literal_transitions[128] "set inputs 69 65 110 12 77 22; set tos 128 55 18 54 120 18"
+    set literal_transitions[129] "set inputs 65 34 8 50; set tos 134 111 43 111"
+    set literal_transitions[130] "set inputs 81 65 12 34 50; set tos 131 10 29 13 14"
+    set literal_transitions[131] "set inputs 81 65 12 50; set tos 131 11 132 14"
+    set literal_transitions[134] "set inputs 34 50; set tos 111 111"
+    set literal_transitions[135] "set inputs 30 2 104 91 94 53 68; set tos 135 83 83 135 82 83 2"
+    set literal_transitions[136] "set inputs 2 91 94 44 30 86 53 68; set tos 83 135 82 24 135 24 83 2"
+    set literal_transitions[138] "set inputs 53 75; set tos 138 138"
 
-    set --local match_anything_transitions_from 24 40 127 96 88 99 123 80 11 106 83 5 29 43 25 10 14 60 20 101 68 56 94 33 69 38 70 64 26 55 109 50 124 61 117 126 41 22 102 92 49 52 93 130 19 81 98 121 23 35 73 87 13 110 17
-    set --local match_anything_transitions_to 3 39 127 97 89 86 34 81 12 104 82 3 30 44 3 36 15 59 18 102 67 51 95 32 70 37 39 63 27 54 95 13 124 62 39 130 42 37 127 7 50 3 65 130 124 81 86 122 87 24 3 87 13 111 37
-    set subword_transitions[76] "set subword_ids 1; set tos 9"
+    set --local match_anything_transitions_from 7 54 76 112 34 37 128 66 96 123 80 133 46 106 119 5 29 82 25 20 56 94 114 31 33 108 103 118 132 64 70 26 55 109 53 3 137 117 2 116 97 126 91 59 41 22 102 72 52 49 27 104 98 8 73 23 87 57 12 17
+    set --local match_anything_transitions_to 6 55 43 97 35 138 65 45 96 96 38 126 47 43 111 43 30 83 32 32 43 93 43 31 32 38 103 111 131 65 69 109 65 109 14 3 136 50 3 42 96 103 89 106 39 31 103 105 52 48 28 102 99 9 74 21 52 58 11 81
+    set subword_transitions[90] "set subword_ids 1; set tos 16"
 
     set --local state 1
     set --local word_index 2
@@ -348,8 +353,8 @@ function _aerospork
         end
     end
 
-    set command_states 87 106 70 83 64 26 50 55 24 40 5 109 29 124 93 61 130 19 81 117 43 25 10 98 121 14 110 127 60 23 20 101 68 126 35 96 88 99 56 123 94 33 69 73 41 22 80 38 102 92 13 11 49 52 17
-    set command_ids 52 43 47 54 43 43 54 54 22 43 47 47 13 47 43 43 52 47 54 47 43 43 43 47 54 47 54 54 54 52 54 43 43 52 50 43 43 47 22 43 47 43 43 54 43 38 54 54 54 43 54 43 47 50 55
+    set command_states 7 54 76 64 70 112 26 55 109 53 3 34 137 117 37 128 2 116 97 126 66 96 91 59 123 72 41 22 80 102 133 52 49 27 46 106 119 5 104 29 82 98 25 8 73 23 20 87 57 56 94 114 31 33 12 108 17 103 118 132
+    set command_ids 53 60 60 60 60 53 39 53 39 60 39 60 57 60 6 53 39 60 57 57 60 57 60 44 57 60 57 53 53 57 60 57 60 60 57 58 53 53 60 60 57 53 19 60 60 57 20 57 58 57 57 44 53 57 60 53 60 57 53 60
     if contains $state $command_states
         set --local index (contains --index $state $command_states)
         set --local function_id $command_ids[$index]

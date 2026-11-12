@@ -38,11 +38,12 @@ aerospork -h;
 
     | layout [--window-id <window_id>] (h_tiles|v_tiles|h_accordion|v_accordion|tiles|accordion|horizontal|vertical|tiling|floating)...
 
-    | macos-native-fullscreen [--fail-if-noop|--window-id <window_id>]... [on|off] [--fail-if-noop|--window-id <window_id>]...
+    | macos-native-fullscreen [--window-id <window_id>]
+    | macos-native-fullscreen [--fail-if-noop|--window-id <window_id>]... (on|off) [--fail-if-noop|--window-id <window_id>]...
 
     | macos-native-minimize [--window-id <window_id>]
 
-    | mode <mode_id>
+    | mode <binding_mode>
 
     | move [<move_command_flag>]... (left|down|up|right) [<move_command_flag>]...
 
@@ -55,7 +56,7 @@ aerospork -h;
     | move-node-to-workspace [--fail-if-noop|--window-id <window_id>|--focus-follows-window]... <workspace> [--fail-if-noop|--window-id <window_id>|--focus-follows-window]...
 
     | move-workspace-to-monitor [<move_workspace_to_monitor_flag>]... (left|down|up|right|next|prev) [<move_workspace_to_monitor_flag>]...
-    | move-workspace-to-monitor [<move_workspace_to_monitor_flag>]... <monitor_pattern>... [<move_workspace_to_monitor_flag>]...
+    | move-workspace-to-monitor [--workspace <workspace>] <monitor_pattern>... [--workspace <workspace>]
 
     | open-settings
 
@@ -67,8 +68,8 @@ aerospork -h;
 
     | summon-workspace [--fail-if-noop] <workspace> [--fail-if-noop]
 
-    | trigger-binding <binding> --mode <mode_id>
-    | trigger-binding --mode <mode_id> <binding>
+    | trigger-binding <binding> --mode <binding_mode>
+    | trigger-binding --mode <binding_mode> <binding>
 
     | volume (up|down)
     | volume (mute-toggle|mute-on|mute-off)
@@ -103,19 +104,19 @@ aerospork -h;
 
 <window_id> ::= {{{ aerospork list-windows --all --format '%{window-id}%{tab}%{app-name} - %{window-title}' }}};
 <binding> ::= {{{ aerospork config --get mode --keys | xargs -I{} aerospork config --get mode.{}.binding --keys }}};
-<mode_id> ::= {{{ aerospork config --get mode --keys }}};
-<workspace> ::= {{{ aerospork list-workspaces --monitor all --empty no }}};
+<binding_mode> ::= {{{ aerospork config --get mode --keys }}};
+<workspace> ::= {{{ aerospork list-workspaces --all }}};
 <number> ::= {{{ true }}};
 <monitor_pattern> ::= {{{ true }}};
 
-<list_workspaces1_flag> ::= --visible [no] | --empty [no] | --format <output_format> | --format <output_format> | --count | --json;
+<list_workspaces1_flag> ::= --visible [no] | --empty [no] | --format <output_format> | --count | --json;
 
 <move_command_flag> ::= --window-id <window_id> | --boundaries <boundary> | --boundaries-action <move_boundaries_action>;
 <move_boundaries_action> ::= stop|fail|create-implicit-container;
 
 <move_workspace_to_monitor_flag> ::= --wrap-around | --workspace <workspace>;
 
-<move_node_to_monitor1_flag> ::= --window-id <window_id>|--focus-follows-window|--fail-if-noop|--wrap-around;
+<move_node_to_monitor1_flag> ::= --window-id <window_id>|--focus-follows-window|--wrap-around;
 <move_node_to_monitor2_flag> ::= --window-id <window_id>|--focus-follows-window|--fail-if-noop;
 
 <focus_flag> ::= --boundaries <boundary>|--boundaries-action <boundaries_action>|--ignore-floating;
