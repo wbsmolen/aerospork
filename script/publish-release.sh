@@ -38,7 +38,25 @@ if test -n "$notes_file" && ! test -f "$notes_file"; then
     exit 1
 fi
 
+# Without --notes-file, the notes are this version's CHANGELOG.md section: everything under
+# `## X.Y.Z` or `## X.Y.Z (date)` up to the next `## `, leading blank lines dropped. Read here, before
+# the twenty-minute build, so a release with no entry stops before anything is tagged.
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+if test -z "$notes_file"; then
+    notes_file="$work_dir/notes.md"
+    awk -v v="$build_version" '
+        $1 == "##" { f = ($2 == v); next }
+        f && (NF || started) { started = 1; print }
+    ' CHANGELOG.md > "$notes_file"
+    if ! grep -q '[^[:space:]]' "$notes_file"; then
+        echo "CHANGELOG.md has no notes for $build_version. Add a '## $build_version (YYYY-MM-DD)' section, or pass --notes-file." > /dev/stderr
+        exit 1
+    fi
+fi
+
 repo="wbsmolen/aerospork"
+changelog_url="https://github.com/$repo/blob/main/CHANGELOG.md"
 dist_zip=".release/aerospork-v$build_version.zip"
 sparkle_zip=".release/AeroSpork-$build_version.zip"
 
@@ -101,13 +119,8 @@ rm -rf "$notary_check_dir"
 git tag -a "v$build_version" -m "v$build_version"
 git push origin "v$build_version"
 
-if test -n "$notes_file"; then
-    gh release create "v$build_version" --repo "$repo" --title "AeroSpork $build_version" \
-        --notes-file "$notes_file" "$dist_zip" "$sparkle_zip"
-else
-    gh release create "v$build_version" --repo "$repo" --title "AeroSpork $build_version" \
-        --generate-notes "$dist_zip" "$sparkle_zip"
-fi
+gh release create "v$build_version" --repo "$repo" --title "AeroSpork $build_version" \
+    --notes-file "$notes_file" "$dist_zip" "$sparkle_zip"
 
 ##################
 ### THE APPCAST ##
@@ -116,8 +129,8 @@ fi
 # Generated from the Sparkle archive, never the distribution zip. `generate_appcast` re-uses an
 # appcast already present in the directory, so seeding it with the live one keeps the channel
 # metadata and the older items.
-appcast_workdir="$(mktemp -d)"
-trap 'rm -rf "$appcast_workdir"' EXIT
+appcast_workdir="$work_dir/appcast"
+mkdir "$appcast_workdir"
 cp "$sparkle_zip" "$appcast_workdir/"
 cp updates-site/appcast.xml "$appcast_workdir/appcast.xml"
 
@@ -127,8 +140,8 @@ cp updates-site/appcast.xml "$appcast_workdir/appcast.xml"
 # HTML, not Markdown. `generate_appcast` picks up a file named after the archive, but a `.md` beside
 # it is silently ignored: only `.html` (without DOCTYPE or body tags) is embedded as CDATA. Tested
 # both -- the Markdown run produced an item with no <description> at all and said nothing about it.
-if test -n "$notes_file"; then
-    python3 - "$notes_file" > "$appcast_workdir/AeroSpork-$build_version.html" <<'PYEOF'
+notes_html="$appcast_workdir/AeroSpork-$build_version.html"
+python3 - "$notes_file" > "$notes_html" <<'PYEOF'
 import html, re, sys
 
 # Deliberately not a Markdown library: these notes use headings, bullets, links, inline code and
@@ -183,13 +196,16 @@ if in_list: out.append("</ul>")
 if in_code: out.append("</pre>")
 print("\n".join(out))
 PYEOF
-fi
+# Sparkle's update dialog shows the notes of the newest item only, so someone who skipped versions
+# would never see the upgrade notes in between. Point them at the whole history.
+echo "<p><a href=\"$changelog_url\">Changes in earlier versions</a></p>" >> "$notes_html"
 
 sparkle_bin="$(find .build/artifacts -type d -name bin -path '*sparkle*' | head -1)"
 test -n "$sparkle_bin" || { echo "Sparkle tools not found; run a build first" > /dev/stderr; exit 1; }
 
 "$sparkle_bin/generate_appcast" \
     --embed-release-notes \
+    --full-release-notes-url "$changelog_url" \
     --download-url-prefix "https://github.com/$repo/releases/download/v$build_version/" \
     --link "https://github.com/$repo" \
     "$appcast_workdir"
