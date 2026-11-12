@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AeroSpork — a tiling window manager for macOS</title>
-<meta name="description" content="An i3-like tiling window manager for macOS. Tree layout, workspaces without animation, TOML config, a CLI, and a settings GUI.">
+<meta name="description" content="An i3-like tiling window manager for macOS. Tree layout, workspaces without animation, TOML config, a CLI, and a Settings window.">
 <link rel="canonical" href="https://aerospork.app/">
 <link rel="icon" href="/icon.png" type="image/png">
 <link rel="apple-touch-icon" href="/icon.png">
@@ -11,7 +11,7 @@
 <meta property="og:site_name" content="AeroSpork">
 <meta property="og:url" content="https://aerospork.app/">
 <meta property="og:title" content="AeroSpork — a tiling window manager for macOS">
-<meta property="og:description" content="Tree layout, workspaces without animation, TOML config, a CLI, and a settings GUI. No System Integrity Protection changes required.">
+<meta property="og:description" content="Tree layout, workspaces without animation, TOML config, a CLI, and a Settings window. No System Integrity Protection changes required.">
 <meta property="og:image" content="https://aerospork.app/social-preview.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
@@ -60,17 +60,17 @@ open AeroSpork again.</p>
 <ul>
   <li>A layout tree with tiles and accordion layouts, driven from the keyboard or the CLI.</li>
   <li>Workspaces that switch instantly, because they are emulated rather than animated.</li>
-  <li>Monitors matched by hardware UUID, so a workspace stays on the same physical panel across a
-      redock — including DisplayLink displays, which report no EDID at all.</li>
+  <li>Monitors matched by hardware UUID, so a workspace stays on the same physical monitor across a
+      redock. This includes DisplayLink monitors, which report no EDID at all.</li>
   <li>Windows return to their workspace, monitor and place in the layout when AeroSpork restarts.</li>
-  <li>Plain-text TOML configuration, with a settings GUI that edits it without touching your
+  <li>Plain-text TOML configuration, with a Settings window that edits it without touching your
       comments.</li>
 </ul>
 
 <h2>Documentation</h2>
-<p><a href="/docs/guide.html">The guide</a> covers configuration and troubleshooting;
-<a href="/docs/commands.html">the command reference</a> covers all 37 commands — 36 on the CLI,
-plus config-only <code>exec-and-forget</code> — which are also installed as man pages;
+<p><a href="/docs/guide.html">The guide</a> covers getting started, configuration and troubleshooting;
+<a href="/docs/commands.html">the command reference</a> covers every command, and the
+commands are also installed as man pages;
 <a href="/docs/goodies.html">goodies</a> collects tips and recipes. The <a href="https://github.com/wbsmolen/aerospork">GitHub repository</a> explains how
 this fork differs from <a href="https://github.com/nikitabobko/AeroSpace">AeroSpace</a>, which it
 is built on.</p>
@@ -79,7 +79,7 @@ is built on.</p>
   <p>Installed copies check <code>/appcast.xml</code> on this host for updates. Each one is signed
   with an EdDSA key whose public half ships in the app, and a build refuses any update it cannot
   verify.</p>
-  <p>No analytics, no telemetry, and update checks are off until you turn them on — the
+  <p>No analytics, no telemetry, and update checks are off until you enable them. The
   <a href="/privacy.html">privacy page</a> says exactly what that means.</p>
   <p>MIT licensed. A fork of
   <a href="https://github.com/nikitabobko/AeroSpace">AeroSpace</a> by Nikita Bobko.</p>
