@@ -759,7 +759,7 @@ floating for all windows of the app:
 == Part 4. Troubleshooting and bug reports
 
 [#binding-does-nothing]
-=== A binding does nothing
+=== [[common-pitfall-keyboard-keys-handling]]A binding does nothing
 
 . Look in the `config` log for a record `Hotkey <key> not registered` (see <<capture-logs>>):
 +
@@ -774,7 +774,7 @@ That record means that another app owns the key.
 . If there is no such record, check that your config loaded. See <<config-problem>>.
 
 [#config-problem]
-=== Is my config the problem?
+=== [[is-my-config-the-problem]]Is my config the problem?
 
 [source,shell]
 ----
@@ -805,7 +805,7 @@ If parts of off-screen windows show on another monitor while AeroSpork runs, see
 <<proper-monitor-arrangement>>.
 
 [#app-not-responding]
-=== An app does not respond
+=== [[an-app-stops-responding]]An app does not respond
 
 A hung or very busy app that does not answer Accessibility requests keeps its windows where they
 are. AeroSpork does not treat them as closed, and does not move the focus away from them. Until the
@@ -813,7 +813,7 @@ app recovers, each layout pass can wait up to a second for it, so workspace swit
 slower.
 
 [#already-running]
-=== "AeroSpork is already running"
+=== [[aerospork-is-already-running]]"AeroSpork is already running"
 
 Only one copy of AeroSpork runs at a time. If you start another copy, for example the binary from a
 terminal while the login item runs, that copy prints
@@ -821,7 +821,7 @@ terminal while the login item runs, that copy prints
 quit the running copy first.
 
 [#capture-logs]
-=== Capture logs
+=== [[capturing-logs]]Capture logs
 
 AeroSpork always writes the important events to the macOS unified log. You do not need to enable
 anything. The records cover which version started, which config loaded or why it did not, config
@@ -910,7 +910,7 @@ https://github.com/wbsmolen/aerospork/blob/main/dev-docs/development.md[the deve
 under "Read a debug build's logs".
 
 [#bug-report-contents]
-=== What to include in a bug report
+=== [[what-to-include-in-a-bug-report]]What to include in a bug report
 
 Open an issue at https://github.com/wbsmolen/aerospork/issues/new?template=bug_report.md and attach:
 
@@ -1401,7 +1401,7 @@ does not match those windows. Match them with `if.app-id`.
 ----
 
 [#event-callbacks]
-=== Event callbacks
+=== [[callbacks]]Event callbacks
 
 [#on-focus-changed-callbacks]
 ==== on-focus-changed, on-focused-workspace-changed, on-focused-monitor-changed
