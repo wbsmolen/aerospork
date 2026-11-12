@@ -18,7 +18,7 @@ struct MoveWorkspaceToMonitorCommand: Command {
                     return true // the monitor it was visible on, if any, got its stub in there
                 } else {
                     return io.err(
-                        "Can't move workspace '\(focusedWorkspace.name)' to monitor '\(targetMonitor.name)'. workspace-to-monitor-force-assignment doesn't allow it",
+                        "Can't move workspace '\(focusedWorkspace.name)' to monitor '\(targetMonitor.name)'. [monitors] pins it to another monitor",
                     )
                 }
             case .failure(let msg):

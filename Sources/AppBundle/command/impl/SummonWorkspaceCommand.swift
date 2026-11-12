@@ -18,7 +18,7 @@ struct SummonWorkspaceCommand: Command {
             if let vacated { _ = vacated.setActiveWorkspace(displaced) }
             return workspace.focusWorkspace()
         } else {
-            return io.err("Can't move workspace '\(workspace.name)' to monitor '\(monitor.name)'. workspace-to-monitor-force-assignment doesn't allow it")
+            return io.err("Can't move workspace '\(workspace.name)' to monitor '\(monitor.name)'. [monitors] pins it to another monitor")
         }
     }
 }
