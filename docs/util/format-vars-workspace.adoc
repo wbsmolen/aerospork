@@ -1,0 +1,3 @@
+%{workspace}:: String. The workspace name.
+%{workspace-is-focused}:: Boolean. True if the workspace is the focused workspace.
+%{workspace-is-visible}:: Boolean. True if the workspace is visible. On more than one monitor, a workspace can be visible but not focused.

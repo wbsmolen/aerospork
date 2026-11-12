@@ -2,10 +2,11 @@
 
 *Project homepage:* https://github.com/wbsmolen/aerospork +
 *Guide:* https://aerospork.app/docs/guide.html +
+*Command reference:* https://aerospork.app/docs/commands.html +
 
-== BUGS
+== Bugs
 
-Bugs can be reported to https://github.com/wbsmolen/aerospork/issues
+Report bugs at https://github.com/wbsmolen/aerospork/issues
 
 == License
 
@@ -14,7 +15,7 @@ Copyright (C) 2025-2026 Billy Smolen +
 Free use of this software is granted under the terms of the MIT License +
 You can find the full text of the AeroSpork license and its dependencies in the 'legal' directory of the distributed zip archive.
 
-== AUTHOR
+== Author
 
 Nikita Bobko and contributors +
 Fork maintained by Billy Smolen

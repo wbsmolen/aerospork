@@ -1,0 +1,8 @@
+include::conditional-exit-status-header.adoc[]
+
+ifndef::env-site[]
+include::exit-status-list.adoc[]
+endif::[]
+ifdef::env-site[]
+The exit status follows the <<exit-status,rules for every command>>.
+endif::[]

@@ -1,0 +1,2 @@
+Exit 1 instead of 0 when the target is already in the requested state, so that a script can tell that nothing changed.
+Without the flag, a no-op exits 0 and still writes a note to stderr.

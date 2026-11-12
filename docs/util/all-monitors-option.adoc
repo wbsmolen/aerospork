@@ -1,6 +1,5 @@
 --all::
 Alias for `--monitor all`.
-Use it only when you genuinely need workspaces/windows from *all monitors*.
 +
-In a multi-monitor setup `--monitor focused` is almost always the option you want.
-A script that operates on all monitors will act on workspaces and windows you were not looking at.
+On more than one monitor, `--monitor focused` is almost always what you want.
+A script that acts on all monitors also acts on workspaces and windows that you do not see.
