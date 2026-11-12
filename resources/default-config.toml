@@ -1,20 +1,24 @@
-# AeroSpork — tiling window manager for macOS
+# AeroSpork: the default config
 #
-# This file ships inside the app and is used when you have no personal config of your own:
-#   Release build: ~/.aerospork.toml
-#   Debug build:   ~/.aerospork-debug.toml
+# AeroSpork ships this file inside the app and uses it when you have no config of your own.
+# To make it yours, copy it and edit the copy:
+#   cp /Applications/AeroSpork.app/Contents/Resources/default-config.toml ~/.aerospork.toml
+# (A debug build reads ~/.aerospork-debug.toml instead.)
 #
-# Every key below is optional. Delete one to get its default back; delete the whole file and
-# AeroSpork still works. Changes apply the moment you save.
+# Every key below is optional. If you delete a key, AeroSpork uses its built-in default, and that
+# is not always the value shown here: without [gaps] the gaps are 0, and without `mod` AeroSpork
+# generates no bindings. If you delete your copy, AeroSpork uses this file again.
+# A saved change applies at once.
 #
-# Full reference: `aerospork --help`, or `man aerospork-<command>` for any command.
+# The guide documents every key: https://aerospork.app/docs/guide.html
+# Each command has a page: `aerospork <command> --help`, or `man aerospork-<command>`.
 
 # ---------------------------------------------------------------------------------------------
 # The two lines most people ever need
 # ---------------------------------------------------------------------------------------------
 
 # Base modifier for the generated bindings listed under [keys] below.
-# Remove this line and nothing is generated at all — you then bind everything yourself.
+# If you remove this line, AeroSpork generates no bindings, and you bind everything yourself.
 mod = "alt"
 
 # Workspaces you want. A range ("1-9"), a list (["dev", "web", "chat"]), or both (["1-9", "dev"]).
@@ -22,8 +26,8 @@ mod = "alt"
 #                 mod-shift-<key>  -> move the focused window to it
 # where <key> is the first character of the name, lower-cased ("dev" -> mod-d).
 # Workspaces listed here always exist, even while empty, so the menu bar, `list-workspaces` and
-# `workspace next/prev` show all of them. One you reach only through a binding of your own is created
-# when you switch to it and released when it empties out.
+# `workspace next/prev` show all of them. AeroSpork creates any other workspace when you switch to
+# it, and releases it when it is empty.
 workspaces = "1-9"
 
 # ---------------------------------------------------------------------------------------------
@@ -32,7 +36,7 @@ workspaces = "1-9"
 
 [gaps]
 inner = 8    # between windows
-outer = 8    # between windows and the screen edge
+outer = 8    # between windows and the monitor edge
 # Per-edge instead:   outer = { top = 32, bottom = 8, left = 8, right = 8 }
 # Per-monitor:        outer = [{ monitor.main = 16 }, 8]
 
@@ -40,7 +44,8 @@ outer = 8    # between windows and the screen edge
 # Keys
 # ---------------------------------------------------------------------------------------------
 #
-# These are generated from `mod` and are already active — listed here so you can see them:
+# AeroSpork generates these from `mod`, and they are already active. They are listed here so
+# that you can see them:
 #
 #   mod-h / j / k / l              focus left / down / up / right
 #   mod-shift-h / j / k / l        move window
@@ -54,7 +59,7 @@ outer = 8    # between windows and the screen edge
 alt-shift-semicolon = "mode service"
 # alt-enter = "exec-and-forget open -na Ghostty"
 
-# A named mode. Enter it with `mode <name>`, leave with `mode main`.
+# A binding mode. Enter it with `mode <name>`. Leave it with `mode main`.
 [keys.service]
 esc = ["reload-config", "mode main"]
 r = ["flatten-workspace-tree", "mode main"]
@@ -65,11 +70,11 @@ backspace = ["close-all-windows-but-current", "mode main"]
 # Monitors
 # ---------------------------------------------------------------------------------------------
 #
-# Pin a workspace to a physical screen. The value can be:
-#   "main" / "secondary"            primary / non-primary
+# Pin a workspace to a monitor. The value can be:
+#   "main" / "secondary"            the main monitor / the other one, when there are exactly two
 #   2                               monitor by position, left to right
 #   "LG|DELL"                       case-insensitive regex on the name
-#   { uuid = "..." }                exact panel — survives docking and identical models
+#   { uuid = "..." }                the exact monitor: survives docking and identical models
 #   { vendor = "0x10AC", model = "0x4276" }
 #
 # Run `aerospork list-monitors --format '%{monitor-fingerprint}'` to see what to put here.
@@ -81,11 +86,12 @@ backspace = ["close-all-windows-but-current", "mode main"]
 # 2 = { uuid = "AAAAAAAA-0000-4000-8000-000000000001" }
 
 # ---------------------------------------------------------------------------------------------
-# Window placement
+# Window rules
 # ---------------------------------------------------------------------------------------------
 #
-# Where a window goes the moment it appears. Key is an app bundle id.
-# For regex matchers, see the long form: `man aerospork` -> on-window-detected.
+# A window rule runs when a window of the app appears. The key is the bundle ID of the app
+# (`aerospork list-apps` prints them). To match by app name, window title or workspace, use
+# [[on-window-detected]]: https://aerospork.app/docs/guide.html#on-window-detected-callback
 
 # [on-window]
 # "com.apple.mail" = "move-node-to-workspace 3"
