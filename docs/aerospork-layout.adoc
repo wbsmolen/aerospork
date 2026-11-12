@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-layout
 // tag::purpose[]
-:manpurpose: Change layout of the focused window to the given layout
+:manpurpose: Change the layout of the focused window, or float it
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -18,39 +18,50 @@ aerospork layout [-h|--help] [--window-id <window-id>]
 == Description
 
 // tag::body[]
-{manpurpose}
+`layout` changes the layout or the orientation of the container that holds the focused window, or makes the window float or tile.
 
-If several arguments are supplied then finds the first argument that doesn't describe the currently active layout, and applies the layout.
-
-* Change both tiling layout and orientation in one go: `h_tiles|v_tiles|h_accordion|v_accordion`
-* Change tiling layout but preserve orientation: `tiles|accordion`
-* Change orientation but preserve layout: `horizontal|vertical`
-* Toggle floating/tiling mode: `tiling|floating`
-
-Deprecated (but still supported) layout names: `list`, `h_list`, `v_list` for `tiles`, `h_tiles`, `v_tiles`
+With several arguments, `layout` applies the first argument that does not match the current layout.
+So two arguments toggle between them, and the order of the arguments does not matter.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
 
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+h_tiles, v_tiles, h_accordion, v_accordion:: Set the layout and the orientation of the container.
+tiles, accordion:: Set the layout of the container, and keep its orientation.
+horizontal, vertical:: Set the orientation of the container, and keep its layout.
+tiling, floating:: Make the window tile or float.
+
+Old spellings, still accepted: `list`, `h_list` and `v_list` for `tiles`, `h_tiles` and `v_tiles`.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`layout` exits 1 when no window is focused, and for a minimized window, a macOS fullscreen window or a window of a hidden app.
+
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-* Toggle between `floating` and `tiling` layouts (order of args doesn't matter): +
+* Toggle between floating and tiling: +
 `aerospork layout floating tiling`
-
-* Toggle orientation (order of args doesn't matter): +
+* Toggle the orientation: +
 `aerospork layout horizontal vertical`
-
-* Toggle between `tiles` and `accordion` layouts (order of args doesn't matter): +
+* Toggle between `tiles` and `accordion`: +
 `aerospork layout tiles accordion`
-
-* Switch to `tiles` layout. Toggle the layout orientation if already in `tiles` layout: +
+* Switch to `tiles`. When the container is already `tiles`, toggle its orientation: +
 `aerospork layout tiles horizontal vertical`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-join-with(1), aerospork-split(1), aerospork-fullscreen(1), https://aerospork.app/docs/guide.html#floating-windows[the guide on floating windows]
 
 // end::body[]
 

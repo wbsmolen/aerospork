@@ -1,5 +1,5 @@
 ifndef::env-site[]
-== Output Format
+== Output format
 endif::[]
 
 ifdef::env-site[]

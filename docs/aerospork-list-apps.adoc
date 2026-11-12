@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-list-apps
 // tag::purpose[]
-:manpurpose: Print the list of running applications that appears in the Dock and may have a user interface
+:manpurpose: Print the running apps that can have windows
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,51 +17,51 @@ aerospork list-apps [-h|--help] [--macos-native-hidden [no]] [--format <output-f
 == Description
 
 // tag::body[]
-{manpurpose}
+`list-apps` prints the running apps that appear in the Dock and can have a user interface, one line for each app.
+Use it to find the bundle ID of an app for a https://aerospork.app/docs/guide.html#on-window-detected-callback[window rule].
 
-Use it to find the application IDs for an xref:guide.adoc#on-window-detected-callback[on-window-detected callback]
+include::util/cli-only.adoc[]
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --macos-native-hidden [no]::
-Filter results to only print hidden applications.
-`[no]` inverts the condition
+Print only the apps hidden with cmd-h. With `no`, print only the apps that are not hidden.
 
---format <output-format>:: Specify output format. See "Output Format" section for more details.
-Incompatible with `--count`
+:list-noun: apps
+include::util/format-options.adoc[]
 
---count:: Output only the number of apps.
-Incompatible with: `--format`, `--json`
-
---json:: Output in JSON format.
-Can be used in combination with `--format` to specify which data to include into the json.
-With `--json`, the `<output-format>` may contain only interpolation variables and spaces
-(`%{right-padding}` and literal text are rejected).
-Incompatible with `--count`
-
-// =========================================================== Output Format
+// =========================================================== Output format
 include::util/conditional-output-format-header.adoc[]
 
-The output format is set with the optional `[--format <output-format>]` option.
-`<output-format>` supports https://en.wikipedia.org/wiki/String_interpolation[string interpolation].
+include::util/format-intro.adoc[]
 
-If not specified, the default `<output-format>` is: +
+The default `<output-format>` is +
 `%{app-pid}%{right-padding} | %{app-bundle-id}%{right-padding} | %{app-name}`
 
-The following variables can be used inside `<output-format>`:
+`<output-format>` can use these variables:
 
-%{app-bundle-id}:: String. Application unique identifier. https://developer.apple.com/documentation/appstoreconnectapi/bundle_ids[Bundle ID]
-%{app-name}:: String. Application name
-%{app-pid}:: Number. https://en.wikipedia.org/wiki/Process_identifier[UNIX process identifier]
-%{app-exec-path}:: String. Application executable path
-%{app-bundle-path}:: String. Application bundle path
+include::util/format-vars-app.adoc[]
 
-%{right-padding}:: Expands to the minimum number of spaces required to right-pad the current column
-%{newline}:: Unicode U+000A newline symbol `\n`
-%{tab}:: Unicode U+0009 tab symbol `\t`
+include::util/format-vars-special.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Print the bundle ID and the name of every app: +
+`aerospork list-apps --format '%{app-bundle-id}%{right-padding} %{app-name}'`
+* Count the hidden apps: +
+`aerospork list-apps --macos-native-hidden --count`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-list-windows(1)
 
 // end::body[]
 

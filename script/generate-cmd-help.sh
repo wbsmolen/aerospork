@@ -18,7 +18,8 @@ cat << EOF > $out_file
 EOF
 
 for file in docs/aerospork-*.adoc; do
-    subcommand=$(basename "$file" | sed 's/^aerospork-//' | sed 's/\.adoc$//' | sed 's/-/_/g')
+    manpage=$(basename "$file" .adoc)
+    subcommand=$(sed 's/^aerospork-//; s/-/_/g' <<< "$manpage")
     sed -n -E '/tag::synopsis/, /end::synopsis/ p' "$file" | \
         sed '1d' | \
         sed '$d' | \
@@ -27,6 +28,6 @@ for file in docs/aerospork-*.adoc; do
         sed "2,$ s/^$cmd_prefix/$_______or_prefix/" | \
         sed     "s/^$____strip_prefix//" | \
         sed "1 s/^/let ${subcommand}_help_generated = $triple_quote\n/" | \
-        sed "\$ s/$/\n${triple_quote}/" | \
-        sed '2,$ s/^/    /' >> $out_file
+        sed "\$ s/$/\n\nSee: man $manpage\n${triple_quote}/" | \
+        sed '2,$ s/^./    &/' >> $out_file
 done

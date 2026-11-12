@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-workspace-back-and-forth
 // tag::purpose[]
-:manpurpose: Switch between the focused workspace and previously focused workspace back and forth
+:manpurpose: Focus the workspace that had focus before
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,19 +17,37 @@ aerospork workspace-back-and-forth [-h|--help]
 == Description
 
 // tag::body[]
-{manpurpose}
+`workspace-back-and-forth` focuses the workspace that had focus before the focused one.
+Run it twice to go back to where you started.
 
-Unlike `focus-back-and-forth`, `workspace-back-and-forth` always succeeds.
-Because unlike windows, workspaces can not be "closed".
-Workspaces are name-addressable objects.
-They are created and destroyed on the fly.
-
-Also see: <<focus-back-and-forth, focus-back-and-forth>>
+Unlike `focus-back-and-forth`, it still works after you close windows, because a workspace keeps its name even when it is empty.
+It fails when there is no previous workspace yet, for example just after AeroSpork starts.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`workspace-back-and-forth` exits 1 when there is no previous workspace yet.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Go back and forth with one key:
++
+[source,toml]
+----
+[keys]
+alt-tab = 'workspace-back-and-forth'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-focus-back-and-forth(1), aerospork-workspace(1)
 
 // end::body[]
 

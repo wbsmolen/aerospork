@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-list-monitors
 // tag::purpose[]
-:manpurpose: Print monitors that satisfy conditions
+:manpurpose: Print the connected monitors
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,69 +17,59 @@ aerospork list-monitors [-h|--help] [--focused [no]] [--mouse [no]] [--format <o
 == Description
 
 // tag::body[]
-{manpurpose}
+`list-monitors` prints one line for each connected monitor, in monitor order.
+include::util/monitor-order.adoc[]
+The filters narrow the list.
+
+Use `--format '%{monitor-fingerprint}'` to get the table that pins a workspace to one physical monitor in `[monitors]`.
+
+include::util/cli-only.adoc[]
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --focused [no]::
-Filter results to only print the focused monitor.
-`[no]` inverts the condition
+Print only the focused monitor. With `no`, print every other monitor.
 
 --mouse [no]::
-Filter results to only print the monitor with the mouse.
-`[no]` inverts the condition
+Print only the monitor with the mouse pointer. With `no`, print every other monitor.
 
---format <output-format>:: Specify output format. See "Output Format" section for more details.
-Incompatible with `--count`
+:list-noun: monitors
+include::util/format-options.adoc[]
 
---count:: Output only the number of monitors.
-Incompatible with: `--format`, `--json`
-
---json:: Output in JSON format.
-Can be used in combination with `--format` to specify which data to include into the json.
-With `--json`, the `<output-format>` may contain only interpolation variables and spaces
-(`%{right-padding}` and literal text are rejected).
-Incompatible with `--count`
-
-// =========================================================== Output Format
+// =========================================================== Output format
 include::util/conditional-output-format-header.adoc[]
 
-The output format is set with the optional `[--format <output-format>]` option.
-`<output-format>` supports https://en.wikipedia.org/wiki/String_interpolation[string interpolation].
+include::util/format-intro.adoc[]
 
-If not specified, the default `<output-format>` is: +
+The default `<output-format>` is +
 `%{monitor-id}%{right-padding} | %{monitor-name}`
 
-The following variables can be used inside `<output-format>`:
+`<output-format>` can use these variables:
 
-%{monitor-id}:: 1-based Number. Sequential number of the belonging monitor
-%{monitor-appkit-nsscreen-screens-id}:: 1-based Number. Index of the belonging monitor in the `NSScreen.screens` array. Useful for integration with other tools that use `NSScreen.screens` ordering (like sketchybar).
-%{monitor-name}:: String. Name of the belonging monitor
-%{monitor-fingerprint}:: String. Hardware fingerprint of the monitor: whichever of vendor, model, serial, name, size and UUID the display reports, as a table you can paste into `[monitors]`. Use it to identify a specific physical monitor in a docking setup.
-%{monitor-vendor-id}:: String. Vendor ID of the monitor in hexadecimal format (e.g., `0x10AC`). Empty if not available.
-%{monitor-model-id}:: String. Model ID of the monitor in hexadecimal format (e.g., `0xD0C1`). Empty if not available.
-%{monitor-serial-number}:: String. Serial number of the monitor. Empty if not available.
-%{monitor-width}:: Number. Width of the monitor in points
-%{monitor-height}:: Number. Height of the monitor in points
+include::util/format-vars-monitor.adoc[]
 
-%{right-padding}:: Expands to the minimum number of spaces required to right-pad the current column
-%{newline}:: Unicode U+000A newline symbol `\n`
-%{tab}:: Unicode U+0009 tab symbol `\t`
+include::util/format-vars-special.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-* Print all monitors in the default format: +
+* Print every monitor in the default format: +
 `aerospork list-monitors`
+* Print the monitor fingerprints, to paste into `[monitors]`: +
+`aerospork list-monitors --format '%{monitor-fingerprint}'`
+* Print the vendor ID, the model ID and the size of each monitor: +
+`aerospork list-monitors --format '%{monitor-name} [%{monitor-vendor-id}:%{monitor-model-id}] %{monitor-width}x%{monitor-height}'`
 
-* Print monitor fingerprints, to paste into the `[monitors]` config section: +
-`aerospork list-monitors --format "%{monitor-fingerprint}"`
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
 
-* Print monitors with their vendor/model IDs and size: +
-`aerospork list-monitors --format "%{monitor-name} [%{monitor-vendor-id}:%{monitor-model-id}] %{monitor-width}x%{monitor-height}"`
+aerospork(1), aerospork-focus-monitor(1), aerospork-list-workspaces(1), https://aerospork.app/docs/guide.html#assign-workspaces-to-monitors[the guide on how to pin workspaces to monitors]
 
 // end::body[]
 

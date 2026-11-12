@@ -19,13 +19,21 @@ aerospork macos-native-fullscreen [-h|--help] [--window-id <window-id>] [--fail-
 == Description
 
 // tag::body[]
-{manpurpose}
+`macos-native-fullscreen` does what the green button of a window does: macOS moves the window to a fullscreen Space of its own.
+AeroSpork takes the window out of the tiles while it is fullscreen, and puts it back in its place when it leaves fullscreen.
+
+To fill the monitor and keep the window on its workspace, use `fullscreen` instead.
+
+macOS reports the fullscreen state with a delay. Two `macos-native-fullscreen` commands in quick succession can act on the old state, or flicker.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---fail-if-noop:: Exit with non-zero exit code if already fullscreen or already not fullscreen
+-h, --help:: Print help and exit.
+
+--fail-if-noop::
+include::util/fail-if-noop-flag-desc.adoc[]
+Requires `on` or `off`.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
@@ -33,10 +41,32 @@ include::util/window-id-flag-desc.adoc[]
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
-on, off::
-`on` means enter fullscreen mode.
-`off` means exit fullscreen mode.
-Toggle between the two if not specified
+on:: Make the window fullscreen.
+off:: Make the window leave fullscreen.
+
+With neither argument, the command toggles.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`macos-native-fullscreen` exits 1 when no window is focused.
+With `--fail-if-noop`, it also exits 1 when the window is already in the requested state.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Toggle macOS fullscreen with a binding:
++
+[source,toml]
+----
+[keys]
+alt-shift-f = 'macos-native-fullscreen'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-fullscreen(1), aerospork-macos-native-minimize(1)
 
 // end::body[]
 

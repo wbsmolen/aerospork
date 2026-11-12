@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-config
 // tag::purpose[]
-:manpurpose: Query AeroSpork config options
+:manpurpose: Print values from the config that AeroSpork runs
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -20,38 +20,60 @@ aerospork config [-h|--help] --config-path
 == Description
 
 // tag::body[]
-{manpurpose}
+`config` prints the effective config: what AeroSpork runs now, after it expands the file.
+For example, `--get mode.main.binding` lists the generated bindings and the bindings that you wrote.
 
-Internally the config is a recursive structure of maps, arrays, strings and integers.
-What you query is the *effective* config: what AeroSpork is running right now, after the config file
-has been desugared. So `--get mode.main.binding` lists the generated bindings as well as the ones you
-wrote.
+The config is a tree of maps, arrays, strings and integers.
+Without `--json` or `--keys`, `--get` prints only a string, an integer or an array of them.
+For a map or an array of maps, add `--json` or `--keys`.
 
-Printing without `--json` or `--keys` flag is supported only for scalar types (strings and integers) and array of scalar types.
-Printing other complicated objects requires `--json` or `--keys` flag.
+include::util/cli-only.adoc[]
+
+AeroSpork reads its config from `~/.aerospork.toml` or `$XDG_CONFIG_HOME/aerospork/aerospork.toml`.
+When `XDG_CONFIG_HOME` is not set, the second path is `~/.config/aerospork/aerospork.toml`.
+When both files exist, AeroSpork reports a config error.
+A debug build reads `~/.aerospork-debug.toml` or `$XDG_CONFIG_HOME/aerospork/aerospork-debug.toml`.
+When you start AeroSpork.app with `--config-path <path>`, it reads that file instead.
+
+`aerospork config --config-path` prints the path of the file that the running app loaded.
+When you have no config of your own, that is the default config inside the app.
+
+For the v1 and v2 spellings of the config, and how AeroSpork converts a v1 config, see
+https://aerospork.app/docs/guide.html#config-v2[the guide].
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---get <name>:: Get the value for a given key. You can inspect available keys with `--major-keys` or `--all-keys`
---major-keys:: Print major keys
---all-keys:: Print all available keys recursively
---json:: Print result in JSON format
---keys:: Print keys of the complicated object (map or array)
---config-path:: Print absolute path to the loaded config
+-h, --help:: Print help and exit.
+--get <name>:: Print the value of `<name>`. `--major-keys` and `--all-keys` list the names.
+--major-keys:: Print the top-level names.
+--all-keys:: Print every name, at every level.
+--json:: Print the value as JSON. Requires `--get`.
+--keys:: Print the keys of a map, or the indexes of an array. Requires `--get`.
+--config-path:: Print the absolute path of the config that the running app loaded.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`config --get` exits 1 when `<name>` is not in the config.
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-* List all binding modes:
+* Print the path of the config that AeroSpork loaded:
++
+----
+$ aerospork config --config-path
+/Users/you/.aerospork.toml
+----
+* List the binding modes:
 +
 ----
 $ aerospork config --get mode --keys
 main
 service
 ----
-* List all key bindings for 'main' binding mode:
+* List the bindings of the `main` binding mode:
 +
 ----
 $ aerospork config --get mode.main.binding --keys
@@ -59,72 +81,20 @@ alt-1
 alt-2
 ...
 ----
-* List all key bindings for 'main' binding mode in JSON format:
+* Print the bindings of the `main` binding mode as JSON:
 +
 ----
 $ aerospork config --get mode.main.binding --json
 {
-  "alt-w" : "workspace W",
-  "alt-y" : "workspace Y",
-  "alt-n" : "workspace N",
-  "alt-shift-e" : "move-node-to-workspace E",
-  "alt-shift-m" : "move-node-to-workspace M",
-  "alt-shift-t" : "move-node-to-workspace T",
+  "alt-1" : "workspace 1",
+  "alt-shift-1" : "move-node-to-workspace 1",
 ...
 ----
 
-// =========================================================== Config file
-== The config file
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
 
-`~/.aerospork.toml` or `+${XDG_CONFIG_HOME}/aerospork/aerospork.toml+`
-(`XDG_CONFIG_HOME` falls back to `~/.config` when the variable is not set);
-a debug build uses `~/.aerospork-debug.toml`.
-If a config is found in more than one location, the ambiguity is reported. A complete config:
-
-----
-mod = "alt"              # base modifier for the generated bindings
-workspaces = "1-9"       # always exist; a range, a list (["dev", "web"]), or both
-
-[gaps]
-inner = 8
-outer = 8                # or { top = 32, bottom = 8, left = 8, right = 8 }
-
-[keys]                   # only what you want beyond the generated defaults
-alt-shift-semicolon = "mode service"
-
-[keys.service]           # a named mode; enter with `mode service`, leave with `mode main`
-esc = ["reload-config", "mode main"]
-
-[monitors]               # workspace -> monitor
-2 = { uuid = "AAAAAAAA-0000-4000-8000-000000000001" }
-
-[on-window]              # app id -> what to do when its window appears
-"com.apple.mail" = "move-node-to-workspace 3"
-----
-
-=== Generated bindings
-
-`mod` generates `mod-h/j/k/l` (focus), `mod-shift-h/j/k/l` (move), `mod-minus`/`mod-equal` (resize),
-`mod-slash`/`mod-comma` (layout) and `mod-tab` (previous workspace).
-Each entry in `workspaces` additionally generates `mod-<key>` to switch to it and `mod-shift-<key>` to
-move the focused window there, where `<key>` is the first character of the name, lower-cased.
-Every entry also always exists, even while empty, with or without `mod`. `persistent-workspaces` declares
-workspaces the same way without generating any binding. `aerospork config --get persistent-workspaces`
-lists every declared workspace: those in `workspaces` and `persistent-workspaces`, and those pinned to
-a monitor.
-
-Anything in `[keys]` **overrides** a generated binding with the same key, so any generated default can
-be replaced. Remove `mod` and nothing is generated at all.
-
-=== Older configs
-
-A config written in the previous schema (the one with `[mode.main.binding]` and
-`workspace-to-monitor-force-assignment`) is converted on first launch, and the original is kept next
-to it as `<name>.pre-v2`. The conversion is only performed when the converted file provably loads to
-the same configuration; otherwise your file is left exactly as it is.
-
-`[mode.<name>.binding]`, `workspace-to-monitor-force-assignment`, `[[on-window-detected]]` and the
-per-edge `gaps` spelling all still parse, so a hand-written or GUI-edited mixture keeps working.
+aerospork(1), aerospork-reload-config(1), aerospork-list-modes(1), aerospork-open-settings(1)
 
 // end::body[]
 

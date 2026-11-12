@@ -1,0 +1,3 @@
+%{right-padding}:: The number of spaces that aligns the current column.
+%{newline}:: A newline character (U+000A, `\n`).
+%{tab}:: A tab character (U+0009, `\t`).

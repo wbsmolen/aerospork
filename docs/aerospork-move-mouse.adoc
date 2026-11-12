@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-move-mouse
 // tag::purpose[]
-:manpurpose: Move mouse to the requested position
+:manpurpose: Move the mouse pointer to the focused window or monitor
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,41 +17,52 @@ aerospork move-mouse [-h|--help] [--fail-if-noop] <mouse-position>
 == Description
 
 // tag::body[]
-{manpurpose}
+`move-mouse` moves the mouse pointer to the center of the focused window or of the focused monitor.
+With a `lazy` position, the pointer moves only when it is outside the window or the monitor.
+
+On an empty workspace no window has focus, so both `window-*` positions use the focused monitor.
+Otherwise the pointer would stay on the monitor that you left.
+In `on-focused-workspace-changed`, a callback is a list of commands with no shell `||`, so it needs that fallback built in.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --fail-if-noop::
-Exit with non-zero exit code if mouse is already at the requested position.
-The flag is compatible only with `window-lazy-center` and `monitor-lazy-center` arguments.
+include::util/fail-if-noop-flag-desc.adoc[]
+Works only with `window-lazy-center` and `monitor-lazy-center`.
 
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
 <mouse-position>::
-Position to move mouse to.
-Possible values:
+Where to move the pointer:
 +
-* `monitor-lazy-center`. Move mouse to the center of the focused monitor, *unless* it is already within the monitor boundaries.
-* `monitor-force-center`. Move mouse to the center of the focused monitor.
-* `window-lazy-center`. Move mouse to the center of the focused window, *unless* it is already within the window boundaries.
-* `window-force-center`. Move mouse to the center of the focused window.
+* `monitor-lazy-center`: the center of the focused monitor, unless the pointer is already on that monitor.
+* `monitor-force-center`: the center of the focused monitor.
+* `window-lazy-center`: the center of the focused window, unless the pointer is already inside that window.
+* `window-force-center`: the center of the focused window.
 
-When no window is focused, which is the case on an empty workspace, both `window-*` values fall back
-to the focused monitor. Centering on "the focused window" has no meaning there, and the alternative
-is leaving the pointer on the monitor you switched away from. This matters most in
-`on-focused-workspace-changed`, where a callback is a list of commands and cannot express the shell
-fallback below.
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+With `--fail-if-noop`, `move-mouse` exits 1 when the pointer is already inside the window or the monitor.
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-* Move mouse to the center of the focused window, falling back to the monitor when a workspace is
-empty (the fallback is built in; no `||` needed): +
-`aerospork move-mouse window-lazy-center`
+* Make the mouse follow focus:
++
+[source,toml]
+----
+on-focus-changed = ['move-mouse window-lazy-center']
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-focus(1), aerospork-focus-monitor(1)
 
 // end::body[]
 

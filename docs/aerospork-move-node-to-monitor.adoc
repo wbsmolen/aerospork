@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-move-node-to-monitor
 // tag::purpose[]
-:manpurpose: Move window to monitor targeted by relative direction, by order, or by pattern
+:manpurpose: Move the focused window to another monitor
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -20,20 +20,22 @@ aerospork move-node-to-monitor [-h|--help] [--window-id <window-id>] [--focus-fo
 == Description
 
 // tag::body[]
-{manpurpose}
+`move-node-to-monitor` moves the focused window to the visible workspace of another monitor.
+Focus stays on the workspace where it was, unless you give `--focus-follows-window`.
+You choose the monitor by direction, by order, or by pattern.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---wrap-around:: Make it possible to wrap around the movement
+-h, --help:: Print help and exit.
+--wrap-around:: At the last monitor, go on to the first, and the reverse. Incompatible with `<monitor-pattern>`.
 
 --focus-follows-window::
-Make sure that the window in question receives focus after moving.
-This flag is a shortcut for manually running `aerospork-workspace`/`aerospork-focus` after `move-node-to-monitor` successful execution.
+Focus the window after the move.
 
 --fail-if-noop::
-Exit with a non-zero exit code if the window already belongs to the target monitor
+include::util/fail-if-noop-flag-desc.adoc[]
+Works only with `<monitor-pattern>`.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
@@ -42,16 +44,30 @@ include::util/window-id-flag-desc.adoc[]
 include::util/conditional-arguments-header.adoc[]
 
 (left|down|up|right)::
-Move window to monitor in direction relative to the focused monitor
+The nearest monitor in that direction from the monitor of the window.
 
 (next|prev)::
-Move window to next|prev monitor in the order they appear in the menu bar icon
+The next or the previous monitor in monitor order.
+include::util/monitor-order.adoc[]
 
-<monitor-pattern>...::
-Find the first matching monitor and move the window there.
-Multiple monitor patterns are useful for covering different monitor configurations.
-Monitor patterns follow the same format as in the `[monitors]` config section
-(previously `workspace-to-monitor-force-assignment`, still accepted)
+include::util/monitor-pattern-arg.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`move-node-to-monitor` exits 1 when no window is focused, when no monitor is in that direction or in that position, and when no pattern matches.
+With `--fail-if-noop`, it also exits 1 when the window is already on the target monitor.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Send the focused window to the next monitor, and go with it: +
+`aerospork move-node-to-monitor --wrap-around --focus-follows-window next`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-focus-monitor(1), aerospork-move-node-to-workspace(1), aerospork-move-workspace-to-monitor(1)
 
 // end::body[]
 

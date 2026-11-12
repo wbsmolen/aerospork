@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-debug-windows
 // tag::purpose[]
-:manpurpose: Interactive command to record Accessibility API debug information to create bug reports
+:manpurpose: Record what macOS reports about windows, for a bug report
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,29 +17,43 @@ aerospork debug-windows [-h|--help] [--window-id <window-id>]
 == Description
 
 // tag::body[]
-{manpurpose}
+`debug-windows` records what the macOS Accessibility API reports about windows.
+Attach its output to a bug report about a window that AeroSpork handles wrongly, for example a window that floats when it should tile.
 
-Attach the output to a bug report about incorrect window handling, such as a window being floated
-when it shouldn't be.
+To record a session:
 
-The intended usage:
+. Run `aerospork debug-windows`. The recording starts.
+. Focus the problem window, or make the window appear.
+. Run `aerospork debug-windows` again. The recording stops and the command prints what it recorded.
 
-. Run the command to start recording a debug session
-. Focus the problematic window, or make the window appear
-. Run the command again to stop recording and print the results
+`debug-windows` is not a stable API.
+Do not rely on the command, or on its output format, in a script.
 
-`debug-windows` is *not a stable API*.
-*Don't rely on* the command existing or on its output format.
-Its only intended use is reporting bugs about incorrect window handling.
+include::util/cli-only.adoc[]
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --window-id <window-id>::
-Print debug information of the specified window right away.
-Usage of this flag disables interactive mode.
+Print the information for this window at once, with no recording session.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`debug-windows --window-id` exits 1 when no window has that ID.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Save the information for one window to a file: +
+`aerospork debug-windows --window-id 1234 > window.txt`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-list-windows(1)
 
 // end::body[]
 

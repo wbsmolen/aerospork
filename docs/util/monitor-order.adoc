@@ -1,0 +1,1 @@
+AeroSpork numbers the monitors from 1 by their left edge, from left to right. It numbers monitors with the same left edge from top to bottom.

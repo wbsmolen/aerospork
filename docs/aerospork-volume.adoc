@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-volume
 // tag::purpose[]
-:manpurpose: Manipulate volume
+:manpurpose: Change or mute the system output volume
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -19,19 +19,45 @@ aerospork volume [-h|--help] set <number>
 == Description
 
 // tag::body[]
-{manpurpose}
+`volume` changes the output volume of the Mac, as the volume keys do.
+Bind it to keys on a keyboard that has no media keys.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
-(up|down):: Increase or decrease the volume by one step (6.25%, i.e. 1/16, the same step the media keys use)
-(mute-toggle|mute-on|mute-off):: Toggle/On/Off mute
-set <number>:: Set volume to the exact value on scale from 0 to 100
+up, down:: Make the volume louder or quieter by one step of 6.25% (1/16), the step of the media keys.
+mute-toggle:: Mute the output, or unmute it when it is muted.
+mute-on:: Mute the output.
+mute-off:: Unmute the output.
+set <number>:: Set the volume to `<number>`, from 0 to 100.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Set the volume to one quarter: +
+`aerospork volume set 25`
+* Control the volume with bindings:
++
+[source,toml]
+----
+[keys]
+alt-shift-up = 'volume up'
+alt-shift-down = 'volume down'
+alt-shift-m = 'volume mute-toggle'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1)
 
 // end::body[]
 

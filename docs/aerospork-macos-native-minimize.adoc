@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-macos-native-minimize
 // tag::purpose[]
-:manpurpose: Minimize focused window
+:manpurpose: Minimize the focused window
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,17 +17,40 @@ aerospork macos-native-minimize [-h|--help] [--window-id <window-id>]
 == Description
 
 // tag::body[]
-{manpurpose}
+`macos-native-minimize` minimizes a window to the Dock, as cmd-m does.
+AeroSpork takes the window out of the tiles, and puts it back in its place when it comes back.
 
-With `--window-id` naming a window that is already minimized, it brings the window back.
+A minimized window has no focus, so only `--window-id` can name one.
+With `--window-id` and a minimized window, the command brings the window back.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`macos-native-minimize` exits 1 when no window is focused.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Minimize a window, then bring it back:
++
+----
+id=$(aerospork list-windows --focused --format '%{window-id}')
+aerospork macos-native-minimize
+aerospork macos-native-minimize --window-id "$id"
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-macos-native-fullscreen(1), aerospork-focus(1)
 
 // end::body[]
 

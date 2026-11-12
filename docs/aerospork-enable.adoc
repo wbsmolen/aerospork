@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-enable
 // tag::purpose[]
-:manpurpose: Temporarily disable window management
+:manpurpose: Enable or disable window management
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -19,22 +19,53 @@ aerospork enable [-h|--help] off [--fail-if-noop]
 == Description
 
 // tag::body[]
-{manpurpose}
+`enable off` stops window management: AeroSpork moves the windows of off-screen workspaces onto the screen and stops every binding.
+`enable on` starts window management again, in the `main` binding mode.
+The *Pause tiling* and *Resume tiling* items of the menu bar icon do the same.
 
-When you disable AeroSpork, windows from currently invisible workspaces will be placed to the visible area of the screen
+While window management is off, AeroSpork rejects every other command, query commands included.
+Such a command exits 1 with the message `server is disabled and doesn't accept commands`.
+`-h`, `--help`, `-v` and `--version` still work.
 
-Key events are not intercepted when AeroSpork is disabled
-
-While disabled, the server rejects every other command — including query commands — with a non-zero
-exit code and the message "server is disabled and doesn't accept commands".
-`aerospork enable on|off|toggle` is the one exception.
-`-h|--help` and `-v|--version` still work because the CLI answers them without contacting the server
+WARNING: No binding works while window management is off, so a binding cannot run `enable on`.
+Run `aerospork enable on` from a terminal, or choose *Resume tiling* from the menu bar icon.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---fail-if-noop:: Exit with non-zero exit code if already in the requested mode
+-h, --help:: Print help and exit.
+
+--fail-if-noop::
+include::util/fail-if-noop-flag-desc.adoc[]
+Incompatible with `toggle`.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+on:: Enable window management.
+off:: Disable window management.
+toggle:: Enable window management if it is off, and disable it if it is on.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+With `--fail-if-noop`, `enable on` exits 1 when window management is already on, and `enable off` exits 1 when it is already off.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Let a script pause tiling while it arranges windows itself:
++
+----
+aerospork enable off
+# ...
+aerospork enable on
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-mode(1)
 
 // end::body[]
 

@@ -1,0 +1,10 @@
+%{monitor-id}:: Number. The monitor number, from 1.
+include::monitor-order.adoc[]
+%{monitor-appkit-nsscreen-screens-id}:: Number. The position of the monitor in the `NSScreen.screens` array, from 1. Tools such as sketchybar use this order.
+%{monitor-name}:: String. The monitor name.
+%{monitor-fingerprint}:: String. The hardware fingerprint of the monitor: the vendor, model, serial, name, size and UUID that the display reports, as a table that you can paste into `[monitors]`. Use it to pin a workspace to one physical monitor in a docking setup.
+%{monitor-vendor-id}:: String. The vendor ID of the monitor in hexadecimal, for example `0x10AC`. Empty if the display does not report it.
+%{monitor-model-id}:: String. The model ID of the monitor in hexadecimal, for example `0xD0C1`. Empty if the display does not report it.
+%{monitor-serial-number}:: String. The serial number of the monitor. Empty if the display does not report it.
+%{monitor-width}:: Number. The width of the monitor in points.
+%{monitor-height}:: Number. The height of the monitor in points.

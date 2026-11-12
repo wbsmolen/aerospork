@@ -1,0 +1,12 @@
+--format <output-format>::
+Print each item in `<output-format>`. See the Output format section.
+Incompatible with `--count`.
+
+--count::
+Print only the number of {list-noun}.
+Incompatible with `--format` and `--json`.
+
+--json::
+Print the result as JSON.
+With `--format`, `<output-format>` chooses the fields of each JSON object. It can then hold only variables and spaces: AeroSpork rejects `%{right-padding}` and literal text.
+Incompatible with `--count`.

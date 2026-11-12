@@ -1,10 +1,9 @@
---monitor <monitors>::
-Filter results to only print workspaces/windows that are attached to specified monitors.
-`<monitors>` is a space-separated list of monitor IDs. +
+--monitor <monitor>...::
+Print only the workspaces or windows on the given monitors.
+`<monitor>...` is a space-separated list of monitor IDs:
 +
-Possible monitor IDs: +
-+
-. 1-based index of a monitor, as if monitors were ordered horizontally from left to right
-. `all` is a special monitor ID that represents all monitors
-. `mouse` is a special monitor ID that represents the monitor with the mouse
-. `focused` is a special monitor ID that represents the focused monitor
+* A monitor number.
+include::monitor-order.adoc[]
+* `all`: every monitor.
+* `mouse`: the monitor with the mouse pointer.
+* `focused`: the focused monitor.

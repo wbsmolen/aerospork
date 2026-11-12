@@ -17,19 +17,35 @@ aerospork close [-h|--help] [--quit-if-last-window] [--window-id <window-id>]
 == Description
 
 // tag::body[]
-{manpurpose}
+`close` closes a window as its close button does. The app can ask you to save first, so the window can stay open.
 
-Normally, you don’t need to use this command, because macOS offers its own `cmd+w` binding.
-You might want to use the command from CLI for scripting purposes
+For the focused window, macOS already offers cmd-w, so you do not need this command in a binding.
+Use it from a script, or with `--window-id` to close a window that does not have focus.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---quit-if-last-window:: Quit the app instead of closing if it's the last window of the app
+-h, --help:: Print help and exit.
+--quit-if-last-window:: When the window is the last window of its app, quit the app.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`close` exits 1 on an empty workspace, and when the app does not quit.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Close every TextEdit window, on every monitor: +
+`aerospork list-windows --monitor all --app-bundle-id com.apple.TextEdit --format '%{window-id}' | xargs -n1 aerospork close --window-id`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-close-all-windows-but-current(1), aerospork-list-windows(1)
 
 // end::body[]
 

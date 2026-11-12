@@ -1,0 +1,8 @@
+0:: The command did what you asked.
+A no-op also exits 0. See `--fail-if-noop` on the commands that take it.
+1:: The command ran and failed: no window to act on, an unknown target, or window management is off.
+The reason is on stderr.
+2:: AeroSpork did not understand the command: an unknown subcommand, flag or value.
+The error on stderr names what the command accepts.
+3:: The CLI cannot reach AeroSpork.
+Open AeroSpork.app, then run the command again.

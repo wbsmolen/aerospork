@@ -1,0 +1,13 @@
+<monitor-pattern>...::
+One or more monitor patterns. AeroSpork tries them in order and uses the first monitor that matches.
+Several patterns let one command work with different monitor setups.
+Each pattern is one of:
++
+* A monitor number, in the monitor order that `next` and `prev` use.
+* `main`: the main monitor.
+* `secondary`: the monitor that is not the main monitor, when exactly two monitors are connected.
+* A case-insensitive regular expression, matched against the monitor name.
+
++
+These are the string patterns of the `[monitors]` config section.
+A fingerprint table such as `{ uuid = "..." }` works only in the config.

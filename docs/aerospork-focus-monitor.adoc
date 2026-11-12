@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-focus-monitor
 // tag::purpose[]
-:manpurpose: Focus monitor by relative direction, by order, or by pattern
+:manpurpose: Focus a monitor by direction, by order, or by pattern
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -19,28 +19,44 @@ aerospork focus-monitor [-h|--help] <monitor-pattern>...
 == Description
 
 // tag::body[]
-{manpurpose}
+`focus-monitor` focuses the visible workspace of another monitor, and the window on it that had focus last.
+No window moves.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---wrap-around:: Make it possible to wrap around focus
+-h, --help:: Print help and exit.
+--wrap-around:: At the last monitor, go on to the first, and the reverse. Incompatible with `<monitor-pattern>`.
 
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
 (left|down|up|right)::
-Focus monitor in direction relative to the focused monitor
+The nearest monitor in that direction from the focused monitor.
 
 (next|prev)::
-Focus next|prev monitor in the order they appear in the menu bar icon
+The next or the previous monitor in monitor order.
+include::util/monitor-order.adoc[]
 
-<monitor-pattern>...::
-Find the first matching monitor and focus it.
-Multiple monitor patterns are useful for covering different monitor configurations.
-Monitor patterns follow the same format as in the `[monitors]` config section
-(previously `workspace-to-monitor-force-assignment`, still accepted)
+include::util/monitor-pattern-arg.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`focus-monitor` exits 1 when no monitor is in that direction or in that position, and when no pattern matches.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Focus the monitor to the right, and wrap to the leftmost one: +
+`aerospork focus-monitor --wrap-around right`
+* Focus the built-in display if it is connected, else the main monitor: +
+`aerospork focus-monitor 'built-in' main`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-list-monitors(1), aerospork-move-node-to-monitor(1), aerospork-move-workspace-to-monitor(1)
 
 // end::body[]
 

@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-open-settings
 // tag::purpose[]
-:manpurpose: Open the settings window
+:manpurpose: Open the Settings window
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,37 +17,40 @@ aerospork open-settings [-h|--help]
 == Description
 
 // tag::body[]
-{manpurpose}
+`open-settings` opens the Settings window of AeroSpork and brings it to the front, even when another app is frontmost.
+It does the same as *Settings…* in the menu bar icon, cmd-comma while AeroSpork is frontmost, or opening AeroSpork.app again while it runs.
 
-Equivalent to choosing *Settings…* from the menu bar icon, pressing kbd:[Cmd+,] while AeroSpork is
-frontmost, or opening AeroSpork again (from Finder, Spotlight or `open -a AeroSpork`) while it is
-running. The settings window is a singleton: running this while it is already open brings the
-existing window to the front. The window comes to the front even when another app is frontmost, and
-AeroSpork never tiles it or moves it to a workspace.
+There is only one Settings window. When it is already open, the command brings that window to the front.
+AeroSpork never tiles the Settings window and never moves it to a workspace.
 
-The command is allowed in config, so it can be bound to a key:
+For the panes and how changes apply, see https://aerospork.app/docs/guide.html#settings-gui[the guide].
 
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`open-settings` exits 1 when the window does not open.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Open the Settings window with a binding:
++
 [source,toml]
 ----
 [keys]
 alt-shift-comma = 'open-settings'
 ----
 
-The window has seven panes: General, Gaps, Keys, Monitors, Events, Window Rules, and Raw TOML.
-It is resizable (opens at 880×620, minimum 780×520) and remembers its selected pane.
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
 
-Structured settings apply live as you change them, and a change still pending when you close the
-window is saved. The *Raw TOML* pane is the exception: it applies
-explicitly, so half-typed TOML is never written. Raw TOML
-supports native Find, line numbers, section jumps, and parser errors that link to the failing line.
+aerospork(1), aerospork-config(1), aerospork-reload-config(1)
 
-A *complex* badge marks a value richer than the structured controls can edit. Such a value is
-preserved on save, and can be edited in Raw TOML.
-
-// =========================================================== Options
-include::util/conditional-options-header.adoc[]
-
--h, --help:: Print help
 // end::body[]
 
 // =========================================================== Footer

@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-move-workspace-to-monitor
 // tag::purpose[]
-:manpurpose: Move workspace to monitor targeted by relative direction, by order, or by pattern
+:manpurpose: Move the focused workspace to another monitor
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -19,18 +19,19 @@ aerospork move-workspace-to-monitor [-h|--help] [--workspace <workspace>] <monit
 == Description
 
 // tag::body[]
-{manpurpose}.
-Focus follows the workspace, so the workspace stays focused.
+`move-workspace-to-monitor` makes a workspace the visible workspace of another monitor, with all its windows.
+Focus goes with the workspace.
+Directions and `next`/`prev` count from the monitor that the workspace is on now: with `--workspace`, that is not always the focused monitor.
 
-Deprecated name: `move-workspace-to-display`
+The command fails for a workspace that the config https://aerospork.app/docs/guide.html#assign-workspaces-to-monitors[pins to a monitor].
 
-The command fails for a workspace xref:guide.adoc#assign-workspaces-to-monitors[that has a monitor force assignment].
+Old spelling, still accepted: `move-workspace-to-display`.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---wrap-around:: Make it possible to move a workspace between the first and last monitors
+-h, --help:: Print help and exit.
+--wrap-around:: At the last monitor, go on to the first, and the reverse. Incompatible with `<monitor-pattern>`.
 
 --workspace <workspace>::
 include::util/workspace-flag-desc.adoc[]
@@ -39,17 +40,32 @@ include::util/workspace-flag-desc.adoc[]
 include::util/conditional-arguments-header.adoc[]
 
 (left|down|up|right)::
-Move workspace to monitor in direction relative to the focused monitor
+The nearest monitor in that direction from the monitor of the workspace.
 
 (next|prev)::
-Move the workspace to next or prev monitor.
-'next' or 'prev' monitor is calculated relative to the monitor `<workspace>` currently belongs to.
+The next or the previous monitor in monitor order, from the monitor of the workspace.
+include::util/monitor-order.adoc[]
 
-<monitor-pattern>::
-Find the first matching monitor and move the workspace there.
-Multiple monitor patterns are useful for covering different monitor configurations.
-Monitor patterns follow the same format as in the `[monitors]` config section
-(previously `workspace-to-monitor-force-assignment`, still accepted)
+include::util/monitor-pattern-arg.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`move-workspace-to-monitor` exits 1 for a pinned workspace, when no monitor is in that direction or in that position, and when no pattern matches.
+When the workspace is already on the target monitor, it exits 0.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Move the focused workspace to the next monitor, and wrap to the first: +
+`aerospork move-workspace-to-monitor --wrap-around next`
+* Move workspace `web` to the main monitor: +
+`aerospork move-workspace-to-monitor --workspace web main`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-summon-workspace(1), aerospork-focus-monitor(1), aerospork-move-node-to-monitor(1)
 
 // end::body[]
 

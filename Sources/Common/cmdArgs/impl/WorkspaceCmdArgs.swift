@@ -23,7 +23,7 @@ public struct WorkspaceCmdArgs: CmdArgs {
 
 public func parseWorkspaceCmdArgs(_ args: [String]) -> ParsedCmd<WorkspaceCmdArgs> {
     parseSpecificCmdArgs(WorkspaceCmdArgs(rawArgs: args), args)
-        .filter("--wrapAround requires using \(NextPrev.unionLiteral) argument") { ($0._wrapAround != nil).implies($0.target.val.isRelatve) }
+        .filter("--wrap-around requires using \(NextPrev.unionLiteral) argument") { ($0._wrapAround != nil).implies($0.target.val.isRelatve) }
         .filterNot("--auto-back-and-forth is incompatible with \(NextPrev.unionLiteral)") { $0._autoBackAndForth != nil && $0.target.val.isRelatve }
         .filterNot("--fail-if-noop is incompatible with \(NextPrev.unionLiteral)") { $0.failIfNoop && $0.target.val.isRelatve }
         .filterNot("--fail-if-noop is incompatible with --auto-back-and-forth") { $0.autoBackAndForth && $0.failIfNoop }
@@ -53,7 +53,7 @@ public enum WorkspaceTarget: Equatable, Sendable {
     }
 }
 
-let workspaceTargetPlaceholder = "(<workspace-name>|next|prev)"
+let workspaceTargetPlaceholder = "(<workspace>|next|prev)"
 
 func parseWorkspaceTarget(arg: String, nextArgs: inout [String]) -> Parsed<WorkspaceTarget> {
     return switch arg {

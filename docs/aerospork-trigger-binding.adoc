@@ -2,14 +2,14 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-trigger-binding
 // tag::purpose[]
-:manpurpose: Trigger AeroSpork binding as if it was pressed by user
+:manpurpose: Run a binding as if you pressed its keys
 // end::purpose[]
 
 // =========================================================== Synopsis
 == Synopsis
 [verse]
 // tag::synopsis[]
-aerospork trigger-binding [-h|--help] <binding> --mode <mode-id>
+aerospork trigger-binding [-h|--help] <binding> --mode <binding-mode>
 
 // end::synopsis[]
 
@@ -17,29 +17,39 @@ aerospork trigger-binding [-h|--help] <binding> --mode <mode-id>
 == Description
 
 // tag::body[]
-{manpurpose}
+`trigger-binding` runs the commands of a binding without a key press.
+The binding mode does not have to be the active one.
 
-Inspect the available bindings with `aerospork config`: +
-`aerospork config --get mode.main.binding --keys`
+To list the bindings of a mode, run `aerospork config --get mode.main.binding --keys`.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---mode <mode-id>:: Mode to search `<binding>` in
+-h, --help:: Print help and exit.
+--mode <binding-mode>:: The binding mode that holds `<binding>`. Required.
 
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
-<binding>:: Binding to trigger
+<binding>:: The keys of the binding, in the key notation of the config, for example `alt-tab`.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`trigger-binding` exits 1 when the mode or the binding does not exist, and when a command of the binding fails.
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-* Run the alphabetically first binding in the config: +
-`aerospork trigger-binding --mode main "$(aerospork config --get mode.main.binding --keys | head -1)"`
-* Trigger `alt-tab` binding: +
+* Run the `alt-tab` binding of the `main` mode: +
 `aerospork trigger-binding --mode main alt-tab`
+* Run the first binding of the `main` mode, in alphabetical order: +
+`aerospork trigger-binding --mode main "$(aerospork config --get mode.main.binding --keys | head -1)"`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-mode(1), aerospork-config(1), aerospork-list-modes(1)
 
 // end::body[]
 

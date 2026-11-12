@@ -1,0 +1,5 @@
+%{app-bundle-id}:: String. The https://developer.apple.com/documentation/appstoreconnectapi/bundle_ids[bundle ID] of the app.
+%{app-name}:: String. The app name.
+%{app-pid}:: Number. The https://en.wikipedia.org/wiki/Process_identifier[process ID] of the app.
+%{app-exec-path}:: String. The path of the app executable.
+%{app-bundle-path}:: String. The path of the app bundle.

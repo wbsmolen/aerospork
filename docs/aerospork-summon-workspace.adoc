@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-summon-workspace
 // tag::purpose[]
-:manpurpose: Move the requested workspace to the focused monitor
+:manpurpose: Bring a workspace to the focused monitor
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,23 +17,43 @@ aerospork summon-workspace [-h|--help] [--fail-if-noop] <workspace>
 == Description
 
 // tag::body[]
-{manpurpose}.
-The moved workspace becomes focused.
-The behavior is identical to Xmonad's.
+`summon-workspace` makes `<workspace>` the visible workspace of the focused monitor, and focuses it.
+`workspace` goes to the monitor of a workspace. `summon-workspace` brings the workspace to you.
 
-The command is only meaningful in a multi-monitor setup.
-On a single monitor it is identical to `workspace`.
+When `<workspace>` is visible on another monitor, the two monitors swap workspaces, so nothing that was on the screen disappears.
+On one monitor, `summon-workspace` does the same as `workspace`.
+
+The command fails for a workspace that the config https://aerospork.app/docs/guide.html#assign-workspaces-to-monitors[pins to another monitor].
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---fail-if-noop:: Exit with a non-zero exit code if the workspace is already visible on the focused monitor
+-h, --help:: Print help and exit.
+
+--fail-if-noop::
+include::util/fail-if-noop-flag-desc.adoc[]
 
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
-<workspace>:: The workspace to operate on.
+<workspace>:: The name of the workspace to bring.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`summon-workspace` exits 1 for a workspace that is pinned to another monitor.
+With `--fail-if-noop`, it also exits 1 when the workspace is already visible on the focused monitor.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Bring workspace `web` to the monitor that you work on: +
+`aerospork summon-workspace web`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-workspace(1), aerospork-move-workspace-to-monitor(1)
 
 // end::body[]
 

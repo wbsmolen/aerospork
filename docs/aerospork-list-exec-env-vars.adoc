@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-list-exec-env-vars
 // tag::purpose[]
-:manpurpose: List environment variables that exec-* commands and callbacks are run with
+:manpurpose: Print the environment that exec-* commands and callbacks run with
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,30 +17,40 @@ aerospork list-exec-env-vars [-h|--help] [--show-secrets]
 == Description
 
 // tag::body[]
-{manpurpose}
+`list-exec-env-vars` prints the environment that each of these starts from, one `NAME=value` line for each variable:
 
-Examples of commands and callbacks:
+* The `exec-and-forget` command.
+* The `on-focus-changed`, `on-focused-workspace-changed` and `on-focused-monitor-changed` callbacks.
 
-* `aerospork exec-and-forget` command
-* the `on-focus-changed` / `on-focused-workspace-changed` / `on-focused-monitor-changed` callbacks
+AeroSpork adds `AEROSPORK_WINDOW_ID`, `AEROSPORK_WORKSPACE`, `AEROSPORK_FOCUSED_WORKSPACE` and `AEROSPORK_PREV_WORKSPACE` for each command, from what triggered it.
+Those variables are not in this list.
 
-Values are **redacted by default** for variables whose names look like secrets (matching KEY, TOKEN,
-SECRET, PASSWORD, PASSWD, CREDENTIAL, AUTH or PRIVATE). The match is deliberately over-eager,
-because the two failure directions are not symmetric: a needlessly hidden value costs you one flag,
-a leaked credential costs you the credential.
+By default, the command hides the value of each variable whose name looks like a secret: a name that contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `PRIVATE`.
+The match is deliberately broad. A value that is hidden for no reason costs you one flag. A leaked credential costs you the credential.
 
-Redaction is a shoulder-surfing guard for *display only*. The child process still receives the real
-environment, because a script that posts to Slack needs its token. See `man aerospork-exec-and-forget`.
+The hiding is for the screen only. The script still receives the real values, because a script that posts to Slack needs its token. See aerospork-exec-and-forget(1).
 
-It lists the environment every such command starts from. The variables AeroSpork adds per command --
-`AEROSPORK_WINDOW_ID`, `AEROSPORK_WORKSPACE`, `AEROSPORK_FOCUSED_WORKSPACE`, `AEROSPORK_PREV_WORKSPACE`
--- depend on what triggered it, so they cannot appear here.
+Unlike the other query commands, `list-exec-env-vars` also works in the config, so a callback can print its own environment.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---show-secrets:: Print real values instead of `<redacted>`
+-h, --help:: Print help and exit.
+--show-secrets:: Print the real values in place of `<redacted>`.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Check the `PATH` that a script gets: +
+`aerospork list-exec-env-vars | grep '^PATH='`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-exec-and-forget(1), https://aerospork.app/docs/guide.html#exec-env-vars[the guide on exec environment variables]
 
 // end::body[]
 

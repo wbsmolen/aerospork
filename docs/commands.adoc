@@ -1,275 +1,416 @@
-= AeroSpork Commands
+= AeroSpork commands
 include::util/site-attributes.adoc[]
 
 include::util/header.adoc[]
 
-Commands documentation is also available as manpages.
+Run each command from a terminal as `aerospork <command>`, or from a binding or a callback in the config without the `aerospork` prefix.
+The query commands work only from the CLI, except `list-exec-env-vars`. `exec-and-forget` works only in the config.
+Every command exits with one of the codes in <<exit-status>>.
+Each command also has a man page: run `man aerospork-<command>`.
 
-== balance-sizes
-----
-include::aerospork-balance-sizes.adoc[tags=synopsis]
-----
-include::aerospork-balance-sizes.adoc[tags=purpose]
-include::aerospork-balance-sizes.adoc[tags=body]
+In this reference, a _node_ is a window or a container in the tree. In practice, the commands move windows.
 
-== close
-----
-include::aerospork-close.adoc[tags=synopsis]
-----
-include::aerospork-close.adoc[tags=purpose]
-include::aerospork-close.adoc[tags=body]
+[#focus-commands]
+== Focus
 
-== close-all-windows-but-current
-----
-include::aerospork-close-all-windows-but-current.adoc[tags=synopsis]
-----
-include::aerospork-close-all-windows-but-current.adoc[tags=purpose]
-include::aerospork-close-all-windows-but-current.adoc[tags=body]
-
-== enable
-----
-include::aerospork-enable.adoc[tags=synopsis]
-----
-include::aerospork-enable.adoc[tags=purpose]
-include::aerospork-enable.adoc[tags=body]
-
-== exec-and-forget
-----
-include::aerospork-exec-and-forget.adoc[tags=synopsis]
-----
-include::aerospork-exec-and-forget.adoc[tags=purpose]
-include::aerospork-exec-and-forget.adoc[tags=body]
-
-== flatten-workspace-tree
-----
-include::aerospork-flatten-workspace-tree.adoc[tags=synopsis]
-----
-include::aerospork-flatten-workspace-tree.adoc[tags=purpose]
-include::aerospork-flatten-workspace-tree.adoc[tags=body]
-
-== focus
+[#focus]
+=== focus
 ----
 include::aerospork-focus.adoc[tags=synopsis]
 ----
 include::aerospork-focus.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-focus.adoc[tags=body]
 
-== focus-back-and-forth
+[#focus-back-and-forth]
+=== focus-back-and-forth
 ----
 include::aerospork-focus-back-and-forth.adoc[tags=synopsis]
 ----
 include::aerospork-focus-back-and-forth.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-focus-back-and-forth.adoc[tags=body]
 
-== focus-monitor
+[#focus-monitor]
+=== focus-monitor
 ----
 include::aerospork-focus-monitor.adoc[tags=synopsis]
 ----
 include::aerospork-focus-monitor.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-focus-monitor.adoc[tags=body]
 
-== fullscreen
-----
-include::aerospork-fullscreen.adoc[tags=synopsis]
-----
-include::aerospork-fullscreen.adoc[tags=purpose]
-include::aerospork-fullscreen.adoc[tags=body]
-
-== join-with
-----
-include::aerospork-join-with.adoc[tags=synopsis]
-----
-include::aerospork-join-with.adoc[tags=purpose]
-include::aerospork-join-with.adoc[tags=body]
-
-== layout
-----
-include::aerospork-layout.adoc[tags=synopsis]
-----
-include::aerospork-layout.adoc[tags=purpose]
-include::aerospork-layout.adoc[tags=body]
-
-== macos-native-fullscreen
-----
-include::aerospork-macos-native-fullscreen.adoc[tags=synopsis]
-----
-include::aerospork-macos-native-fullscreen.adoc[tags=purpose]
-include::aerospork-macos-native-fullscreen.adoc[tags=body]
-
-== macos-native-minimize
-----
-include::aerospork-macos-native-minimize.adoc[tags=synopsis]
-----
-include::aerospork-macos-native-minimize.adoc[tags=purpose]
-include::aerospork-macos-native-minimize.adoc[tags=body]
-
-== mode
-----
-include::aerospork-mode.adoc[tags=synopsis]
-----
-include::aerospork-mode.adoc[tags=purpose]
-include::aerospork-mode.adoc[tags=body]
+[#move-commands]
+== Move windows and workspaces
 
 [#move]
-== move
+=== move
 ----
 include::aerospork-move.adoc[tags=synopsis]
 ----
 include::aerospork-move.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-move.adoc[tags=body]
 
-== move-mouse
-----
-include::aerospork-move-mouse.adoc[tags=synopsis]
-----
-include::aerospork-move-mouse.adoc[tags=purpose]
-include::aerospork-move-mouse.adoc[tags=body]
-
-== move-node-to-monitor
-----
-include::aerospork-move-node-to-monitor.adoc[tags=synopsis]
-----
-include::aerospork-move-node-to-monitor.adoc[tags=purpose]
-include::aerospork-move-node-to-monitor.adoc[tags=body]
-
-== move-node-to-workspace
+[#move-node-to-workspace]
+=== move-node-to-workspace
 ----
 include::aerospork-move-node-to-workspace.adoc[tags=synopsis]
 ----
 include::aerospork-move-node-to-workspace.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-move-node-to-workspace.adoc[tags=body]
 
-== move-workspace-to-monitor
+[#move-node-to-monitor]
+=== move-node-to-monitor
+----
+include::aerospork-move-node-to-monitor.adoc[tags=synopsis]
+----
+include::aerospork-move-node-to-monitor.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-move-node-to-monitor.adoc[tags=body]
+
+[#move-workspace-to-monitor]
+=== move-workspace-to-monitor
 ----
 include::aerospork-move-workspace-to-monitor.adoc[tags=synopsis]
 ----
 include::aerospork-move-workspace-to-monitor.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-move-workspace-to-monitor.adoc[tags=body]
 
-== open-settings
+[#move-mouse]
+=== move-mouse
 ----
-include::aerospork-open-settings.adoc[tags=synopsis]
+include::aerospork-move-mouse.adoc[tags=synopsis]
 ----
-include::aerospork-open-settings.adoc[tags=purpose]
-include::aerospork-open-settings.adoc[tags=body]
+include::aerospork-move-mouse.adoc[tags=purpose]
+{manpurpose}.
 
-== reload-config
-----
-include::aerospork-reload-config.adoc[tags=synopsis]
-----
-include::aerospork-reload-config.adoc[tags=purpose]
-include::aerospork-reload-config.adoc[tags=body]
+include::aerospork-move-mouse.adoc[tags=body]
 
-== resize
-----
-include::aerospork-resize.adoc[tags=synopsis]
-----
-include::aerospork-resize.adoc[tags=purpose]
-include::aerospork-resize.adoc[tags=body]
+[#layout-commands]
+== Layout
 
-== split
+[#layout]
+=== layout
+----
+include::aerospork-layout.adoc[tags=synopsis]
+----
+include::aerospork-layout.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-layout.adoc[tags=body]
+
+[#join-with]
+=== join-with
+----
+include::aerospork-join-with.adoc[tags=synopsis]
+----
+include::aerospork-join-with.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-join-with.adoc[tags=body]
+
+[#split]
+=== split
 ----
 include::aerospork-split.adoc[tags=synopsis]
 ----
 include::aerospork-split.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-split.adoc[tags=body]
 
-== summon-workspace
+[#resize]
+=== resize
 ----
-include::aerospork-summon-workspace.adoc[tags=synopsis]
+include::aerospork-resize.adoc[tags=synopsis]
 ----
-include::aerospork-summon-workspace.adoc[tags=purpose]
-include::aerospork-summon-workspace.adoc[tags=body]
+include::aerospork-resize.adoc[tags=purpose]
+{manpurpose}.
 
-== trigger-binding
-----
-include::aerospork-trigger-binding.adoc[tags=synopsis]
-----
-include::aerospork-trigger-binding.adoc[tags=purpose]
-include::aerospork-trigger-binding.adoc[tags=body]
+include::aerospork-resize.adoc[tags=body]
 
-== volume
+[#balance-sizes]
+=== balance-sizes
 ----
-include::aerospork-volume.adoc[tags=synopsis]
+include::aerospork-balance-sizes.adoc[tags=synopsis]
 ----
-include::aerospork-volume.adoc[tags=purpose]
-include::aerospork-volume.adoc[tags=body]
+include::aerospork-balance-sizes.adoc[tags=purpose]
+{manpurpose}.
 
-== workspace
+include::aerospork-balance-sizes.adoc[tags=body]
+
+[#flatten-workspace-tree]
+=== flatten-workspace-tree
+----
+include::aerospork-flatten-workspace-tree.adoc[tags=synopsis]
+----
+include::aerospork-flatten-workspace-tree.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-flatten-workspace-tree.adoc[tags=body]
+
+[#fullscreen]
+=== fullscreen
+----
+include::aerospork-fullscreen.adoc[tags=synopsis]
+----
+include::aerospork-fullscreen.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-fullscreen.adoc[tags=body]
+
+[#workspace-commands]
+== Workspaces
+
+[#workspace]
+=== workspace
 ----
 include::aerospork-workspace.adoc[tags=synopsis]
 ----
 include::aerospork-workspace.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-workspace.adoc[tags=body]
 
-== workspace-back-and-forth
+[#workspace-back-and-forth]
+=== workspace-back-and-forth
 ----
 include::aerospork-workspace-back-and-forth.adoc[tags=synopsis]
 ----
 include::aerospork-workspace-back-and-forth.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-workspace-back-and-forth.adoc[tags=body]
 
+[#summon-workspace]
+=== summon-workspace
+----
+include::aerospork-summon-workspace.adoc[tags=synopsis]
+----
+include::aerospork-summon-workspace.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-summon-workspace.adoc[tags=body]
+
+[#window-commands]
+== Windows
+
+[#close]
+=== close
+----
+include::aerospork-close.adoc[tags=synopsis]
+----
+include::aerospork-close.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-close.adoc[tags=body]
+
+[#close-all-windows-but-current]
+=== close-all-windows-but-current
+----
+include::aerospork-close-all-windows-but-current.adoc[tags=synopsis]
+----
+include::aerospork-close-all-windows-but-current.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-close-all-windows-but-current.adoc[tags=body]
+
+[#macos-native-fullscreen]
+=== macos-native-fullscreen
+----
+include::aerospork-macos-native-fullscreen.adoc[tags=synopsis]
+----
+include::aerospork-macos-native-fullscreen.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-macos-native-fullscreen.adoc[tags=body]
+
+[#macos-native-minimize]
+=== macos-native-minimize
+----
+include::aerospork-macos-native-minimize.adoc[tags=synopsis]
+----
+include::aerospork-macos-native-minimize.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-macos-native-minimize.adoc[tags=body]
+
+[#binding-mode-commands]
+== Binding modes
+
+[#mode]
+=== mode
+----
+include::aerospork-mode.adoc[tags=synopsis]
+----
+include::aerospork-mode.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-mode.adoc[tags=body]
+
+[#trigger-binding]
+=== trigger-binding
+----
+include::aerospork-trigger-binding.adoc[tags=synopsis]
+----
+include::aerospork-trigger-binding.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-trigger-binding.adoc[tags=body]
+
+[#aerospork-commands]
+== AeroSpork and the system
+
+[#enable]
+=== enable
+----
+include::aerospork-enable.adoc[tags=synopsis]
+----
+include::aerospork-enable.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-enable.adoc[tags=body]
+
+[#reload-config]
+=== reload-config
+----
+include::aerospork-reload-config.adoc[tags=synopsis]
+----
+include::aerospork-reload-config.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-reload-config.adoc[tags=body]
+
+[#open-settings]
+=== open-settings
+----
+include::aerospork-open-settings.adoc[tags=synopsis]
+----
+include::aerospork-open-settings.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-open-settings.adoc[tags=body]
+
+[#exec-and-forget]
+=== exec-and-forget
+----
+include::aerospork-exec-and-forget.adoc[tags=synopsis]
+----
+include::aerospork-exec-and-forget.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-exec-and-forget.adoc[tags=body]
+
+[#volume]
+=== volume
+----
+include::aerospork-volume.adoc[tags=synopsis]
+----
+include::aerospork-volume.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-volume.adoc[tags=body]
+
+[#query-commands]
 == Query commands
 
-Query commands examine the current state without changing it.
+Query commands print the state of AeroSpork and change nothing.
+They work only from the CLI, because a binding or a callback has no way to use their output.
+`list-exec-env-vars` is the exception: it also works in the config, so a callback can print its own environment.
 
-- Query commands are *NOT* available in config +
-(because there is no way to consume the stdout of these commands in config)
-- Query commands are only available in CLI
-- `list-exec-env-vars` is the one exception: it is also available in config, so callbacks can inspect the environment their commands run with
-
+[#config]
 === config
 ----
 include::aerospork-config.adoc[tags=synopsis]
 ----
 include::aerospork-config.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-config.adoc[tags=body]
 
+[#debug-windows]
 === debug-windows
 ----
 include::aerospork-debug-windows.adoc[tags=synopsis]
 ----
 include::aerospork-debug-windows.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-debug-windows.adoc[tags=body]
 
+[#list-apps]
 === list-apps
 ----
 include::aerospork-list-apps.adoc[tags=synopsis]
 ----
 include::aerospork-list-apps.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-list-apps.adoc[tags=body]
 
+[#list-exec-env-vars]
 === list-exec-env-vars
 ----
 include::aerospork-list-exec-env-vars.adoc[tags=synopsis]
 ----
 include::aerospork-list-exec-env-vars.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-list-exec-env-vars.adoc[tags=body]
 
+[#list-modes]
 === list-modes
 ----
 include::aerospork-list-modes.adoc[tags=synopsis]
 ----
 include::aerospork-list-modes.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-list-modes.adoc[tags=body]
 
+[#list-monitors]
 === list-monitors
 ----
 include::aerospork-list-monitors.adoc[tags=synopsis]
 ----
 include::aerospork-list-monitors.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-list-monitors.adoc[tags=body]
 
+[#list-windows]
 === list-windows
 ----
 include::aerospork-list-windows.adoc[tags=synopsis]
 ----
 include::aerospork-list-windows.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-list-windows.adoc[tags=body]
 
+[#list-workspaces]
 === list-workspaces
 ----
 include::aerospork-list-workspaces.adoc[tags=synopsis]
 ----
 include::aerospork-list-workspaces.adoc[tags=purpose]
+{manpurpose}.
+
 include::aerospork-list-workspaces.adoc[tags=body]
+
+[#exit-status]
+== Exit status
+
+The `aerospork` CLI exits with one of four codes, so that a script can tell the kind of failure:
+
+include::util/exit-status-list.adoc[]

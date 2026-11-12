@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-move-node-to-workspace
 // tag::purpose[]
-:manpurpose: Move the focused window to the specified workspace
+:manpurpose: Move the focused window to another workspace
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -12,7 +12,7 @@ include::util/man-attributes.adoc[]
 aerospork move-node-to-workspace [-h|--help] [--focus-follows-window] [--wrap-around]
                                  (next|prev)
 aerospork move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if-noop]
-                                 [--window-id <window-id>] <workspace-name>
+                                 [--window-id <window-id>] <workspace>
 
 // end::synopsis[]
 
@@ -20,29 +20,59 @@ aerospork move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if
 == Description
 
 // tag::body[]
-{manpurpose}
+`move-node-to-workspace` moves the focused window to `<workspace>`.
+Focus stays on the workspace where it was, unless you give `--focus-follows-window`.
+When no workspace has that name, AeroSpork creates it.
 
-`(next|prev)` is identical to `workspace (next|prev)`
+`next` and `prev` pick the workspace as `workspace next` and `workspace prev` do, and they read the list from stdin in the same way.
+See aerospork-workspace(1).
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---wrap-around:: Make it possible to jump between first and last workspaces using (next|prev)
---fail-if-noop:: Exit with a non-zero exit code if the window already belongs to the target workspace
+-h, --help:: Print help and exit.
+--wrap-around:: With `next` or `prev`, go on from the last workspace to the first, and the reverse.
+
+--fail-if-noop::
+include::util/fail-if-noop-flag-desc.adoc[]
+Incompatible with `next` and `prev`.
 
 --focus-follows-window::
-Make sure that the window in question receives focus after moving.
-This flag is a shortcut for manually running `aerospork-workspace`/`aerospork-focus` after `move-node-to-workspace` successful execution.
+Focus the window after the move. This has the same effect as `workspace <workspace>` after the move.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
+Incompatible with `next` and `prev`.
 
 // =========================================================== Arguments
 include::util/conditional-arguments-header.adoc[]
 
-(next|prev):: Move window to next or prev workspace
-<workspace-name>:: Specifies workspace name where to move window to
+(next|prev):: The next or the previous workspace.
+<workspace>:: The name of the workspace to move the window to.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`move-node-to-workspace` exits 1 when no window is focused, and with `next` or `prev` when there is no next or previous workspace.
+With `--fail-if-noop`, it also exits 1 when the window is already on `<workspace>`.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Send the focused window to workspace `3`, and go with it: +
+`aerospork move-node-to-workspace --focus-follows-window 3`
+* Send every new Mail window to workspace `3`, with a window rule:
++
+[source,toml]
+----
+[on-window]
+"com.apple.mail" = "move-node-to-workspace 3"
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-workspace(1), aerospork-move-node-to-monitor(1), https://aerospork.app/docs/guide.html#on-window-detected-callback[the guide on window rules]
 
 // end::body[]
 

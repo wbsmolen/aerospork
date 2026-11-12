@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-list-workspaces
 // tag::purpose[]
-:manpurpose: Print workspaces that satisfy conditions
+:manpurpose: Print the workspaces that match the filters
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -19,70 +19,67 @@ aerospork list-workspaces [-h|--help] --focused [--format <output-format>] [--co
 == Description
 
 // tag::body[]
-{manpurpose}
+`list-workspaces` prints the name of each workspace that matches every filter, one name for each line.
+Give one of `--monitor`, `--all` and `--focused`.
+
+A workspace that the config declares always exists, even while it is empty, so `--all` always prints it.
+For which workspaces exist, see https://aerospork.app/docs/guide.html#persistent-workspaces[the guide].
+
+include::util/cli-only.adoc[]
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 include::util/all-monitors-option.adoc[]
 
 --focused::
-Alias for `--monitor focused --visible`.
-Always prints a single workspace
+Alias for `--monitor focused --visible`. Always prints one workspace.
 
 include::util/monitor-option.adoc[]
 
 --visible [no]::
-Filter results to only print currently visible workspaces.
-`[no]` inverts the condition.
-Several workspaces can be visible in multi-monitor setup
+Print only the visible workspaces, one for each monitor. With `no`, print only the workspaces that are off screen.
 
 --empty [no]::
-Filter results to only print empty workspaces.
-`[no]` inverts the condition.
+Print only the empty workspaces. With `no`, print only the workspaces that have windows.
 
---format <output-format>:: Specify output format. See "Output Format" section for more details.
-Incompatible with `--count`
+:list-noun: workspaces
+include::util/format-options.adoc[]
 
---count:: Output only the number of workspaces.
-Incompatible with: `--format`, `--json`
-
---json:: Output in JSON format.
-Can be used in combination with `--format` to specify which data to include into the json.
-With `--json`, the `<output-format>` may contain only interpolation variables and spaces
-(`%{right-padding}` and literal text are rejected).
-Incompatible with `--count`
-
-// =========================================================== Output Format
+// =========================================================== Output format
 include::util/conditional-output-format-header.adoc[]
 
-The output format is set with the optional `[--format <output-format>]` option.
-`<output-format>` supports https://en.wikipedia.org/wiki/String_interpolation[string interpolation].
+include::util/format-intro.adoc[]
 
-If not specified, the default `<output-format>` is: +
-`%{workspace}`
+The default `<output-format>` is `%{workspace}`.
 
-The following variables can be used inside `<output-format>`:
+`<output-format>` can use these variables:
 
-%{workspace}:: String. Name of the belonging workspace
-%{workspace-is-focused}:: Boolean. True if the workspace has focus
-%{workspace-is-visible}:: Boolean. True if the workspace is visible. A workspace can be visible but not focused in a multi-monitor setup
+include::util/format-vars-workspace.adoc[]
 
-%{monitor-id}:: 1-based Number. Sequential number of the belonging monitor
-%{monitor-appkit-nsscreen-screens-id}:: 1-based Number. Index of the belonging monitor in the `NSScreen.screens` array. Useful for integration with other tools that use `NSScreen.screens` ordering (like sketchybar).
-%{monitor-name}:: String. Name of the belonging monitor
-%{monitor-fingerprint}:: String. Hardware fingerprint of the monitor: whichever of vendor, model, serial, name, size and UUID the display reports, as a table you can paste into `[monitors]`. Use it to identify a specific physical monitor in a docking setup.
-%{monitor-vendor-id}:: String. Vendor ID of the monitor in hexadecimal format (e.g., `0x10AC`). Empty if not available.
-%{monitor-model-id}:: String. Model ID of the monitor in hexadecimal format (e.g., `0xD0C1`). Empty if not available.
-%{monitor-serial-number}:: String. Serial number of the monitor. Empty if not available.
-%{monitor-width}:: Number. Width of the monitor in points
-%{monitor-height}:: Number. Height of the monitor in points
+include::util/format-vars-monitor.adoc[]
 
-%{right-padding}:: Expands to the minimum number of spaces required to right-pad the current column
-%{newline}:: Unicode U+000A newline symbol `\n`
-%{tab}:: Unicode U+0009 tab symbol `\t`
+include::util/format-vars-special.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Print the focused workspace: +
+`aerospork list-workspaces --focused`
+* Print the workspaces with windows on the focused monitor: +
+`aerospork list-workspaces --monitor focused --empty no`
+* Print each workspace with the monitor that it is on: +
+`aerospork list-workspaces --all --format '%{workspace}%{right-padding} %{monitor-name}'`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-workspace(1), aerospork-list-windows(1), aerospork-list-monitors(1)
 
 // end::body[]
 

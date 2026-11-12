@@ -1,0 +1,1 @@
+This command works only from the CLI. A binding or a callback cannot use its output, so the config rejects it.

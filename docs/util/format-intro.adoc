@@ -1,0 +1,2 @@
+`--format <output-format>` sets the output format.
+`<output-format>` is a template: AeroSpork replaces each `%{variable}` in it with a value and keeps the other text.

@@ -31,7 +31,7 @@ extension MoveNodeToWorkspaceCmdArgs {
 
 public func parseMoveNodeToWorkspaceCmdArgs(_ args: [String]) -> ParsedCmd<MoveNodeToWorkspaceCmdArgs> {
     parseSpecificCmdArgs(MoveNodeToWorkspaceCmdArgs(rawArgs: .init(args)), args)
-        .filter("--wrapAround requires using (prev|next) argument") { ($0._wrapAround != nil).implies($0.target.val.isRelatve) }
+        .filter("--wrap-around requires using (prev|next) argument") { ($0._wrapAround != nil).implies($0.target.val.isRelatve) }
         .filterNot("--fail-if-noop is incompatible with (next|prev)") { $0.failIfNoop && $0.target.val.isRelatve }
         .filterNot("--window-id is incompatible with (next|prev)") { $0.windowId != nil && $0.target.val.isRelatve }
 }
