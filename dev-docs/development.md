@@ -226,7 +226,9 @@ syspolicy_check distribution .release/AeroSpork.app
 and updates the Homebrew tap. It needs a Developer ID certificate, a notary profile, and the `gh`,
 `swa`, `az` and `node` tools.
 
-1. Write the release notes in the version's section of `CHANGELOG.md`. Put each bullet on one line.
+1. Write the release notes under `## Unreleased` in `CHANGELOG.md`, then rename that heading to
+   `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. Put
+   each bullet on one line.
    The script converts the notes to HTML for the update dialog, and its converter turns the second
    line of a wrapped bullet into a separate paragraph.
 2. Merge the changelog to `main`, and switch to a clean, up-to-date `main`. The script refuses a tree

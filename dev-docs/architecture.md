@@ -386,7 +386,8 @@ inset tables and the shared action bar.
 **Rule.** `SettingsChrome.swift` holds every shared control of the Settings window, and is the only
 copy of each. A pane uses what is there and does not grow its own copy. Status symbols and tints come
 from `StatusLabel.Kind` and `Banner.Kind`, never from string literals in a pane. A section footer is
-a `SettingsHint`. `CodeEditor` is not shared: only Raw TOML uses it, so it is in `RawTomlTab.swift`.
+a `SettingsHint`. An icon-only control gets its hit target from `settingsHitTarget()`, and a state
+change that does not move focus is announced through `settingsAnnounce(_:)`. `CodeEditor` is not shared: only Raw TOML uses it, so it is in `RawTomlTab.swift`.
 
 **Reason.** The panes were written at different times. Each time one needed a small control and did
 not find it, it grew its own. The result was three hand-made +/- rows, caveat text in three places,
