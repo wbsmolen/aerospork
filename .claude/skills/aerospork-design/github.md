@@ -30,7 +30,8 @@ system was derived from it. What did not match was fixed in the repo, not here:
   colour change is the whole confirmation: the product has no toast anywhere.
 - The settings kit and Swift implementation now share the native pane toolbar, monitor-arrangement
   schematic, guided Rules controls, cross-mode Keys search, and AppKit Raw TOML editor behavior.
-  `dev-docs/redesign-v3/` holds the reviewed matrix and production mapping.
+  `dev-docs/decisions/` records why (ADRs 0001 to 0005 and 0009), and `dev-docs/decisions/assets/`
+  holds the reviewed contact sheets.
 
 `UIChromeConsistencyTest` pins all of it, including the chip ratio, so the two sides cannot drift
 apart silently.

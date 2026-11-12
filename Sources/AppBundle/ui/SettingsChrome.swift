@@ -126,7 +126,7 @@ struct PanelHeader: View {
     }
 
     var body: some View {
-        // 16/14/8 is the padding the redesign synthesis fixed for every non-Form panel header;
+        // 16/14/8 is the padding for every non-Form panel header (dev-docs/decisions/0005);
         // hand-rolled variants drifted, which is why this component exists.
         SectionLabel(title, icon)
             .padding(.horizontal, 16)
