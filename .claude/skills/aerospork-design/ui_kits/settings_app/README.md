@@ -25,8 +25,9 @@ and Window Rules tables select, add and remove rows; the Raw TOML editor enables
 when the text differs from disk.
 
 The entry point accepts `tab`, `appearance`, `width`, `height`, and `banner` query parameters. The
-checked redesign matrix in `dev-docs/redesign-v3/mockups/` renders every pane in light and dark at
-880×620 and 780×520.
+reviewed contact sheets in `dev-docs/decisions/assets/` render every pane in light and dark at
+880×620 and 780×520. Their Monitors sheets predate the arrangement schematic, so `MonitorsTab.jsx`
+is the reference for that pane.
 
 ## Deliberately not modelled
 
