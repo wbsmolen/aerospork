@@ -3,10 +3,6 @@ include::util/site-attributes.adoc[]
 
 include::util/header.adoc[]
 
-Have an automation, integration, or workflow worth sharing?
-Open an issue or pull request to add it to this list.
-The source of this page is in the `./docs` directory.
-
 [#move-by-dragging-any-part-of-the-window]
 == Move windows by dragging any part of the window
 
@@ -27,24 +23,16 @@ link:https://github.com/FelixKratz/JankyBorders[JankyBorders] draws a colored bo
 [source,toml]
 ----
 after-startup-command = [
-    # JankyBorders has a built-in detection of already running process,
-    # so it won't be run twice on AeroSpork restart
+    # JankyBorders detects a copy that already runs,
+    # so a restart of AeroSpork does not start a second one
     'exec-and-forget borders active_color=0xffe1e3e4 inactive_color=0xff494d64 width=5.0'
 ]
 ----
 
-[#raycast-extension]
-== Raycast extension
-
-A third party Raycast extension exists for upstream AeroSpace: https://www.raycast.com/limonkufu/aerospace
-
-It drives the `aerospace` binary, so the command name has to be changed to `aerospork` to work here.
-It lets you search for commands by name instead of recalling their shortcuts.
-
 [#disable-open-animations]
 == Disable windows opening animations
 
-Observable in Google Chrome
+macOS animates each new window. The animation is most visible in Google Chrome. To disable it, run:
 
 [source,bash]
 ----
@@ -63,18 +51,14 @@ aerospork workspace "$(aerospork list-workspaces --monitor mouse --visible)" && 
 aerospork workspace "$(aerospork list-workspaces --monitor mouse --visible)" && aerospork workspace prev
 ----
 
-Use the software of your choice to assign trackpad gestures to the respective commands.
-A few third party options, in alphabetical order. All of them were written for upstream AeroSpace, so
-they invoke the `aerospace` binary and read `AEROSPACE_*` environment variables; both need adjusting
-for AeroSpork:
+Assign a trackpad gesture to each command with a tool that runs shell commands, such as
+link:https://folivora.ai/[BetterTouchTool].
+Such a tool does not read your shell's `PATH`, so give the full path of the CLI:
+`/opt/homebrew/bin/aerospork` for a Homebrew install on Apple silicon, or the link you made for a zip
+install.
 
-* https://github.com/acsandmann/aerospace-swipe
-* link:https://folivora.ai/[BetterTouchTool] can assign arbitrary commands to trackpad gestures.
-Beware that you might need to specify full path to aerospork executable https://community.folivora.ai/t/how-to-execute-terminal-command-to-switch-workspaces-with-aerospace/35914
-* https://github.com/MediosZ/SwipeAeroSpace
-
-CAUTION: Make sure you trust the project authors before running a distributed binary.
-Otherwise, inspect the source and build it yourself.
+NOTE: The swipe apps written for AeroSpace connect to the AeroSpace socket, not to the AeroSpork one,
+so they do not work with AeroSpork.
 
 [#show-aerospork-workspaces-in-sketchybar]
 == Show AeroSpork workspaces in Sketchybar
@@ -86,8 +70,8 @@ Use these snippets as a starting point.
 [source,toml]
 ----
 # Run Sketchybar together with AeroSpork
-# sketchbar has a built-in detection of already running process,
-# so it won't be run twice on AeroSpork restart
+# Sketchybar detects a copy that already runs,
+# so a restart of AeroSpork does not start a second one
 after-startup-command = ['exec-and-forget sketchybar']
 
 # Notify Sketchybar about workspace change
@@ -118,7 +102,7 @@ done
 ----
 #!/usr/bin/env bash
 
-# make sure it's executable with:
+# make the script executable with:
 # chmod +x ~/.config/sketchybar/plugins/aerospork.sh
 
 if [ "$1" = "$FOCUSED_WORKSPACE" ]; then
@@ -140,7 +124,7 @@ To open *a new window* of a program that supports multiple windows (Safari, Term
 +
 [source,toml]
 ----
-[mode.main.binding]
+[keys]
 ctrl-g = '''exec-and-forget osascript -e '
 tell application "Safari"
     make new document at end of documents
@@ -152,7 +136,7 @@ end tell'
 +
 [source,toml]
 ----
-[mode.main.binding]
+[keys]
 ctrl-g = '''exec-and-forget osascript -e '
 tell application "Terminal"
     do script
@@ -164,13 +148,13 @@ end tell'
 [#disable-hide-app]
 == Disable the "hide application" shortcut
 
-If `automatically-unhide-macos-hidden-apps` isn't enough, disable `cmd-h` altogether.
-The hotkey then becomes unavailable to apps that use it for something else.
+If `automatically-unhide-macos-hidden-apps` is not enough, disable `cmd-h` completely.
+Apps that use the shortcut for something else then cannot use it.
 
 .~/.aerospork.toml
 [source,toml]
 ----
-[mode.main.binding]
+[keys]
     cmd-h = [] # Disable "hide application"
     cmd-alt-h = [] # Disable "hide others"
 ----
@@ -183,7 +167,7 @@ Bind a shortcut to `screencapture`, a built-in macOS command.
 .~/.aerospork.toml
 [source,toml]
 ----
-[mode.main.binding]
+[keys]
 alt-shift-s = 'exec-and-forget screencapture -i -c'
 ----
 
@@ -198,13 +182,14 @@ include::config-examples/i3-like-config-example.toml[]
 ----
 
 [#popular-apps-ids]
-== Application IDs of popular and built-in apps
+== Bundle IDs of popular and built-in apps
 
-Use these to write an xref:guide.adoc#on-window-detected-callback[on-window-detected callback].
+Use these bundle IDs to write a xref:guide.adoc#on-window-detected-callback[window rule].
+`aerospork list-apps` prints the bundle IDs of the apps that run now.
 
 [cols="1,3"]
 |===
-|Application name|Application ID
+|App|Bundle ID
 
 |1Password|`com.1password.1password`
 |Activity Monitor|`com.apple.ActivityMonitor`
@@ -295,3 +280,10 @@ Use these to write an xref:guide.adoc#on-window-detected-callback[on-window-dete
 |Zen Browser|`app.zen-browser.zen`
 
 |===
+
+[#contribute-a-goodie]
+== Share a recipe
+
+To add a recipe to this page, open an issue or a pull request at
+https://github.com/wbsmolen/aerospork. The source of this page is
+https://github.com/wbsmolen/aerospork/blob/main/docs/goodies.adoc[docs/goodies.adoc].

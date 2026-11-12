@@ -1,6 +1,5 @@
 = AeroSpork Guide
 include::util/site-attributes.adoc[]
-:url-search-for-config: https://github.com/search?q=path%3A*aerospork.toml&type=code
 
 include::util/header.adoc[]
 
@@ -10,21 +9,7 @@ Skip what you already know.
 [#installation]
 == Installation
 
-[#manual-installation]
-=== Manual installation
-
 AeroSpork needs macOS 13 or later, on Apple silicon or Intel.
-
-. Download the latest available zip from https://github.com/wbsmolen/aerospork/releases[releases page]
-. Unpack zip
-. Put unpacked `aerospork-v$VERSION/AeroSpork.app` to `/Applications`
-. Symlink the CLI onto `$PATH`
-(optional; needed only to drive AeroSpork from the CLI):
-`ln -s /Applications/AeroSpork.app/Contents/MacOS/aerospork-cli /usr/local/bin/aerospork`
-
-NOTE: The zip's `bin/aerospork` is itself a relative symlink into the bundle — that is what keeps
-the CLI covered by the app's notarization ticket — so copying it out of the unpacked folder leaves
-a link that points at nothing. Symlink the installed app's copy instead, as above.
 
 [#homebrew-installation]
 === Homebrew installation
@@ -34,27 +19,64 @@ a link that points at nothing. Symlink the installed app's copy instead, as abov
 brew install --cask wbsmolen/tap/aerospork
 ----
 
-The cask installs the app, links the bundled CLI onto your `PATH`, and installs the man pages and
-the bash, fish and zsh completions. Your shell may need configuring to pick up Homebrew's
-completions: https://docs.brew.sh/Shell-Completion
+The cask installs the app, links the CLI onto your `PATH`, and installs the man pages and the bash,
+fish and zsh completions. If your shell does not complete `aerospork` commands, configure it for
+Homebrew's completions: https://docs.brew.sh/Shell-Completion
 
-NOTE: The release zip carries the same completions under
-`aerospork-v$VERSION/shell-completion/`.
+[#manual-installation]
+=== Manual installation
 
-Releases are signed with a Developer ID, notarized by Apple and stapled, so Gatekeeper accepts
-them on first launch and you should not see a warning.
+. Download `aerospork-v<version>.zip` from the https://github.com/wbsmolen/aerospork/releases[releases page].
+  The other zip, `AeroSpork-<version>.zip`, is the update archive. It holds only the app.
+. Open the zip. Finder unpacks it to a folder named `aerospork-v<version>`.
+. Move `AeroSpork.app` from that folder to `/Applications`.
+. Optional: to use the CLI, link it onto your `PATH`.
+  `/usr/local/bin` belongs to root, and a new Apple silicon Mac does not have it, so use `sudo`:
++
+[source,bash]
+----
+sudo mkdir -p /usr/local/bin
+sudo ln -s /Applications/AeroSpork.app/Contents/MacOS/aerospork-cli /usr/local/bin/aerospork
+----
++
+Do not copy `bin/aerospork` out of the unpacked folder. It is a relative link into the app, so a
+copy points at nothing.
 
-If you do see
+The unpacked folder also holds the man pages (`manpage/`) and the shell completions
+(`shell-completion/`).
+
+[#first-launch]
+=== First launch: grant Accessibility permission
+
+AeroSpork moves windows through the macOS Accessibility APIs, so it needs Accessibility permission.
+The first time you open it, macOS asks for the permission and AeroSpork quits.
+
+. Open AeroSpork. macOS shows a dialog that asks for Accessibility access, and AeroSpork quits.
+. Open System Settings > Privacy & Security > Accessibility.
+. Enable AeroSpork.
+. Open AeroSpork again. Its icon appears in the menu bar, and it tiles the windows on your screen.
+
+If AeroSpork quits again, the permission is not enabled. Do the steps again.
+
+[#gatekeeper]
+=== If macOS blocks the app
+
+Releases are signed with a Developer ID, notarized by Apple and stapled. Gatekeeper accepts them,
+and you do not see a warning.
+
+If you see this message, the copy you have is not a release. It is a build from source, or a
+download that changed in transit:
 
 ----
 "AeroSpork.app" can't be opened because Apple cannot check it for malicious software.
 ----
 
-then the copy you have is not one of those -- a build from source, or a download that was altered in
-transit. Prefer replacing it with a release from the
-https://github.com/wbsmolen/aerospork/releases[releases page] over dismissing the warning: right
-click the app in Finder and choose Open to run it anyway, which is a decision to trust that
-particular copy.
+. Delete that copy.
+. Download a release from the https://github.com/wbsmolen/aerospork/releases[releases page], and
+  install it again.
+
+To run that copy anyway, open System Settings > Privacy & Security, and click Open Anyway next to
+the message about AeroSpork. This is a decision to trust that copy.
 
 [#configuring-aerospork]
 == Configuring AeroSpork
@@ -68,7 +90,7 @@ AeroSpork looks for a custom config in two locations:
 . `+${XDG_CONFIG_HOME}/aerospork/aerospork.toml+`
 (`XDG_CONFIG_HOME` falls back to `~/.config` when the variable is not set)
 
-If a config is found in more than one location, the ambiguity is reported.
+If both files exist, AeroSpork reports an error at startup and runs the default config.
 
 Debug builds read `~/.aerospork-debug.toml` /
 `+${XDG_CONFIG_HOME}/aerospork/aerospork-debug.toml+` instead, so a debug build never touches the
@@ -79,7 +101,6 @@ locations and skips the ambiguity check entirely.
 
 * <<default-config,The default config>>
 * xref:./goodies.adoc#i3-like-config[i3-like config]
-* {url-search-for-config}[Configs written by other users on GitHub]
 
 The config format is TOML, which supports comments.
 See the https://toml.io/en/v1.0.0[TOML spec].
@@ -139,10 +160,10 @@ include::config-examples/default-config.toml[]
 [#config-v2]
 === The v2 schema, and how older configs get there
 
-The default config above is written in the current (v2) schema: `mod` and `workspaces` generate
-the i3-style bindings, `[keys]` holds only what you add or override, and the assignment and rule
-sections are spelled `[monitors]` and `[on-window]`. A v1 config (everything spelled out under
-`[mode.main.binding]`, `workspace-to-monitor-force-assignment`, `[[on-window-detected]]`) still
+The default config above uses the v2 spelling: `mod` and `workspaces` generate the i3-style
+bindings, `[keys]` holds only what you add or override, and the pin and window-rule sections are
+spelled `[monitors]` and `[on-window]`. A v1 config (every binding spelled out under
+`[mode.main.binding]`, and pins under `workspace-to-monitor-force-assignment`) still
 loads — and the next time AeroSpork starts, it rewrites the file to v2 in place, keeping your original
 next to it as `<name>.pre-v2`. The migration only happens when the converted file provably parses
 to the same configuration, and it is skipped forever once a `.pre-v2` file exists — so going back
@@ -151,14 +172,16 @@ and formatting from the original survive only in the `.pre-v2` copy.
 
 How the v2 pieces layer:
 
-* `mod = 'alt'` generates the i3 defaults (focus, move, resize, layout, workspace-back-and-forth,
-  and friends), and `workspaces = [ '1-9', 'A', 'chat' ]` generates two bindings per workspace —
+* `mod = 'alt'` generates the 13 i3 defaults that the comments of the default config list (focus,
+  move, resize, the two layouts and `workspace-back-and-forth`), and `workspaces = [ '1-9', 'A', 'chat' ]` generates two bindings per workspace —
   switch and move-node. A token is a range only when it is exactly `<char>-<char>`, so
   `my-workspace` stays a literal name.
 * Every workspace in `workspaces` also always exists, even while empty, whether or not `mod` is set.
   See <<persistent-workspaces>>.
-* `[keys]` (and `[keys.<mode>]` for other modes) layers on top of the generated set; a key you
-  write there wins. `[mode.*.binding]` still layers on top of both.
+* `[keys]` (and `[keys.<mode>]` for other binding modes) adds to the generated bindings. If a key
+  in `[keys]` is also generated, your binding wins. `[mode.*.binding]` still adds to both.
+* `\[[on-window-detected]]` is not a v1 spelling. It is the long form of a window rule in both
+  spellings, and `[on-window]` is its short form. See <<on-window-detected-callback>>.
 * Because each workspace's binding comes from its name's first character, two workspaces sharing a
   first character (`workspaces = ['dev', 'docs']`) is an error — the same key would be generated
   twice — and a name whose first character has no key on the keyboard (for example a non-Latin
@@ -194,8 +217,8 @@ keeps the monitor it was last on. Across a restart, an empty one comes back on t
 
 AeroSpork reads `~/.aerospork.toml` or `~/.config/aerospork/aerospork.toml`, never AeroSpace's
 `~/.aerospace.toml` or `~/.config/aerospace/aerospace.toml`. With only an AeroSpace file present,
-AeroSpork runs its default config and says
-so on stderr and in the `config` log. Copy the file across, then:
+AeroSpork runs its default config. It writes a hint to stderr and to the `config` log, and shows
+no message, so the only sign is the default keymap. Copy the file across, then:
 
 * `AEROSPACE_*` environment variables are never set. The names are `AEROSPORK_FOCUSED_WORKSPACE`,
   `AEROSPORK_PREV_WORKSPACE`, `AEROSPORK_WINDOW_ID` and `AEROSPORK_WORKSPACE`, and the CLI is
@@ -206,7 +229,7 @@ so on stderr and in the `config` log. Copy the file across, then:
   reloads by itself.
 * `persistent-workspaces` works as it does in AeroSpace, and so does `workspaces`. See
   <<persistent-workspaces>>.
-* In `[[on-window-detected]]`, write the table form of `if` (`if.app-id = '...'`). AeroSpace's newer
+* In `\[[on-window-detected]]`, write the table form of `if` (`if.app-id = '...'`). AeroSpace's newer
   string form, `if = 'test %{...}'`, is rejected with an error that names the replacement. A rule can run only
   `layout floating`, `layout tiling` and `move-node-to-workspace`, and `if.during-aerospace-startup` is
   spelled `if.during-aerospork-startup`.
@@ -230,7 +253,7 @@ A binding key is modifiers joined to one key with `-`: `alt-shift-h`. The four m
 [#gaps]
 === Gaps
 
-`[gaps]` puts space between windows (`inner`) and between windows and the screen edge (`outer`):
+`[gaps]` puts space between windows (`inner`) and between windows and the monitor edge (`outer`):
 
 [source,toml]
 ----
@@ -251,12 +274,13 @@ plain number used when nothing matches — it is required:
 
 [source,toml]
 ----
+[gaps]
 outer.top = [{ monitor.'built-in' = 3 }, { monitor.main = 16 }, 24]
 ----
 
-`<pattern>` accepts the same monitor descriptions as <<assign-workspaces-to-monitors,workspace
-assignments>>. The settings GUI edits flat numbers only; it warns before an edit would replace
-per-monitor rules, which stay a Raw TOML affair.
+`<pattern>` accepts the same monitor patterns as <<assign-workspaces-to-monitors,pins>>. The Gaps
+pane edits single numbers only. Before an edit replaces per-monitor rules, the pane warns you. Edit
+per-monitor rules in the Raw TOML pane.
 
 [#binding-modes]
 === Binding modes
@@ -268,16 +292,18 @@ AeroSpork starts in the mode named "main".
 
 The feature is identical to https://i3wm.org/docs/userguide.html#binding_modes[the one in i3].
 
-A mode takes two parts: a binding that switches to it, and the declaration of the mode itself.
+A binding mode takes two parts: a binding that switches to it, and the mode itself. `[keys]` holds
+the bindings of `main`, and `[keys.<mode>]` holds the bindings of another mode:
 
 [source,toml]
 ----
-[mode.main.binding]            # Declare 'main' binding mode
-    alt-r = 'mode resize'      # 1. Define a binding to switch to 'resize' mode
+[keys]
+alt-r = 'mode resize'          # 1. A binding in 'main' that switches to 'resize'
 
-[mode.resize.binding]          # 2. Declare 'resize' binding mode
-    minus = 'resize smart -50'
-    equal = 'resize smart +50'
+[keys.resize]                  # 2. The 'resize' binding mode
+minus = 'resize smart -50'
+equal = 'resize smart +50'
+esc = 'mode main'              # A way back to 'main'
 ----
 
 [#commands]
@@ -291,11 +317,11 @@ You can use them in two ways:
 +
 [source,toml]
 ----
-[mode.main.binding]
-    # Bind alt-1 key to switch to workspace 1
-    alt-1 = 'workspace 1'
-    # Or bind a sequence of commands
-    alt-shift-1 = ['move-node-to-workspace 1', 'workspace 1']
+[keys]
+# Bind alt-f to one command
+alt-f = 'fullscreen'
+# Or bind a sequence of commands: move the window to workspace 1, then follow it
+alt-ctrl-1 = ['move-node-to-workspace 1', 'workspace 1']
 ----
 . Run commands from the CLI:
 +
@@ -320,8 +346,8 @@ If you use a different layout or alphabet, or want an alias for an existing key,
 [key-mapping.key-notation-to-key-code]
     unicorn = 'u'
 
-[mode.main.binding]
-    alt-unicorn = 'workspace wonderland' # (⁀ᗢ⁀)
+[keys]
+alt-unicorn = 'workspace wonderland' # (⁀ᗢ⁀)
 ----
 
 * `dvorak` and `colemak` have presets.
@@ -356,13 +382,7 @@ Environment variable substitution is supported in the form `+${ENV_VAR}+`
    workspace rather than a window
 --
 * Commands run by `on-focused-workspace-changed` also get `AEROSPORK_FOCUSED_WORKSPACE` and
-  `AEROSPORK_PREV_WORKSPACE`, exactly as <<exec-on-workspace-change-callback>> does. Before 1.2.0
-  they were unset there.
-* NOTE: `exec-and-forget` runs your command with AeroSpork's **full** environment by default,
-including any secrets in it. That is deliberate: a callback that posts to Slack needs its token. But
-it means a config snippet copied from the internet runs with everything your shell has. Set
-`exec.inherit-env-vars = false` and list what you need under `[exec.env-vars]` if that is not what
-you want.
+  `AEROSPORK_PREV_WORKSPACE`, exactly as <<exec-on-workspace-change-callback>> does.
 * GUI apps on macOS don’t have Homebrew’s prefix in their `PATH` by default (https://docs.brew.sh/FAQ#my-mac-apps-dont-find-homebrew-utilities[docs.brew.sh]).
 So unless your config overrides the `exec` section, AeroSpork falls back to:
 +
@@ -373,6 +393,10 @@ So unless your config overrides the `exec` section, AeroSpork falls back to:
 [exec.env-vars]
     PATH = '/opt/homebrew/bin:/opt/homebrew/sbin:${PATH}'
 ----
+
+WARNING: A command in your config runs with the full environment of AeroSpork, including any
+secrets in it. A config snippet that you copy from the internet can read them. To pass only the
+variables that you name, set `exec.inherit-env-vars = false` and list them under `[exec.env-vars]`.
 
 [#settings-gui]
 === The settings GUI
@@ -439,7 +463,9 @@ The tree structure can be changed with three commands:
 
 . xref:commands.adoc#move[move]
 . xref:commands.adoc#join-with[join-with]
-. xref:commands.adoc#split[split] (kept for i3 compatibility; prefer `join-with`)
+. xref:commands.adoc#split[split], for i3 compatibility. While
+  `enable-normalization-flatten-containers` is on (the built-in default), `split` fails with an
+  error. Use `join-with` instead.
 
 [#layouts]
 === Layouts
@@ -542,9 +568,10 @@ of the floating window.
 
 That removes the need for a separate binding to focus floating windows.
 
-xref:commands.adoc#move[move] and xref:commands.adoc#resize[resize] work on floating windows too, and
-keep them on their monitor. Each monitor shows only its own workspace, so past its edge a window would be
-on another workspace's screen.
+xref:commands.adoc#move[move] and xref:commands.adoc#resize[resize] work on floating windows too.
+By default they keep a floating window on its monitor, because each monitor shows only its own
+workspace. With `move --boundaries all-monitors-outer-frame`, a floating window that reaches the
+edge moves to the next monitor.
 
 [#emulation-of-virtual-workspaces]
 == Emulation of virtual workspaces
@@ -563,32 +590,32 @@ the bottom right or left corner. When neither corner of a monitor is free, they 
 or left edge instead.
 Switching back to the workspace (with the xref:commands.adoc#workspace[workspace] command, or `cmd + tab`) returns its windows to the visible area.
 
-On quit, all windows are returned to the visible area of the screen, each centred on the monitor it
-was on. `killall AeroSpork` runs the same cleanup, but if AeroSpork is stuck and the cleanup has not
-finished after 10 seconds, it exits without it. A crash does not run the cleanup either, because nothing
-intercepts a fatal signal. Either way windows can be left off screen; relaunching AeroSpork brings
-them back.
+When you quit AeroSpork, it brings every window back on screen. A tiled window is centered on the
+monitor of its workspace. A floating window goes back to the spot where you put it.
+`killall AeroSpork` runs the same cleanup, but if AeroSpork is stuck and the cleanup has not
+finished after 10 seconds, AeroSpork exits without it. A crash does not run the cleanup either. In
+both cases, windows can stay off screen. Start AeroSpork again to bring them back.
 
 [#workspace-memory]
 === Workspaces across a restart
 
-AeroSpork remembers which workspace each window was on and puts it back when it restarts, along with
-the monitor that workspace was on.
+When AeroSpork restarts, it puts back the whole layout: the workspace of each window and the
+monitor of each workspace, the workspace that each monitor showed, the tree of each workspace with
+its split sizes and layouts, and the place of each floating, fullscreen and minimized window.
 
 The memory is keyed on the window id issued by the macOS window server, so it holds for exactly as
 long as that server does. Restarting AeroSpork -- an update, a crash, `killall`, or Quit from the
 menu bar -- keeps it. Logging out, restarting the Mac, or quitting and relaunching an *application*
 does not: those windows are new as far as the system is concerned, and there is no way to recognise
-them. AeroSpork does not guess. It falls back to placing a window by where it physically sits, which
-is what it did before.
+them. AeroSpork does not guess. It places such a window by where it physically sits.
 
 For windows that must land somewhere specific after their app restarts, say so explicitly with
-xref:guide.adoc#on-window-detected-callback[on-window-detected] and `if.during-aerospork-startup`.
+a <<on-window-detected-callback,window rule>>.
 
 The state lives in `~/Library/Caches/com.wbs.aerospork/workspace-memory.json` and is readable only
 by you. It is disposable: deleting it costs one restart's worth of placement and nothing else.
 
-The name of the active workspace is shown in the menu bar icon.
+The menu bar icon shows the visible workspace of each monitor, and marks the focused one.
 
 The intended workflow is to keep a single macOS Space (or one per monitor, if `Displays have separate Spaces` is enabled) and not to interact with macOS Spaces at all.
 
@@ -704,11 +731,29 @@ defaults write com.apple.spaces spans-displays -bool true && killall SystemUISer
 == Callbacks
 
 [#on-window-detected-callback]
-=== 'on-window-detected' callback
+=== Window rules ('on-window' and 'on-window-detected')
 
-Use the `on-window-detected` callback to run commands every time a new window is detected.
+A window rule runs commands when a new window appears. To send every window of an app to a
+workspace, or to float or tile it, add a line to `[on-window]`. The key is the bundle ID of the
+app, and the value is the command:
 
-An example using every available option:
+[source,toml]
+----
+[on-window]
+"com.apple.mail" = "move-node-to-workspace 3"
+"com.apple.systempreferences" = "layout floating"
+"org.alacritty" = ["layout tiling", "move-node-to-workspace T"]
+----
+
+The Window Rules pane of the Settings window edits these lines.
+
+To match by app name, window title or workspace, or only at startup, write the long form,
+`\[[on-window-detected]]`. Each `[on-window]` line is the same as an `\[[on-window-detected]]` rule
+with only `if.app-id`. AeroSpork adds the `[on-window]` rules after the `\[[on-window-detected]]`
+rules, so a long-form rule that matches the same window runs first, and by default it stops the
+`[on-window]` rule.
+
+An example of the long form, with every available option:
 
 [source,toml]
 ----
@@ -725,10 +770,8 @@ An example using every available option:
 `run` commands are run only if the detected window matches all the specified conditions.
 If no conditions are specified then `run` is run every time a new window is detected.
 
-Several callbacks can be declared in the config.
-The callbacks are processed in the order they are declared.
-By default, the first callback that matches the criteria is run, and further callbacks are not considered.
-(The behavior can be overridden with `check-further-callbacks` option)
+AeroSpork checks the rules in file order and runs only the first rule that matches. To make
+AeroSpork also check the rules after a rule, set `check-further-callbacks = true` in it.
 
 `run` supports exactly three commands so far: `layout floating`, `layout tiling` and
 xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] — other `layout` arguments are
@@ -783,23 +826,25 @@ Ways to find an `app-id`:
 IMPORTANT: Some windows initialize their title after the window appears.
 `window-title-regex-substring` may not work as expected for such windows
 
-Examples of automations:
+Examples of window rules:
 
-* Assign apps on particular workspaces
+* Send apps to particular workspaces
++
+[source,toml]
+----
+[on-window]
+'org.alacritty' = 'move-node-to-workspace T'          # T for Terminal
+'com.google.Chrome' = 'move-node-to-workspace W'      # W for Web browser
+'com.jetbrains.intellij' = 'move-node-to-workspace I' # I for IDE
+----
+* Float the windows of an app whose title contains "Preferences"
 +
 [source,toml]
 ----
 [[on-window-detected]]
-    if.app-id = 'org.alacritty'
-    run = 'move-node-to-workspace T' # mnemonics T - Terminal
-
-[[on-window-detected]]
-    if.app-id = 'com.google.Chrome'
-    run = 'move-node-to-workspace W' # mnemonics W - Web browser
-
-[[on-window-detected]]
-    if.app-id = 'com.jetbrains.intellij'
-    run = 'move-node-to-workspace I' # mnemonics I - IDE
+    if.app-id = 'com.example.app'
+    if.window-title-regex-substring = 'preferences'
+    run = 'layout floating'
 ----
 * Make all windows float by default
 +
@@ -943,7 +988,7 @@ auto-move-workspaces-on-monitor-connect = true  # Default: true
 
 [monitors]
 # The exact panel. Survives docking, and is the only thing that separates two identical monitors.
-1 = { fingerprint = { uuid = 'AAAAAAAA-0000-4000-8000-000000000001' } }
+1 = { uuid = 'AAAAAAAA-0000-4000-8000-000000000001' }
 
 # Fingerprint by vendor and model. Both are numbers: a TOML integer, or a '0x'-prefixed hex
 # string. A bare 'D0C1' or a vendor *name* like 'LG' is a parse error, not a match failure.
@@ -968,7 +1013,7 @@ To read your monitor's fingerprint:
 
 [source,bash]
 ----
-aerospork list-monitors --format "%{monitor-fingerprint}"
+aerospork list-monitors --format '%{monitor-id} %{monitor-name} %{monitor-fingerprint}'
 ----
 
 When `auto-move-workspaces-on-monitor-connect` is enabled (the default), AeroSpork moves workspaces
@@ -990,19 +1035,18 @@ Fingerprint fields:
 * `width_pixels`, `height_pixels` - Exact size, in **points** (the same unit as
   `%{monitor-width}` / `%{monitor-height}`), despite the field names
 
-Every field is optional, and each accepts two other spellings: bare (`vendor`, `model`, `serial`,
-`name`, `width`, `height`) and camelCase (`vendorID`, `modelID`, `serialNumber`, `displayName`,
-`widthPixels`, `heightPixels`, `displayUUID`). They are the same fields; pick one style. The
+Every field is optional, and each accepts other spellings: bare (`vendor`, `model`, `serial`,
+`name`, `width`, `height`), camelCase (`vendorID`, `modelID`, `serialNumber`, `displayName`,
+`widthPixels`, `heightPixels`, `displayUUID`), and `display_uuid` for `uuid`. They are the same fields; pick one style. The
 `fingerprint` wrapper itself is optional — `2 = { uuid = '…' }` means the same thing, and is the
 form the default config uses.
 
-Fields are checked in a fixed order, and two of them are decisive. `uuid`, when present, decides
-the match alone — nothing else is consulted. Otherwise `vendor_id`, `model_id` and `serial_number`
-combine as filters, and then `display_name`, when present, decides — `width_pixels` and
-`height_pixels` are only consulted when there is no name. So `{ name = 'DELL', width = 3840 }` is
-exactly `{ name = 'DELL' }`; pin by size *instead of* name, not alongside it. An unknown field
-name is a hard error that rejects the whole config, and a malformed hex value like `'0xZZZZ'` is
-rejected too rather than silently dropped, so a typo cannot widen the match.
+When `uuid` is present, it decides the match alone, and AeroSpork checks no other field.
+Otherwise every field that you give must match: `vendor_id`, `model_id`, `serial_number`,
+`width_pixels` and `height_pixels` must be equal, and `display_name` must match as described above.
+So `{ name = 'DELL', width = 3840 }` matches only a DELL monitor that is 3840 points wide. An
+unknown field name is an error that rejects the whole config. AeroSpork also rejects a malformed
+hex value such as `'0xZZZZ'`, so a typo cannot widen the match.
 
 The settings GUI's Monitors pane edits UUID and name pins. A fingerprint richer than that — or a
 multi-pattern array — shows up there with a `complex` badge: it is preserved untouched by every
@@ -1024,47 +1068,44 @@ The fullscreen button and the maximize button are different buttons.
 
 Windows recognized as dialogs are floated by default.
 
-If some windows are not handled correctly, a PR improving the heuristic is welcome.
-Hardcoded special handling for popular applications is acceptable; AeroSpork already contains some.
-See the `isDialogHeuristic` function in the AeroSpork sources.
+If AeroSpork floats or tiles the windows of an app the wrong way, open an issue at
+https://github.com/wbsmolen/aerospork/issues. Until a fix ships, a window rule can force tiling or
+floating for all windows of the app:
 
-`on-window-detected` can also force tiling or floating for all windows of a particular application:
-
-. Force tile all the windows (or windows of a particular app)
-+
 [source,toml]
 ----
-[[on-window-detected]]
-    if.app-id = '...'
-    run = 'layout tiling'
-----
-. Force float all the windows (or windows of a particular app)
-+
-[source,toml]
-----
-[[on-window-detected]]
-    if.app-id = '...'
-    run = 'layout floating'
+[on-window]
+'com.example.tiles' = 'layout tiling'     # Force tiling
+'com.example.floats' = 'layout floating'  # Force floating
 ----
 
 == Common pitfall: keyboard keys handling
 
-If AeroSpork does not respond to a key you bound in the config, check for a conflict with other software that listens to global keys (skhd, Karabiner-Elements, Raycast).
+If AeroSpork does not respond to a key you bound in the config, look for a record
+`Hotkey <key> not registered` in the `config` log (see <<troubleshooting>>). That record means that
+another app owns the key. Software that listens to global keys, such as skhd, Karabiner-Elements and
+Raycast, is the usual cause.
 
 [#troubleshooting]
 == Troubleshooting and bug reports
 
+[#config-problem]
 === Is my config the problem?
 
 [source,shell]
 ----
+aerospork config --config-path      # which file is loaded now
 aerospork reload-config --dry-run   # parse the config without applying it
-aerospork config --config-path      # which file is actually loaded right now
 ----
 
-`--config-path` is the one to check first. If it prints a path *inside* the app bundle
-(`…/AeroSpork.app/Contents/Resources/default-config.toml`) then your config failed to load and
-AeroSpork fell back to the built-in defaults. `reload-config --dry-run` will then tell you why.
+Run `--config-path` first:
+
+* A path inside the app (`…/AeroSpork.app/Contents/Resources/default-config.toml`) means that
+  AeroSpork runs the default config. You have no config, or yours failed to load at startup.
+* Your own path means that your config loaded. If an edit then does nothing, the edited file did not
+  parse, and AeroSpork kept the config that it had before.
+
+In both cases, `reload-config --dry-run` tells you why.
 
 === An app stops responding
 
@@ -1079,67 +1120,99 @@ terminal while the login item is running, prints `AeroSpork is already running (
 copy is exiting` and exits. Quit the running copy first to restart it. A debug build and a release
 build are separate apps and can still run side by side.
 
+[#capture-logs]
 === Capturing logs
 
-AeroSpork logs to the macOS unified log. Nothing is written to a file, and nothing needs to be
-turned on. The events worth diagnosing after the fact are always recorded: which version started,
-which config file loaded, why one didn't, config warnings, focus AeroSpork moved on its own, the CLI
-socket coming up, a second copy exiting because one is already running, and any CLI command that
-exited non-zero.
+AeroSpork always writes the important events to the macOS unified log. You do not need to enable
+anything. The records cover which version started, which config loaded or why it did not, config
+warnings, bindings that did not register, focus that AeroSpork moved on its own, the CLI socket, and
+every CLI command that exited non-zero.
 
-To collect them for a bug report:
+To collect the log for a bug report:
 
+. Reproduce the problem, or note the time when it happened.
+. Within the hour, save the log of the last hour to a file:
++
 [source,shell]
 ----
-# Everything AeroSpork logged in the last hour, from a release build
-log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compact
-
-# Watch it live instead
-log stream --predicate 'subsystem == "com.wbs.aerospork"' --style compact
+log show --last 1h --predicate 'subsystem == "com.wbs.aerospork"' --style compact > aerospork.log
 ----
+. If AeroSpork showed an internal error, find its report in `~/Library/Logs/com.wbs.aerospork/`.
+  AeroSpork writes a report there for each internal error, and never sends it anywhere.
 
-Use `com.wbs.aerospork.debug` for a debug build. The `.debug` there names the build, not
-the log level: a release build always logs under `com.wbs.aerospork`, whatever level it writes at.
-Records are tagged with a category, so you can narrow them down:
+To watch the log live instead, run
+`log stream --predicate 'subsystem == "com.wbs.aerospork"' --style compact`.
+
+A record has a category. To narrow the log, add the category to the predicate:
 
 [source,shell]
 ----
 log show --last 1h --predicate 'subsystem == "com.wbs.aerospork" AND category == "config"'
 ----
 
-`config`:: the startup record (version, and whether verbose tracing is on), config file loaded /
-rejected, config warnings, hot-reload problems, an AeroSpace config found where no AeroSpork config
-exists, and a Settings change that could not be saved when its window closed
-`server`:: CLI socket lifecycle, a second copy exiting because one is already running, and every CLI
-command that exited non-zero
-`session`:: focus AeroSpork moved on its own initiative: a window dying under the focused one, a
-session syncing focus back to macOS, a windows-cache restore, and (1.2.0 and later) focus following
-macOS onto a workspace that was not on screen, such as an app activating itself or the next key
-window after a close. Start here for "focus jumped on its own". Focus that follows macOS within what
-is already on screen, such as clicking a window on any monitor, is not recorded. The
-same category also carries refresh-session failures and quit-cleanup errors.
+`config`:: the startup record (the version, and whether verbose tracing is on), the config that
+loaded or was rejected, config warnings, hot-reload problems, `Hotkey <key> not registered`, an
+AeroSpace config found where no AeroSpork config exists, and a Settings change that could not be
+saved when its window closed.
+`server`:: the CLI socket, a second copy that exits because one already runs, and every CLI command
+that exited non-zero.
+`session`:: focus that AeroSpork moved on its own: a window that closed under the focused one, focus
+taken back from macOS, a restore of the window cache, and focus that followed macOS onto a workspace
+that was not on screen (an app that activated itself, or the next window after a close). Start here
+for "focus jumped on its own". Focus that follows a click is not recorded. The same category also
+holds refresh failures and quit-cleanup errors.
 
-Redirect to a file to attach it: `log show … > aerospork.log`.
+A debug build logs under `com.wbs.aerospork.debug`. The `.debug` names the build, not the log
+level.
 
+[#verbose-tracing]
 === Verbose tracing
 
-The always-on records above are deliberately sparse. For a per-refresh, per-command trace, set
-`AEROSPORK_DEBUG_LOG` and restart the app:
+The records above are sparse on purpose. For a trace of every refresh and every command, set
+`AEROSPORK_DEBUG_LOG`. The trace is written at debug level, which the unified log does not keep:
+only a `log stream` that already runs receives it, and a later `log show` does not find it.
 
+. Set the variable:
++
 [source,shell]
 ----
 launchctl setenv AEROSPORK_DEBUG_LOG 1
-
-# Restart so it inherits the variable. `killall` returns as soon as the signal is SENT, so waiting
-# for the process to exit matters. Otherwise `open` re-activates the old one, still
-# without the variable.
+----
+. Restart AeroSpork, so that it reads the variable. The loop waits for the old copy to exit, because
+  `open` otherwise wakes the old copy, which does not have the variable:
++
+[source,shell]
+----
 killall AeroSpork; while pgrep -qx AeroSpork; do sleep 0.2; done; open -a AeroSpork
-
-log stream --debug --predicate 'subsystem == "com.wbs.aerospork"'
+----
+. Check that tracing is on. The startup record must end in `verbose tracing: on`:
++
+[source,shell]
+----
+log show --last 1h --predicate 'subsystem == "com.wbs.aerospork" AND category == "config"' --style compact
+# ... AeroSpork <version> <hash> started, verbose tracing: on
+----
++
+If it says `off`, the variable did not reach the app, and the trace stays empty. Do steps 1 and 2
+again.
+. Start the stream, and save it to a file. Do not add a `category` filter: the trace is under
+  category `Debug`.
++
+[source,shell]
+----
+log stream --debug --predicate 'subsystem == "com.wbs.aerospork"' > aerospork-trace.log
+----
+. Reproduce the problem, then stop the stream with Control-C.
+. Disable tracing, and restart AeroSpork. Until you do, the trace continues:
++
+[source,shell]
+----
+launchctl unsetenv AEROSPORK_DEBUG_LOG
+killall AeroSpork; while pgrep -qx AeroSpork; do sleep 0.2; done; open -a AeroSpork
 ----
 
-For a debug build every name changes, including the one `open` needs. `open -a AeroSpork` would
-launch the *release* app next to it:
+For a debug build, every name changes, including the one that `open` needs. `open -a AeroSpork`
+starts the release app next to it:
 
 [source,shell]
 ----
@@ -1147,36 +1220,17 @@ killall AeroSporkApp; while pgrep -qx AeroSporkApp; do sleep 0.2; done; open .de
 log stream --debug --predicate 'subsystem == "com.wbs.aerospork.debug"'
 ----
 
-To confirm the variable actually reached the app, look for the startup record. It is written at
-notice level, so it survives. It was added in 1.2.0; earlier versions do not write it, so on those
-the only check is whether the stream shows anything.
-
-[source,shell]
-----
-log show --last 5m --predicate 'subsystem == "com.wbs.aerospork" AND category == "config"' --style compact
-# ... AeroSpork 1.2.0 <hash> started, verbose tracing: on
-----
-
-If it says `off`, the variable did not reach the app and the trace will be empty no matter what you
-stream.
-
-Three things to know about it:
-
-* It is off by default and gated at *runtime*, not at compile time, so enabling it costs a restart
-  rather than a rebuild.
-* These records are written at debug level, which the unified log **does not persist**. They exist
-  only for a `log stream` that is already running; `log show` after the fact will not find them.
-  Start the stream first, then reproduce the problem.
-* The trace is under category `Debug`. Adding `AND category == "session"` to the stream filters the
-  whole trace out.
-
-Turn it back off with `launchctl unsetenv AEROSPORK_DEBUG_LOG` and restart, or the trace keeps
-running for as long as the app does.
-
+[#bug-report-contents]
 === What to include in a bug report
 
-. `aerospork --version` (it prints both the CLI and the server version; a mismatch is its own bug)
-. `aerospork config --config-path`, and the config file itself
-. `aerospork list-monitors --format '%{monitor-id} %{monitor-name} %{monitor-fingerprint}'` for
-  anything monitor- or docking-related
-. The `log show` output from above
+Open an issue at https://github.com/wbsmolen/aerospork/issues/new?template=bug_report.md and attach:
+
+. The output of `aerospork --version`. It prints the CLI version and the app version. If the two are
+  different, say so.
+. The output of `aerospork config --config-path`, and the config file itself.
+. The log from <<capture-logs>>, and the trace from <<verbose-tracing>> for a layout or focus
+  problem.
+. The report from `~/Library/Logs/com.wbs.aerospork/`, if AeroSpork showed an internal error.
+. For a problem with monitors or docking, the output of
+  `aerospork list-monitors --format '%{monitor-id} %{monitor-name} %{monitor-fingerprint}'`. Remove
+  the UUIDs if you do not want to publish them. They identify specific hardware.

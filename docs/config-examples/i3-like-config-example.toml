@@ -1,16 +1,17 @@
 # Reference: https://github.com/i3/i3/blob/next/etc/config
 
-# i3 doesn't have "normalizations" feature that why we disable them here.
-# But the feature is very helpful.
-# Normalizations eliminate all sorts of weird tree configurations that don't make sense.
-# Give normalizations a chance and enable them back.
+# An i3-like config, written in the v2 spelling ([keys] and [keys.<mode>]).
+#
+# i3 has no normalization, so this config disables it. Normalization removes trees that make
+# no sense, and `split` works only while flatten normalization is off. Try this config with
+# normalization on as well, and use `join-with` in place of `split`.
 enable-normalization-flatten-containers = false
 enable-normalization-opposite-orientation-for-nested-containers = false
 
-# Mouse follows focus when focused monitor changes
+# The mouse follows focus when the focused monitor changes
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
-[mode.main.binding]
+[keys]
     # See: https://github.com/wbsmolen/aerospork/blob/main/docs/goodies.adoc#open-a-new-window-with-applescript
     alt-enter = '''exec-and-forget osascript -e '
     tell application "Terminal"
@@ -30,8 +31,7 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
     alt-shift-l = 'move up'
     alt-shift-semicolon = 'move right'
 
-    # Consider using 'join-with' command as a 'split' replacement if you want to enable
-    # normalizations
+    # `split` fails while normalization is on. Use 'join-with' then.
     alt-h = 'split horizontal'
     alt-v = 'split vertical'
 
@@ -43,12 +43,11 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
     alt-shift-space = 'layout floating tiling' # 'floating toggle' in i3
 
-    # Not supported, because this command is redundant in AeroSpork mental model.
+    # Not supported: the AeroSpork model does not need this command.
     # See: https://github.com/wbsmolen/aerospork/blob/main/docs/guide.adoc#floating-windows
     #alt-space = 'focus toggle_tiling_floating'
 
-    # `focus parent`/`focus child` are not yet supported, and it's not clear whether they
-    # should be supported at all https://github.com/wbsmolen/aerospork/issues/5
+    # `focus parent` and `focus child` are not supported.
     # alt-a = 'focus parent'
 
     alt-1 = 'workspace 1'
@@ -77,7 +76,7 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
     alt-r = 'mode resize'
 
-[mode.resize.binding]
+[keys.resize]
     h = 'resize width -50'
     j = 'resize height +50'
     k = 'resize height -50'
