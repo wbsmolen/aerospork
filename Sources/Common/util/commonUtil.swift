@@ -6,7 +6,7 @@ import os
 public let unixUserName = NSUserName()
 public let mainModeId = "main"
 
-public let potentialBugsUrl = "https://github.com/wbsmolen/aerospork/discussions/categories/potential-bugs"
+public let potentialBugsUrl = "https://github.com/wbsmolen/aerospork/issues/new?template=bug_report.md"
 
 @TaskLocal
 public var refreshSessionEvent: RefreshSessionEvent? = nil

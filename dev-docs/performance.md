@@ -2,12 +2,34 @@
 
 ## Status
 
-**Only the first group below has a controlled measurement behind it.** The rest are defensible on
+**Only the "Measured" section below has a controlled measurement behind it.** The rest are defensible on
 first principles. They remove work that provably happens, but their end-to-end effect has *not*
 been demonstrated, because the benchmark available was too noisy to resolve it. See
 "Why the benchmark is unreliable".
 
 Do not cite these as measured wins without re-measuring under Instruments.
+
+## How to measure properly
+
+`OSSignposter` intervals already exist and are the right tool, no new instrumentation needed:
+
+- `util/appBundleUtil.swift`: the signposter, `category: .pointsOfInterest`
+- `layout/refresh.swift`: around `runRefreshSessionBlocking` and `runSession`
+- `util/accessibility.swift`: around **every** AX `get`, `set` and `containingWindowId`, tagged
+  with `axTaskLocalAppThreadToken`
+
+Attach Instruments to the Points of Interest track for per-AX-attribute timing attributed by app
+thread. Always warm the process first (switch workspaces a few times) so app registration is not
+counted.
+
+For a coarse view without Instruments, quit the running AeroSpork, then run the binary directly with
+logging enabled and read the durations the code already computes. A second copy of the same build
+exits at startup, so the binary must not run while the app runs:
+
+```bash
+AEROSPORK_DEBUG_LOG=1 /Applications/AeroSpork.app/Contents/MacOS/AeroSpork 2>&1 \
+  | grep -oE 'SESSION: Completed in [0-9.]+ms'
+```
 
 ## Measured
 
@@ -19,7 +41,7 @@ Test-suite wall clock, same tests, back-to-back on the same machine:
 | new `debugLog`, gate OFF | 0.155 s |
 | new `debugLog`, `AEROSPORK_DEBUG_LOG=1` (fully logging) | 0.156 s |
 
-**Read the third row before quoting the first two.** It is what makes the result interpretable: the
+**Read the third row before you quote the first two.** It is what makes the result interpretable: the
 win is ~99% from deleting the per-call `DateFormatter.localizedString` and `URL(fileURLWithPath:)`,
 and ~0% from the env gate or the `@autoclosure`. Eager evaluation was not the bulk of the cost, which
 is the opposite of the obvious guess.
@@ -47,8 +69,9 @@ broke anyone scripting the CLI.
    (no `URL` parsing), drops the per-call `DateFormatter` (os_log timestamps its own records), and
    is gated on `AEROSPORK_DEBUG_LOG`.
 
-   The gate is a **runtime env var, not `#if DEBUG`**, deliberately: the shipped `.app` is itself a
-   debug build, so a compile-time gate would have left this on for every user.
+   The gate is a **runtime env var, not `#if DEBUG`**, deliberately. `build-release.sh` builds the
+   Release configuration, but a build that ships to users can still be compiled with `DEBUG`, and a
+   compile-time gate would then turn the trace on for every user.
 
 3. **`ui/TrayMenuModel.swift`.** `trayText`, `workspaces` and `trayItems` are now assigned only
    when the value actually changed (`setIfChanged`). Each `@Published` write invalidates
@@ -69,8 +92,8 @@ broke anyone scripting the CLI.
    the minimized container). The fix keeps the parallel prefetch but adds a cheap `willMutate`
    precheck and **re-reads** AX state only for the few windows that are actually about to move, so
    the steady state pays no extra round trips. Per-workspace and per-window cancellation checks are
-   restored too: the `.standard` branch had become fully synchronous, so a cancelled refresh was
-   mutating the whole tree instead of stopping. Index/order pairing was verified correct throughout.
+   restored too. The `.standard` branch was fully synchronous after the change, so a cancelled refresh
+   mutated the whole tree and did not stop. Index/order pairing was verified correct throughout.
 
 5. **`tree/MacApp.getOrRegister`.** replaced a `while true` / `Task.sleep(100ms)` poll with
    continuation-based waiters. The old loop published into `allAppsMap` from a hopped
@@ -84,9 +107,9 @@ broke anyone scripting the CLI.
    - **Negative cache added.** `bulkSubscribe` returning `[]` used to leave nothing in `allAppsMap`,
      so an unsubscribable app cost a fresh `Thread` + `AXObserverCreate` on *every* refresh forever.
      `failedPids` now backs off 1 s → ×2 → 30 s (≈1 probe/30 s instead of ≈20/s). Keyed with
-     `launchDate` so pid reuse can't hide a brand-new process behind a stale backoff.
+     `launchDate` so pid reuse cannot hide a brand-new process behind a stale backoff.
    - **Cancellation fixed.** Waiters are keyed by id and wrapped in `withTaskCancellationHandler`,
-     so a cancelled refresh unparks immediately instead of holding its whole task-group child set
+     so a cancelled refresh unparks immediately. It no longer holds its whole task-group child set
      until the AX timeout. `AXUIElementSetMessagingTimeout(1.0)` also caps a wedged app at 1 s
      rather than the 6 s default (120 debounce windows).
    - **The fragile invariant is gone, not documented.** Correctness used to depend on there being
@@ -104,10 +127,10 @@ broke anyone scripting the CLI.
 7. **`layout/refresh.swift`.** `aliveWindowIds` is a `Set`, not an `Array`. Was O(W²).
 
 8. **`util/RefreshDebouncer.swift`** (since replaced by `RefreshScheduler`, where an event no longer
-   cancels a running refresh). A 250 ms max-wait ceiling was added and then **REVERTED**.
+   cancels a running refresh). A 250 ms max-wait ceiling was added and then **reverted**.
 
    The intent was to stop a sustained event stream from starving the refresh. What it actually did,
-   measured by porting the logic into a harness and driving it:
+   measured when the logic was ported into a harness and driven:
 
    | scenario | refreshes started (3 s) | refreshes **completed** |
    |---|---|---|
@@ -116,8 +139,8 @@ broke anyone scripting the CLI.
    | events @5 ms, refresh 300 ms | 12 | **1** |
 
    Every ceiling fire hit the unconditional `activeRefreshTask?.cancel()` and killed a refresh that
-   was still running, which the next ceiling fire then repeated. The plain debounce does no work
-   during the burst and then produces exactly one correct layout; the ceiling produced twelve
+   still ran, which the next ceiling fire then repeated. The plain debounce does no work during the
+   burst and then produces exactly one correct layout. The ceiling produced twelve
    refreshes' worth of AX traffic and no layout, with a risk of partial layout left behind from
    `setFrame` writes already issued. p90 refresh here is ~380 ms, so this was reachable in practice,
    not theoretical.
@@ -133,7 +156,7 @@ These are mechanically verified work eliminations, not end-to-end timing claims:
    so a typing burst validates only its final buffer. Apply is disabled while validation is pending.
    Syntax diagnostics retain TOMLKit's line and column instead of parsing them back out of display
    copy. Syntactically valid text takes a second parse for AeroSpork's semantic validation, once per
-   settled burst; this replaces a semantic parse on every body evaluation.
+   settled burst. This replaces a semantic parse on every body evaluation.
 
 10. **`RawTomlTab` metadata.** config-path resolution and backup-directory enumeration moved out of
     computed view properties and into window-lifetime state. Because `rawToml` publishes on every
@@ -147,7 +170,7 @@ These are mechanically verified work eliminations, not end-to-end timing claims:
     `as? LazyMonitor` cast discarded valid fingerprints from alternate implementations and paid a
     runtime cast for every connected display.
 
-13. **Small no-op/allocation cleanup.** linked-gap setters return before publishing or scheduling an
+13. **Small no-op/allocation cleanup.** linked-gap setters return before they publish or schedule an
     autosave when all affected values already match; link-state detection compares four integers
     directly instead of allocating a temporary `Set`; the monitor picker builds its known-token set
     once per table construction and uses the row already supplied by `Table` instead of searching
@@ -174,7 +197,7 @@ These are mechanically verified work eliminations, not end-to-end timing claims:
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and
-the complete suite; none of those establish a user-visible duration improvement.
+the complete suite. None of those establish a user-visible duration improvement.
 
 ## Why the benchmark is unreliable
 
@@ -190,34 +213,13 @@ here. Measured medians of session duration for **identical code**, same workload
 Run-to-run variance on unchanged code is ~12×, far larger than any effect being measured. Causes:
 
 - **Cold app registration dominates the first run after a restart.** Every app must get a thread and
-  AX subscriptions; that cost lands entirely in the first few sessions and then disappears.
+  AX subscriptions. That cost lands entirely in the first few sessions and then disappears.
 - AX round-trip latency depends on whether the target app is busy. One slow app serializes a refresh.
 - Ambient system load (browsers, other tooling) moves the numbers more than the code does.
 - CLI process spawn is ~27.6 ms of every measurement, independent of server work.
 
 **Consequence:** a single before/after pair is worthless here. Anything claiming a win needs either
 many alternating trials from a warm process, or Instruments.
-
-## How to measure properly
-
-`OSSignposter` intervals already exist and are the right tool, no new instrumentation needed:
-
-- `util/appBundleUtil.swift`: the signposter, `category: .pointsOfInterest`
-- `layout/refresh.swift` — around `runRefreshSessionBlocking` and `runSession`
-- `util/accessibility.swift` — around **every** AX `get`, `set` and `containingWindowId`, tagged
-  with `axTaskLocalAppThreadToken`
-
-Attach Instruments to the Points of Interest track for per-AX-attribute timing attributed by app
-thread. Always warm the process first (switch workspaces a few times) so app registration is not
-counted.
-
-For a coarse view without Instruments, run the binary directly with logging enabled and read the
-durations the code already computes:
-
-```bash
-AEROSPORK_DEBUG_LOG=1 /Applications/AeroSpork.app/Contents/MacOS/AeroSpork 2>&1 \
-  | grep -oE 'SESSION: Completed in [0-9.]+ms'
-```
 
 ## Known remaining items
 
@@ -226,11 +228,11 @@ AEROSPORK_DEBUG_LOG=1 /Applications/AeroSpork.app/Contents/MacOS/AeroSpork 2>&1 
   hot path costs one rebuild per refresh rather than one per use. **Attempted and deliberately
   reverted.**
   A `@MainActor` cache cascades isolation into `MonitorEx.monitorId`, `MonitorResolution` and their
-  callers (all currently non-isolated); a `nonisolated(unsafe)` cache would be an unsound data
+  callers (all currently non-isolated). A `nonisolated(unsafe)` cache would be an unsound data
   race. No measurement shows this path is hot, so neither price is justified yet. Profile first.
 - **`util/RefreshScheduler.swift`.** A session still discards in-flight refresh work when it starts,
   on purpose. Events no longer do, so the reason the max-wait ceiling above could not be re-added is
-  gone; add it only with a measurement showing starvation actually happens.
+  gone. Add it only with a measurement showing starvation actually happens.
 - **Batching AX attribute reads.** `AXUIElementCopyMultipleAttributeValues` is the right primitive
   and is not used. A previous attempt (`AxBatchFetcher`) was deleted rather than wired in: it was
   broken (`as? CGPoint` on an `AXValue` is always nil) and its `.stopOnError` mode would have been a
@@ -240,6 +242,6 @@ AEROSPORK_DEBUG_LOG=1 /Applications/AeroSpork.app/Contents/MacOS/AeroSpork 2>&1 
 - **Regression coverage is structural, not timing-based.** `PerfInvariantsTest` pins the algorithmic
   properties (workspace GC, the tray publish guard, `aliveWindowIds` being a `Set`, the `debugLog`
   autoclosure) and `AxWriteTest` counts AX operations through the mock. Neither measures wall clock,
-  deliberately; see below. What is *not* covered: the real
+  deliberately: "Why the benchmark is unreliable" explains why. What is *not* covered: the real
   monitor and AX paths. `Monitor.testMonitors` lets a test inject an arrangement, so
   multi-monitor logic is reachable, but nothing drives a live `AXUIElement`.

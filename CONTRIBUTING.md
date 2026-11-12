@@ -1,89 +1,137 @@
 # Contributing
 
+This document takes you from a clone to an open pull request. `dev-docs/development.md` has the full
+reference for the toolchain and the scripts. `dev-docs/architecture.md` has the project rules.
+
 ## Before you start
 
-Open an issue first for anything beyond a bug fix. Feature parity with
-[AeroSpace](https://github.com/nikitabobko/AeroSpace) is not a goal here, so a change that adds
-surface area needs a reason beyond "upstream has it".
+For anything larger than a bug fix, open an issue first. AeroSpork is a fork of AeroSpace, and
+feature parity with AeroSpace is not a goal. A change that adds surface area needs a reason other
+than "upstream has it".
 
-## Setup
+## Prepare your Mac
 
-`dev-docs/development.md` is the full setup, including the code-signing certificate a release build
-needs. The short version:
+1. Install the Xcode that matches your macOS version. On a beta macOS, install the matching Xcode
+   beta.
+2. Clone the repository.
 
-```bash
-./build-debug.sh     # SwiftPM debug build into .debug/ (uses ~/.aerospork-debug.toml)
-./run-tests.sh       # the gate: build, both test targets, CLI checks, format, lint, generated files
-```
+You need nothing else for the build and the tests. `run-tests.sh` downloads pinned versions of
+SwiftFormat, SwiftLint and XcodeGen into `.deps/`. The docs and the shell completions need more
+tools. `dev-docs/development.md`, "Dependencies", lists them.
 
-Debug builds read `~/.aerospork-debug.toml`, so you can develop without touching the config you use
-day to day.
+> [!WARNING]
+> If the toolchain does not match your macOS SDK, the build can stop at 0 compiled files with no
+> error. Put `AEROSPORK_SWIFT=xcrun` before every script, as the commands below do.
+> `dev-docs/development.md`, "Toolchain", explains why.
 
-## The gate
+## Build and run a debug copy
 
-`./run-tests.sh` is what CI runs. It must pass before a pull request can be reviewed. It also fails
-on an unclean working tree, because several checked-in files are generated (`./generate.sh`) and
-drift between the source and the generated copy is a real bug rather than noise.
+The debug copy has its own bundle ID, its own config (`~/.aerospork-debug.toml`) and its own CLI
+socket. Your `~/.aerospork.toml` stays as it is.
 
-`./format.sh` runs SwiftFormat and SwiftLint, rewriting in place. Run it before committing: CI runs
-it too, and then fails on the resulting dirty tree, so an unformatted commit shows up as
-"uncommitted files detected" rather than as a formatting message.
+> [!WARNING]
+> Quit the installed AeroSpork before you launch a debug copy. The two copies have different bundle
+> IDs, so both run, and both move the same windows. To recover, quit one of them.
 
-## Things the tests enforce, and why
+1. Quit the installed AeroSpork.
+2. Run `AEROSPORK_SWIFT=xcrun ./build-debug-app.sh`.
+3. Run `./launch-debug-app.sh`.
+4. When macOS asks, give Accessibility permission to AeroSpork-Debug. AeroSpork quits after the
+   prompt. Run `./launch-debug-app.sh` again.
+5. Put a test config in `~/.aerospork-debug.toml`. Without one, the debug copy uses the bundled
+   default config.
+6. Send commands with `./run-cli.sh <command>`.
+7. When you finish, quit the debug copy and open the installed AeroSpork again.
 
-These are easy to trip over, so they are worth knowing before review points them out:
+If macOS asks for Accessibility permission after each rebuild, the bundle has an ad-hoc signature.
+See `dev-docs/development.md`, "Code signing".
 
-- **Shared settings controls live in `Sources/AppBundle/ui/SettingsChrome.swift`.** A tab uses what
-  is there rather than adding a local copy, and status symbols come from `StatusLabel.Kind` rather
-  than string literals. `UIChromeConsistencyTest`.
-- **The config writer must not rewrite a section the user did not edit.** The view model is a lossy
-  projection of the config, so re-serializing an untouched section destroys anything the UI cannot
-  express. `testWriterNoOpSaveIsByteIdentical`.
-- **No unconditional `print` in hot paths**, and `debugLog` must stay `@autoclosure` so its message
-  is never built when the gate is off. `PerfInvariantsTest`.
-- **The two copies of the default config must stay identical.** `DefaultConfigParityTest`.
-- **Do not put measured performance claims in docs without a measurement behind them.**
-  `dev-docs/performance.md` explains which numbers exist and which the available benchmark could not
-  resolve.
+## Run the checks
+
+1. If you changed Swift, run `./format.sh`. SwiftFormat rewrites the files in place, and SwiftLint
+   reports what it finds.
+2. Run `AEROSPORK_SWIFT=xcrun ./run-tests.sh`.
+
+`run-tests.sh` builds, runs both test targets, checks the CLI, runs the linters (which do not rewrite
+files), and runs `./generate.sh --all`. It fails when the run changes the tree, that is, when the generated files are
+out of date. Your uncommitted work and untracked files do not fail it.
+
+CI runs `run-tests.sh` and two more checks:
+
+- An unsigned Xcode build of the Release configuration.
+- `shellcheck -S warning ./*.sh script/*.sh`. If you changed a shell script, run `shellcheck` on it.
+
+## Open a pull request
+
+1. Create a branch from `main`. Keep one topic in each pull request.
+2. Commit the generated files that `./generate.sh` changes, and the `shell-completion/` files that
+   `./build-shell-completion.sh` changes.
+3. Push the branch and open a pull request against `main`. The template asks what the change does,
+   why, and what a reviewer must look at.
+4. Wait for the `test` check. `main` requires it, and accepts a squash or a rebase merge only.
+
+## Rules the tests enforce
+
+Each rule has a reason, and `dev-docs/architecture.md` gives it.
+
+| Rule | Test | Section |
+|---|---|---|
+| A config section that the user did not edit stays byte for byte the same. A save with no edit changes nothing. | `ConfigTest.testWriterNoOpSaveIsByteIdentical`, `ConfigSafetyWriterFuzzTest` | [The writer invariant](dev-docs/architecture.md#the-writer-invariant) |
+| Each shared Settings control lives in `SettingsChrome.swift`. A pane uses it and does not grow its own copy. Status symbols come from `StatusLabel.Kind` and `Banner.Kind`. | `UIChromeConsistencyTest` | [Shared chrome](dev-docs/architecture.md#shared-chrome) |
+| Restore the workspace of a window and the monitor of that workspace together. | `WorkspaceMemoryTest` | [Both halves, or neither](dev-docs/architecture.md#both-halves-or-neither) |
+| A workspace that the config declares always exists. A workspace that only a binding names stays lazy. | `PersistentWorkspacesTest`, `PerfInvariantsTest` | [Which workspaces exist](dev-docs/architecture.md#which-workspaces-exist) |
+| Read the focus of macOS through `syncFocusFromMacOs`. | `InvoluntaryFocusTest` | [Taking focus from macOS](dev-docs/architecture.md#taking-focus-from-macos) |
+| Window rules run inside `shieldedFromCancellation`. | `WindowDetectionRetryTest` | [Window rules run to the end](dev-docs/architecture.md#window-rules-run-to-the-end) |
+| No session waits for another session. | `RefreshSchedulerTest` | [Refresh and layout](dev-docs/architecture.md#refresh-and-layout) |
+| `debugLog` takes an `@autoclosure`, and no hot file has a bare `print`. | `PerfInvariantsTest` | [Logging](dev-docs/architecture.md#logging) |
+| Never create an `NSFont` in drawing code. | `PerfInvariantsTest.testDrawingCodeDoesNotAskForFonts` | [Fonts in drawing code](dev-docs/architecture.md#fonts-in-drawing-code) |
+| Only `config/upstreamMigration.swift` spells the upstream name. | `BrandingTest` | [Upstream names live in one file](dev-docs/architecture.md#upstream-names-live-in-one-file) |
+| Every command has a `docs/aerospork-<name>.adoc` page, and every page has a command. | `CliSurfaceTest` | [Add a command](dev-docs/architecture.md#add-a-command) |
+| The two copies of the default config are identical. | `DefaultConfigParityTest` | [Configuration](dev-docs/architecture.md#configuration) |
+| Some strings in the design kit match the Swift. | `DesignKitParityTest` | [Design system](dev-docs/architecture.md#design-system) |
+| The appcast in the repository is signed, and a build refuses a feed that is not signed. | `ReleaseFeedTest` | [In-app updates](dev-docs/architecture.md#in-app-updates) |
+
+Do not write a performance claim in a doc unless a measurement supports it.
+`dev-docs/performance.md` says which numbers exist, and which the available benchmark could not
+resolve.
+
+## Change the docs
+
+The docs are AsciiDoc files in `docs/`. Some of them are inputs of the build, and tests check them:
+
+- Each `docs/aerospork-<name>.adoc` page is also a man page, and its `:manpurpose:` line and
+  `tag::synopsis` region make the `--help` text of the command. Keep the purpose line on one line,
+  with no double quotes and no backslashes. After you change a page, run `./generate.sh` and commit
+  the generated files. `CliSurfaceTest` fails on a page with no command, or a command with no page.
+- Each ```` ```toml ```` block in `README.md` must parse, and one of them must contain `mod =`
+  (`ReadmeExamplesTest`).
+- `docs/config-examples/default-config.toml` and `resources/default-config.toml` must stay identical
+  (`DefaultConfigParityTest`). Edit both.
+- `build-docs.sh` builds the site from `guide.adoc`, `commands.adoc` and `goodies.adoc`. Other docs
+  link to the anchor IDs in the guide, so do not rename an anchor. To check the build, run
+  `./build-docs.sh` and examine `.site/` and `.man/`.
+- Tests cite `dev-docs/performance.md` and `docs/guide.adoc` by path. Do not move them.
+- Never edit `updates-site/appcast.xml` by hand. It is signed.
+
+Write the way the product talks. Address the reader as "you", never "we". Explain the consequence,
+not the control. When something fails, name the state, then the recovery. Use a colon or a full stop,
+not a dash. The design system's `readme.md`, "Content fundamentals", has the full voice
+(`.claude/skills/aerospork-design/readme.md`).
 
 ## Comment conventions
 
-A `TRADEOFF:` comment marks a deliberate simplification and names its ceiling, so the next reader
-knows it was a decision rather than an oversight, and knows what would force a change:
+A `TRADEOFF:` comment marks a deliberate simplification and names its limit. The next reader then
+knows that it was a decision, and what would force a change:
 
 ```swift
 // TRADEOFF: blocking I/O on a dedicated dispatch queue. A short-lived CLI process does not
 // need an async event loop; revisit if the server ever multiplexes many clients.
 ```
 
-Use it for a known-adequate shortcut. Use a plain comment for everything else.
+Use it for a shortcut that is known to be good enough. Use a plain comment for everything else.
 
-## Documentation
+## Report a bug
 
-Docs are AsciiDoc under `docs/`, and `docs/aerospork-*.adoc` doubles as the man pages and the CLI
-help text. Adding a command means adding its page; see the checklist in `dev-docs/architecture.md`.
-Run `./build-docs.sh` and check the result in `.site/` and `.man/`.
-
-Prose style: neutral and utilitarian. Explain the consequence rather than restating the control, and
-prefer a colon or a full stop to an em dash.
-
-## Reporting a bug
-
-Include the output of:
-
-```bash
-aerospork --version
-aerospork config --config-path
-log show --last 15m --predicate 'subsystem == "com.wbs.aerospork"' --style compact
-```
-
-`category == "session"` records the focus changes AeroSpork made on its own initiative: a window
-dying under the focused one, a session syncing focus back to macOS, a windows-cache restore, and
-focus following macOS onto a workspace that was not on screen. Start there for a "focus jumped on
-its own" report.
-
-For a layout or focus problem, `AEROSPORK_DEBUG_LOG=1` adds a per-refresh trace. It is written at
-`.debug` level, which the unified log does not persist: `log stream --debug` sees it live and `log
-show` does not, so start the stream before reproducing. Note that `com.wbs.aerospork.debug` is
-the *debug build's* subsystem, not "the debug records": a release build's trace is under
-`com.wbs.aerospork`. `docs/guide.adoc` has the full recipe under *Troubleshooting and bug reports*.
+Use the [bug report template](https://github.com/wbsmolen/aerospork/issues/new?template=bug_report.md).
+The guide, "Troubleshooting and bug reports", says which logs to attach and how to capture them. For
+a security problem, follow `SECURITY.md` instead.
