@@ -6,6 +6,23 @@ the section for an area before you change code in that area.
 
 `dev-docs/development.md` tells you how to build. `dev-docs/testing.md` tells you how the tests work.
 
+## Tech stack
+
+| Concern | Implementation |
+|---|---|
+| Language | Swift, 6.0 language mode (`Package.swift`); `.swift-version` pins toolchain 6.4 |
+| Minimum OS | macOS 13.0 (Ventura) |
+| UI | SwiftUI/AppKit: a `MenuBarExtra` and a native pane-toolbar `Settings` scene |
+| Third-party dependencies | TOMLKit (config parsing) and Sparkle (in-app updates) |
+| CLI/app IPC | POSIX `AF_UNIX` stream socket, length-prefixed framing (`Sources/Common/util/UnixSocket.swift`) |
+| Global hotkeys | Carbon `RegisterEventHotKey` (`config/HotkeyBinding.swift`) |
+| Volume control | CoreAudio (`util/SystemVolume.swift`) |
+| Display identity | CoreGraphics `CGDisplayCreateUUIDFromDisplayID`, `CGDisplayVendorNumber`, `CGDisplayModelNumber`, `CGDisplaySerialNumber` |
+| Window IDs | C shim over the private `_AXUIElementGetWindow` (`Sources/PrivateApi/`) |
+| Build | SwiftPM for the CLI and debug builds; XcodeGen plus `xcodebuild` for the `.app`, since SwiftPM cannot produce a bundle |
+
+The README section "Why these choices" gives the reasons for this stack.
+
 ## Modules
 
 | Path | What it holds |
