@@ -10,7 +10,7 @@ Bugs can be reported to https://github.com/wbsmolen/aerospork/issues
 == License
 
 Copyright (C) 2023 Nikita Bobko +
-Copyright (C) 2025-2026 Billy Smolen +
+Copyright (C) 2025-2026 SEDR LLC +
 Free use of this software is granted under the terms of the MIT License +
 You can find the full text of the AeroSpork license and its dependencies in the 'legal' directory of the distributed zip archive.
 
