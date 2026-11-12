@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-balance-sizes
 // tag::purpose[]
-:manpurpose: Balance sizes of all windows in the current workspace
+:manpurpose: Give the windows of the focused workspace equal sizes
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,15 +17,34 @@ aerospork balance-sizes [-h|--help] [--workspace <workspace>]
 == Description
 
 // tag::body[]
-{manpurpose}
+`balance-sizes` gives every window and container in a `tiles` layout an equal share of its parent container.
+Use it after a `resize` to go back to an even split.
+
+Windows in an `accordion` layout and floating windows keep their size.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --workspace <workspace>::
 include::util/workspace-flag-desc.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Even out the focused workspace: +
+`aerospork balance-sizes`
+* Even out workspace `2`, visible or not: +
+`aerospork balance-sizes --workspace 2`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-resize(1), aerospork-flatten-workspace-tree(1)
 
 // end::body[]
 

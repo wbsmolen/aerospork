@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-move
 // tag::purpose[]
-:manpurpose: Move the focused window in the given direction
+:manpurpose: Move the focused window in a direction
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,30 +17,45 @@ aerospork move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [
 == Description
 
 // tag::body[]
-{manpurpose}. See the "Examples" section for more details.
+`move left` moves the focused window one place to the left in the tree, and so on for the other directions.
+The window swaps places with a neighbor, moves into the container beside it, or moves out of its own container.
+The examples show each case.
 
-A floating window moves 50 points in that direction and stops at the edge of its monitor. Once it is at the
-edge, `--boundaries all-monitors-outer-frame` takes it to the next monitor.
+A floating window moves 50 points in that direction and stops at the edge of its monitor.
+At the edge, `--boundaries all-monitors-outer-frame` takes it to the next monitor.
 
-Deprecated name: `move-through`
+Old spelling, still accepted: `move-through`.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
 
 --boundaries <boundary>::
-Defines move boundaries. +
-`<boundary>` possible values: `(workspace|all-monitors-outer-frame)`. +
-The default is: `workspace`
+Where the edge is. The default is `workspace`.
++
+* `workspace`: the edge of the workspace.
+* `all-monitors-outer-frame`: the outer edge of all monitors together. At the edge of a monitor inside that frame, the window moves to the next monitor in that direction.
 
 --boundaries-action <boundary-action>::
-Defines the behavior when requested to move across the `<boundary>`. +
-`<boundary-action>` possible values: `(stop|fail|create-implicit-container)`. +
-The default is: `create-implicit-container`
+What happens at the edge. The default is `create-implicit-container`.
++
+* `stop`: nothing changes, and the command exits 0.
+* `fail`: nothing changes, and the command exits 1.
+* `create-implicit-container`: put the other windows of the workspace in a new container, and put the window beside it in that direction. See the last example.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+(left|down|up|right):: The direction to move the window in.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`move` exits 1 when no window is focused, for a minimized window, a macOS fullscreen window or a window of a hidden app, and at the edge with `--boundaries-action fail`.
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
@@ -53,7 +68,7 @@ h_tiles
 └── window 2
 ----
 +
-`move right` will result in the following layout
+`move right` gives this layout
 +
 ----
 h_tiles
@@ -72,7 +87,7 @@ h_tiles
     └── window 4
 ----
 +
-`move right` will result in the following layout
+`move right` gives this layout
 +
 ----
 h_tiles
@@ -94,7 +109,7 @@ h_tiles
     └── window 4
 ----
 +
-`move left` will result in the following layout
+`move left` gives this layout
 +
 ----
 h_tiles
@@ -107,7 +122,7 @@ h_tiles
 
 . *Implicit container example*
 +
-In some cases, `move` needs to implicitly create a container to fulfill your command.
+Sometimes `move` has to create a container to do what you asked.
 +
 Given this layout
 +
@@ -118,7 +133,7 @@ h_tiles
 └── window 3
 ----
 +
-`move up` will result in the following layout
+`move up` gives this layout
 +
 ----
 v_tiles
@@ -128,11 +143,15 @@ v_tiles
     └── window 3
 ----
 +
-`v_tiles` is an implicitly created container.
+`move` created the `v_tiles` container.
 +
-*Remark*: If `--boundaries` is set to `all-monitors-outer-frame` and there is a monitor in the `up` direction,
-the implicit container is not created.
-Instead, `window 2` is moved to the monitor above the current one.
+With `--boundaries all-monitors-outer-frame` and a monitor above, `move` creates no container.
+It moves `window 2` to the monitor above.
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-focus(1), aerospork-join-with(1), aerospork-move-node-to-workspace(1), aerospork-move-node-to-monitor(1)
 
 // end::body[]
 

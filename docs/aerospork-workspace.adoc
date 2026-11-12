@@ -2,14 +2,14 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-workspace
 // tag::purpose[]
-:manpurpose: Focus the specified workspace
+:manpurpose: Focus a workspace
 // end::purpose[]
 
 // =========================================================== Synopsis
 == Synopsis
 [verse]
 // tag::synopsis[]
-aerospork workspace [-h|--help] [--auto-back-and-forth] [--fail-if-noop] <workspace-name>
+aerospork workspace [-h|--help] [--auto-back-and-forth] [--fail-if-noop] <workspace>
 aerospork workspace [-h|--help] [--wrap-around] (next|prev)
 
 // end::synopsis[]
@@ -18,47 +18,62 @@ aerospork workspace [-h|--help] [--wrap-around] (next|prev)
 == Description
 
 // tag::body[]
-*1. <workspace-name> syntax*
+`workspace` focuses `<workspace>`, and the window on it that had focus last.
+When no workspace has that name, AeroSpork creates it.
+An off-screen workspace appears on the monitor that the config pins it to, else on the monitor where it was visible last, else on the main monitor.
 
-{manpurpose}
+`next` and `prev` focus the next or the previous workspace in a list:
 
-*2. (next|prev) syntax*
+* When stdin is not a terminal and holds more than white space, the list is the lines of stdin.
+* In every other case, the list is the workspaces of the focused monitor in name order, with numbers in numeric order. It includes the empty workspaces that the config declares.
 
-Focuses next or previous workspace in *the list*.
-
-* If stdin is not TTY and stdin contains non whitespace characters then *the list* is taken from stdin
-* Otherwise, *the list* is defined as all workspaces on focused monitor in alphabetical order, including empty
-  workspaces the config declares
-
-*Workspace lifecycle*
-
-A workspace the config declares always exists, even while it is empty: every name in `workspaces`,
-every name in `persistent-workspaces`, and every workspace pinned to a monitor. `aerospork
-list-workspaces --all`, the menu bar and `workspace next`/`prev` show all of them.
-
-Any other workspace, such as one that only a keybinding of your own mentions, is created the first time you
-switch to it and released once it is empty and no longer visible. It costs nothing until you use it:
-switching back recreates it indistinguishably, because an empty workspace is nothing but its name.
+A workspace that the config declares always exists. Any other workspace exists only while it has windows or is visible.
+For the details, see https://aerospork.app/docs/guide.html#persistent-workspaces[the guide].
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---wrap-around:: Make it possible to jump between first and last workspaces using `(next|prev)`
+-h, --help:: Print help and exit.
+--wrap-around:: With `next` or `prev`, go on from the last workspace to the first, and the reverse.
 
 --auto-back-and-forth::
-Automatic `back-and-forth` when switching to already focused workspace.
-Incompatible with `--fail-if-noop`
+When `<workspace>` is already focused, go to the previous workspace instead, as `workspace-back-and-forth` does.
+Incompatible with `--fail-if-noop`.
 
 --fail-if-noop::
-Exit with a non-zero exit code if the target workspace is already focused.
-Incompatible with `--auto-back-and-forth`
+include::util/fail-if-noop-flag-desc.adoc[]
+Incompatible with `--auto-back-and-forth`, `next` and `prev`.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+<workspace>:: The name of the workspace to focus.
+(next|prev):: The next or the previous workspace in the list.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`workspace next` and `workspace prev` exit 1 when there is no next or previous workspace.
+With `--fail-if-noop`, `workspace` also exits 1 when `<workspace>` is already focused.
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-* Go to the next non empty workspace on the focused monitor: +
+* Go to the next workspace that has windows, on the focused monitor: +
 `aerospork list-workspaces --monitor focused --empty no | aerospork workspace next`
+* Switch workspaces with bindings, and press the same key again to go back:
++
+[source,toml]
+----
+[keys]
+alt-1 = 'workspace --auto-back-and-forth 1'
+alt-2 = 'workspace --auto-back-and-forth 2'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-workspace-back-and-forth(1), aerospork-summon-workspace(1), aerospork-move-node-to-workspace(1), aerospork-list-workspaces(1)
 
 // end::body[]
 

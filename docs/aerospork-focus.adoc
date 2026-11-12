@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-focus
 // tag::purpose[]
-:manpurpose: Set focus to the nearest window in the given direction
+:manpurpose: Focus the nearest window in a direction
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -10,7 +10,7 @@ include::util/man-attributes.adoc[]
 [verse]
 // tag::synopsis[]
 aerospork focus [-h|--help] [--ignore-floating]
-                [--boundaries <boundary>] [--boundaries-action <action>]
+                [--boundaries <boundary>] [--boundaries-action <boundary-action>]
                 (left|down|up|right)
 aerospork focus [-h|--help] --window-id <window-id>
 aerospork focus [-h|--help] --dfs-index <dfs-index>
@@ -21,41 +21,69 @@ aerospork focus [-h|--help] --dfs-index <dfs-index>
 == Description
 
 // tag::body[]
-{manpurpose}
+`focus left` focuses the nearest window to the left of the focused window, and so on for the other directions.
+By default `focus` stays inside the focused workspace: at its edge, nothing happens.
+`--boundaries` and `--boundaries-action` change what happens at the edge.
 
 Unlike i3, `focus` has no separate argument for floating windows.
-It treats them as part of xref:guide.adoc#floating-windows[the tree], which removes the need for a
-separate binding.
-Pass `--ignore-floating` to turn that off.
+It treats each floating window as part of https://aerospork.app/docs/guide.html#floating-windows[the tree], at its position on the screen, so one binding reaches every window.
+`--ignore-floating` turns that off.
 
-`focus child|parent` is not supported.
+`focus` has no `child` or `parent` argument.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --boundaries <boundary>::
-Defines focus boundaries. +
-`<boundary>` possible values: `(workspace|all-monitors-outer-frame)`. +
-The default is: `workspace`
+Where the edge is. The default is `workspace`.
++
+* `workspace`: the edge of the focused workspace.
+* `all-monitors-outer-frame`: the outer edge of all monitors together. At the edge of a monitor inside that frame, focus goes to the next monitor in that direction.
 
---boundaries-action <action>::
-Defines the behavior when requested to cross the `<boundary>`. +
-`<action>` possible values: `(stop|fail|wrap-around-the-workspace|wrap-around-all-monitors)` +
-The default is: `stop`
+--boundaries-action <boundary-action>::
+What happens at the edge. The default is `stop`.
++
+* `stop`: nothing changes, and the command exits 0.
+* `fail`: nothing changes, and the command exits 1.
+* `wrap-around-the-workspace`: focus the window at the opposite edge of the workspace.
+* `wrap-around-all-monitors`: focus the monitor at the opposite end. This action requires `--boundaries all-monitors-outer-frame`, so AeroSpork rejects `focus --boundaries-action wrap-around-all-monitors left` alone.
 
 --window-id <window-id>::
-Focus the window with specified `<window-id>`.
-A minimized window, or a window of a hidden app, is brought back first.
+Focus the window with this ID, on any workspace.
+A minimized window, or a window of a hidden app, comes back first.
+Incompatible with every other option.
 
 --dfs-index <dfs-index>::
-Focus window by its index, based on a depth-first search (DFS) of the window within the workspace tree.
-Index is 0-based.
+Focus the window at this position in a depth-first walk of the tiled windows of the focused workspace. The first window is 0.
+Incompatible with every other option.
 
 --ignore-floating::
-Don't treat floating windows as part of the tree.
-Useful for more predictable scripting.
+Leave floating windows out of the tree. A script then gets the same result whatever floats.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+(left|down|up|right):: The direction to look for a window in.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`focus` exits 1 when no window is focused, when no window has the ID or the index, and at the edge with `--boundaries-action fail`.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Move focus across monitors, and wrap from the last monitor to the first: +
+`aerospork focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors right`
+* Focus the first tiled window of the workspace: +
+`aerospork focus --dfs-index 0`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-focus-back-and-forth(1), aerospork-focus-monitor(1), aerospork-move(1)
 
 // end::body[]
 

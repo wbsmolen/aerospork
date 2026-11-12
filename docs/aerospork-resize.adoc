@@ -17,32 +17,64 @@ aerospork resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|wid
 == Description
 
 // tag::body[]
-{manpurpose}
+`resize` changes the width or the height of a window by `<number>` points, or sets it to `<number>` points.
 
-The first argument chooses the dimension to resize
+For a tiled window, `resize` changes the size of the window, or of the nearest container around it, in a `tiles` layout with that orientation.
+The other children of the same container share the difference.
+When no container around the window is a `tiles` layout with that orientation, for example in an `accordion` layout, the command fails.
 
-* `width` changes width
-* `height` changes height
-* `smart` changes width if the parent has horizontal orientation, and
-height if the parent has vertical orientation
-* `smart-opposite` resizes the opposite axis to `smart`
-
-The second argument controls how much the size changes
-
-* If the `<number>` is prefixed with `+` then the dimension is increased
-* If the `<number>` is prefixed with `-` then the dimension is decreased
-* If the `<number>` is prefixed with neither `+` nor `-` then the command changes the absolute value of the dimension
-
-On a floating window, `smart` changes width and `smart-opposite` changes height, since it has no parent to
-take an orientation from. The window stays on its monitor, and moves back onto it if it grows past the edge.
+A floating window changes its own size. For it, `smart` changes the width and `smart-opposite` changes the height.
+The window stays on its monitor, and moves back onto the monitor when it grows past the edge.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+(smart|smart-opposite|width|height)::
+The dimension to change:
++
+* `width`: the width.
+* `height`: the height.
+* `smart`: the width in a horizontal container, and the height in a vertical container.
+* `smart-opposite`: the other dimension.
+
+[+|-]<number>::
+The change, in points:
++
+* `+<number>`: make the dimension larger by `<number>` points.
+* `-<number>`: make the dimension smaller by `<number>` points.
+* `<number>`: make the dimension `<number>` points.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`resize` exits 1 when no window is focused, when no container around the window is a `tiles` layout with that orientation, and for a floating window on an off-screen workspace.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Make the focused window 50 points wider: +
+`aerospork resize width +50`
+* Resize with bindings:
++
+[source,toml]
+----
+[keys]
+alt-minus = 'resize smart -50'
+alt-equal = 'resize smart +50'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-balance-sizes(1), aerospork-layout(1)
 
 // end::body[]
 

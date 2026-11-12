@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-flatten-workspace-tree
 // tag::purpose[]
-:manpurpose: Flatten the tree of the focused workspace
+:manpurpose: Put every tiled window of the focused workspace in one container
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,17 +17,49 @@ aerospork flatten-workspace-tree [-h|--help] [--workspace <workspace>]
 == Description
 
 // tag::body[]
-{manpurpose}
+`flatten-workspace-tree` moves every tiled window of the workspace out of its nested container.
+Each tiled window becomes a direct child of the root container, in tree order, and the empty containers go away.
+The root container keeps its layout and orientation. Floating windows do not move.
 
-Use it when resetting a layout is quicker than repairing it by hand.
+Use it to reset a layout, when a reset is quicker than a repair by hand.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --workspace <workspace>::
 include::util/workspace-flag-desc.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Given this layout
++
+----
+h_tiles
+├── window 1
+└── v_tiles
+    ├── window 2
+    └── window 3
+----
++
+`flatten-workspace-tree` gives this layout
++
+----
+h_tiles
+├── window 1
+├── window 2
+└── window 3
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-balance-sizes(1), aerospork-join-with(1), aerospork-layout(1)
 
 // end::body[]
 

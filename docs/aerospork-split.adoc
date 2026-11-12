@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-split
 // tag::purpose[]
-:manpurpose: Split focused window
+:manpurpose: Split the focused window, as i3 does
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,30 +17,47 @@ aerospork split [-h|--help] [--window-id <window-id>] (horizontal|vertical|oppos
 == Description
 
 // tag::body[]
-`split` exists solely for compatibility with i3.
-Prefer `join-with` unless you have a specific reason not to.
+`split` exists only for compatibility with i3. Use `join-with` unless you have a reason not to.
+With https://aerospork.app/docs/guide.html#normalization[`enable-normalization-flatten-containers`] on, `split` fails. `join-with` works with it on.
 
-*If the parent of focused window contains more than one child*, then the command
+When the parent container of the focused window has more than one child, `split`:
 
-. Creates a new tiling container
-. Replaces the focused window with the container
-. Puts the focused window into the container as its only child
+. Creates a new `tiles` container with the orientation that the argument gives.
+. Puts the new container in the place of the focused window.
+. Puts the focused window into the new container, as its only child.
 
-The argument sets the orientation of the newly created container.
-`opposite` means the opposite orientation to the parent container.
-
-*If the parent of the focused window contains only a single child* (the window itself), `split` changes the orientation of the parent container
-
-IMPORTANT: `split` has no effect if `enable-normalization-flatten-containers` is turned on.
-Use `join-with` to keep `enable-normalization-flatten-containers` enabled
+When the focused window is the only child of its parent container, `split` changes the orientation of that container.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 --window-id <window-id>::
 include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+horizontal:: A horizontal container.
+vertical:: A vertical container.
+opposite:: The opposite orientation of the parent container.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`split` exits 1 with `enable-normalization-flatten-containers` on, when no window is focused, and for a floating window.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Split the focused window vertically: +
+`aerospork split vertical`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-join-with(1), aerospork-layout(1)
 
 // end::body[]
 

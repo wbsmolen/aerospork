@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-close-all-windows-but-current
 // tag::purpose[]
-:manpurpose: On the focused workspace, close all windows but current
+:manpurpose: Close every window on the focused workspace except the focused one
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,13 +17,36 @@ aerospork close-all-windows-but-current [-h|--help] [--quit-if-last-window]
 == Description
 
 // tag::body[]
-{manpurpose}
+`close-all-windows-but-current` runs `close` on each other window of the focused workspace.
+Windows on other workspaces stay open.
+An app can ask you to save first, so some windows can stay open.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---quit-if-last-window:: Quit the apps instead of closing them if it's their last window
+-h, --help:: Print help and exit.
+--quit-if-last-window:: When a window is the last window of its app, quit the app.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+The command exits 1 on an empty workspace, and when an app does not quit.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Keep only the focused window, in a binding:
++
+[source,toml]
+----
+[keys]
+alt-shift-w = 'close-all-windows-but-current'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-close(1)
 
 // end::body[]
 

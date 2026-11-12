@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-list-modes
 // tag::purpose[]
-:manpurpose: Print a list of modes currently specified in the configuration
+:manpurpose: Print the binding modes of the config
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,17 +17,30 @@ aerospork list-modes [-h|--help] [--current]
 == Description
 
 // tag::body[]
-{manpurpose}
+`list-modes` prints the name of each binding mode in the config, one name for each line.
+For how binding modes work, see https://aerospork.app/docs/guide.html#binding-modes[the guide].
 
-See xref:guide.adoc#binding-modes[the guide] for documentation about binding modes
+include::util/cli-only.adoc[]
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
+--current:: Print only the active binding mode.
 
---current::
-Only print the currently active mode
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Show the active binding mode in a status bar: +
+`aerospork list-modes --current`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-mode(1), aerospork-trigger-binding(1)
 
 // end::body[]
 

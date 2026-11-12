@@ -50,7 +50,7 @@ final class CmdArgsParsingTest: XCTestCase {
     }
 
     func testMandatoryArgumentIsReported() {
-        assertFailure(parseCmdArgs(["workspace"]), "ERROR: Argument '(<workspace-name>|next|prev)' is mandatory")
+        assertFailure(parseCmdArgs(["workspace"]), "ERROR: Argument '(<workspace>|next|prev)' is mandatory")
     }
 
     /// The flag is named back, and the command's real flags are listed -- pinning the exact string

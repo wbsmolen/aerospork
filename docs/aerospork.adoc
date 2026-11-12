@@ -5,22 +5,77 @@ include::util/man-attributes.adoc[]
 
 == Synopsis
 [verse]
-aerospork [-h|--help] [-v|--version] <subcommand> [<subcommand-options>...] [<subcommand-arguments>...]
+aerospork [-h|--help] [-v|--version] <subcommand> [<args>...]
 
 == Description
 
-AeroSpork is an i3-like tiling window manager for macOS.
+The *aerospork* command sends one command to the running AeroSpork app and prints its answer.
+The same commands run from bindings and callbacks in the config, without the `aerospork` prefix.
 
-The *aerospork* command line program manipulates AeroSpork and queries its state.
+`aerospork --help` lists every subcommand with its purpose.
+`aerospork <subcommand> --help` prints the synopsis of one subcommand, and `man aerospork-<subcommand>` describes it.
 
-See https://aerospork.app/docs/commands.html for the available <subcommand> options
-
-See each subcommand's own man page for its <subcommand-options> and <subcommand-arguments>
+In this manual, a _node_ is a window or a container in the tree. In practice, the commands move windows.
+The _focused_ window, workspace and monitor are the ones that have keyboard focus.
+Each monitor shows one _visible_ workspace. A workspace that is not visible is _off screen_.
 
 == Options
 
--h, --help:: Print help
+-h, --help:: Print the list of subcommands and exit.
 
--v, --version:: Print the version
+-v, --version:: Print the version of the CLI and of the running app, and exit.
+
+== Commands
+
+Focus::
+aerospork-focus(1), aerospork-focus-back-and-forth(1), aerospork-focus-monitor(1)
+
+Move windows and workspaces::
+aerospork-move(1), aerospork-move-node-to-workspace(1), aerospork-move-node-to-monitor(1), aerospork-move-workspace-to-monitor(1), aerospork-move-mouse(1)
+
+Layout::
+aerospork-layout(1), aerospork-join-with(1), aerospork-split(1), aerospork-resize(1), aerospork-balance-sizes(1), aerospork-flatten-workspace-tree(1), aerospork-fullscreen(1)
+
+Workspaces::
+aerospork-workspace(1), aerospork-workspace-back-and-forth(1), aerospork-summon-workspace(1)
+
+Windows::
+aerospork-close(1), aerospork-close-all-windows-but-current(1), aerospork-macos-native-fullscreen(1), aerospork-macos-native-minimize(1)
+
+Binding modes::
+aerospork-mode(1), aerospork-trigger-binding(1)
+
+AeroSpork and the system::
+aerospork-enable(1), aerospork-reload-config(1), aerospork-open-settings(1), aerospork-exec-and-forget(1), aerospork-volume(1)
+
+Query commands (CLI only)::
+aerospork-config(1), aerospork-debug-windows(1), aerospork-list-apps(1), aerospork-list-exec-env-vars(1), aerospork-list-modes(1), aerospork-list-monitors(1), aerospork-list-windows(1), aerospork-list-workspaces(1)
+
+`aerospork-list-exec-env-vars` also works in the config. `aerospork-exec-and-forget` works only in the config.
+
+include::util/exit-status.adoc[]
+
+== Environment
+
+AEROSPORK_DEBUG_LOG::
+When it is set in the environment of AeroSpork.app, the app writes verbose tracing to the unified log, where `log stream` shows it.
+See https://aerospork.app/docs/guide.html#troubleshooting[the guide on troubleshooting].
+
+== Files
+
+~/.aerospork.toml, $XDG_CONFIG_HOME/aerospork/aerospork.toml::
+The config. AeroSpork reads one of them. See aerospork-config(1).
+
+/tmp/<bundle-id>-<user>.sock::
+The socket that the CLI talks to the app through. A release build and a debug build each have their own socket, so the CLI of one build cannot reach the app of the other.
+
+== Diagnostics
+
+`Warning: AeroSpork client/server versions don't match`::
+The CLI and the running app come from different builds, usually because AeroSpork updated and the app did not restart.
+The command still runs. Quit AeroSpork and open it again.
+
+`Can't connect to AeroSpork server. Is AeroSpork.app running?`::
+The CLI cannot reach the app, and exits 3. Open AeroSpork.app, then run the command again.
 
 include::util/man-footer.adoc[]

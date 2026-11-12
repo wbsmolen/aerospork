@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-mode
 // tag::purpose[]
-:manpurpose: Activate the specified binding mode
+:manpurpose: Switch to another binding mode
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,14 +17,43 @@ aerospork mode [-h|--help] <binding-mode>
 == Description
 
 // tag::body[]
-{manpurpose}
-
-See xref:guide.adoc#binding-modes[the guide] for documentation about binding modes
+`mode` makes the bindings of `<binding-mode>` the active bindings.
+The bindings of the previous mode do not work until you switch back, usually with `mode main`.
+For how binding modes work, see https://aerospork.app/docs/guide.html#binding-modes[the guide].
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+<binding-mode>:: The name of a binding mode in the config, for example `main` or `service`.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`mode` exits 1 when the config has no binding mode with that name. The active mode then does not change.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Enter a `service` mode with one binding, and leave it with esc:
++
+[source,toml]
+----
+[keys]
+alt-shift-semicolon = 'mode service'
+
+[keys.service]
+esc = ['reload-config', 'mode main']
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-list-modes(1), aerospork-trigger-binding(1)
 
 // end::body[]
 

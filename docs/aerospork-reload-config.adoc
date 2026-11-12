@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-reload-config
 // tag::purpose[]
-:manpurpose: Reload currently active config
+:manpurpose: Read the config again and apply it
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,21 +17,41 @@ aerospork reload-config [-h|--help] [--no-gui] [--dry-run]
 == Description
 
 // tag::body[]
-{manpurpose}
+`reload-config` reads the config file again and applies it.
+You rarely need it: AeroSpork already reloads the config when the file changes, from an editor or from the Settings window.
 
-If the config contains errors, they are printed to stdout and the GUI opens to show them.
+When the config has errors, AeroSpork keeps the config that it runs now.
+The command prints the errors to stdout and opens an error window.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
---no-gui:: Don't open the GUI. Report errors on stdout only
---dry-run:: Validate the config and show errors (if any) but don't reload the config
+-h, --help:: Print help and exit.
+--no-gui:: Do not open the error window. Print the errors to stdout only.
+--dry-run:: Check the config and print its errors, but do not apply it.
 
-include::util/conditional-exit-code-header.adoc[]
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
 
-0:: Success. The config is reloaded successfully.
-non-zero exit code:: Failure. The config contains errors.
+`reload-config` exits 1 when the config has errors.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Check the config from a script, with no window: +
+`aerospork reload-config --dry-run --no-gui && echo 'The config is valid'`
+* Reload the config and go back to the main binding mode:
++
+[source,toml]
+----
+[keys.service]
+esc = ['reload-config', 'mode main']
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-config(1), aerospork-open-settings(1)
 
 // end::body[]
 

@@ -53,7 +53,7 @@ public enum WorkspaceTarget: Equatable, Sendable {
     }
 }
 
-let workspaceTargetPlaceholder = "(<workspace-name>|next|prev)"
+let workspaceTargetPlaceholder = "(<workspace>|next|prev)"
 
 func parseWorkspaceTarget(arg: String, nextArgs: inout [String]) -> Parsed<WorkspaceTarget> {
     return switch arg {

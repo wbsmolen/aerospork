@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-exec-and-forget
 // tag::purpose[]
-:manpurpose: Run /bin/bash -c '<bash-script>'
+:manpurpose: Run a shell script in the background, from the config
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,41 +17,59 @@ exec-and-forget <bash-script>   # config only, not available in CLI
 == Description
 
 // tag::body[]
-Run `/bin/bash -c '<bash-script>'`, and don't wait for the command termination.
-Stdout, stderr and exit code are ignored.
+`exec-and-forget` runs `/bin/bash -c '<bash-script>'` and does not wait for it.
+AeroSpork ignores the stdout, the stderr and the exit code of the script.
 
-For example, you can use this command to launch applications:
+This command works only in the config, in a binding or a callback.
+From a shell, run the script directly.
 
+The script inherits the full environment of AeroSpork, *secrets included*: API tokens, credentials, and anything that your shell profile exported when AeroSpork started.
+That is deliberate, because a script that posts to Slack needs its token.
+It also means that the config is trusted input.
+
+WARNING: Read every `exec-and-forget` line that you copy from the internet before you put it in your config.
+The script runs as you, with your secrets.
+Treat it as a line that you are about to paste into your shell.
+
+AeroSpork adds these variables to the environment:
+
+* `AEROSPORK_WINDOW_ID`: the target window, when the command has one.
+* `AEROSPORK_WORKSPACE`: the target workspace, when the command has one.
+* `AEROSPORK_FOCUSED_WORKSPACE`: in `on-focused-workspace-changed`, the workspace that now has focus.
+* `AEROSPORK_PREV_WORKSPACE`: in `on-focused-workspace-changed`, the workspace that had focus before.
+
+To start from an empty environment, set `inherit-env-vars = false` in `[exec]`.
+To list the variables that the script receives, set `env-vars` in `[exec]`.
+`aerospork list-exec-env-vars` prints the environment that every such script starts from.
+It hides secret-looking values on screen, but the script still receives them.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+<bash-script>::
+The rest of the TOML string after `exec-and-forget `.
+AeroSpork passes it to bash as it is, with no parsing and no escaping.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`exec-and-forget` exits 1 only when bash does not start. The exit code of the script does not count.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Open a new Terminal window with a binding:
++
 [source,toml]
 ----
+[keys]
 alt-enter = 'exec-and-forget open -n /System/Applications/Utilities/Terminal.app'
 ----
 
-`<bash-script>` is passed "as is" to bash without any transformations and escaping. `<bash-script>` is treated as suffix of the TOML string, it's not even an argument in classic CLI sense
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
 
-* The command is available in config
-* The command is *NOT* available in CLI
-
-// =========================================================== Environment
-== Environment
-
-The script inherits AeroSpork's full environment, *including any secrets in it*: API tokens,
-credentials, anything exported by your shell profile at launch. This is deliberate, since a script
-that posts to Slack needs its token. But it means the config file is trusted input.
-
-Treat an `exec-and-forget` line copied from the internet exactly as you would treat a line you were
-about to paste into your shell.
-
-`aerospork list-exec-env-vars` redacts secret-looking values by default when *displaying* them; that
-is a shoulder-surfing guard only and does not change what the child process receives. Use
-`--show-secrets` to see the real values.
-
-AeroSpork adds, when the command has a target, `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`; and
-for commands run by `on-focused-workspace-changed`, `AEROSPORK_FOCUSED_WORKSPACE` and
-`AEROSPORK_PREV_WORKSPACE`.
-
-Set `[exec] inherit-env-vars = false` to start from an empty environment, and `[exec] env-vars` to
-declare exactly what should be passed through.
+aerospork(1), aerospork-list-exec-env-vars(1), https://aerospork.app/docs/guide.html#exec-env-vars[the guide on exec environment variables]
 
 // end::body[]
 

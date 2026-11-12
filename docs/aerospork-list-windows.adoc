@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-list-windows
 // tag::purpose[]
-:manpurpose: Print windows that satisfy conditions
+:manpurpose: Print the windows that match the filters
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -22,88 +22,83 @@ aerospork list-windows [-h|--help] --focused [--format <output-format>] [--count
 == Description
 
 // tag::body[]
-{manpurpose}
+`list-windows` prints one line for each window that matches every filter.
+Give at least one of `--workspace`, `--monitor`, `--all` and `--focused`.
+`--all` and `--focused` take no other filter.
+
+include::util/cli-only.adoc[]
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
--h, --help:: Print help
+-h, --help:: Print help and exit.
 
 include::util/all-monitors-option.adoc[]
 
 --focused::
-Print the focused window.
-If no window is focused, an error is reported.
+Print the focused window. When no window has focus, the command exits 1.
 
 --workspace <workspace>...::
-Filter results to only print windows that belong to either of specified workspaces.
-`<workspace>...` is a space-separated list of workspace names.
+Print only the windows on the given workspaces.
+`<workspace>...` is a space-separated list of:
 +
-Possible values: +
-+
-. Workspace name
-. `focused` is a special workspace name that represents the focused workspace
-. `visible` is a special workspace name that represents all currently visible workspaces (In multi-monitor setup, there are multiple visible workspaces)
+* A workspace name.
+* `focused`: the focused workspace.
+* `visible`: every visible workspace, one for each monitor.
 
 include::util/monitor-option.adoc[]
 
---pid <pid>:: Filter results to only print windows that belong to the Application with specified `<pid>`
+--pid <pid>:: Print only the windows of the app with this process ID.
 
 --app-bundle-id <app-bundle-id>::
-Filter results to only print windows that belong to the Application with specified https://developer.apple.com/documentation/appstoreconnectapi/bundle_ids[Bundle ID]
+Print only the windows of the app with this https://developer.apple.com/documentation/appstoreconnectapi/bundle_ids[bundle ID].
 +
-Deprecated (but still supported) flag name: `--app-id`
+Old spelling, still accepted: `--app-id`.
 
---format <output-format>:: Specify output format. See "Output Format" section for more details.
-Incompatible with `--count`
+:list-noun: windows
+include::util/format-options.adoc[]
 
---count:: Output only the number of windows.
-Incompatible with: `--format`, `--json`
-
---json:: Output in JSON format.
-Can be used in combination with `--format` to specify which data to include into the json.
-With `--json`, the `<output-format>` may contain only interpolation variables and spaces
-(`%{right-padding}` and literal text are rejected).
-Incompatible with `--count`
-
-// =========================================================== Output Format
+// =========================================================== Output format
 include::util/conditional-output-format-header.adoc[]
 
-The output format is set with the optional `[--format <output-format>]` option.
-`<output-format>` supports https://en.wikipedia.org/wiki/String_interpolation[string interpolation].
+include::util/format-intro.adoc[]
 
-If not specified, the default `<output-format>` is: +
+The default `<output-format>` is +
 `%{window-id}%{right-padding} | %{app-name}%{right-padding} | %{window-title}`
 
-The following variables can be used inside `<output-format>`:
+`<output-format>` can use these variables:
 
-%{window-id}:: Number. Window unique ID
-%{window-title}:: String. Window title
-%{window-is-fullscreen}:: Boolean. Is window in fullscreen by `aerospork fullscreen` command
+include::util/format-vars-window.adoc[]
 
-%{app-bundle-id}:: String. Application unique identifier. https://developer.apple.com/documentation/appstoreconnectapi/bundle_ids[Bundle ID]
-%{app-name}:: String. Application name
-%{app-pid}:: Number. https://en.wikipedia.org/wiki/Process_identifier[UNIX process identifier]
-%{app-exec-path}:: String. Application executable path
-%{app-bundle-path}:: String. Application bundle path
+include::util/format-vars-app.adoc[]
 
-%{workspace}:: String. Name of the belonging workspace
-%{workspace-is-focused}:: Boolean. True if the workspace has focus
-%{workspace-is-visible}:: Boolean. True if the workspace is visible. A workspace can be visible but not focused in a multi-monitor setup
+include::util/format-vars-workspace.adoc[]
 
-%{monitor-id}:: 1-based Number. Sequential number of the belonging monitor
-%{monitor-appkit-nsscreen-screens-id}:: 1-based Number. Index of the belonging monitor in the `NSScreen.screens` array. Useful for integration with other tools that use `NSScreen.screens` ordering (like sketchybar).
-%{monitor-name}:: String. Name of the belonging monitor
-%{monitor-fingerprint}:: String. Hardware fingerprint of the monitor: whichever of vendor, model, serial, name, size and UUID the display reports, as a table you can paste into `[monitors]`. Use it to identify a specific physical monitor in a docking setup.
-%{monitor-vendor-id}:: String. Vendor ID of the monitor in hexadecimal format (e.g., `0x10AC`). Empty if not available.
-%{monitor-model-id}:: String. Model ID of the monitor in hexadecimal format (e.g., `0xD0C1`). Empty if not available.
-%{monitor-serial-number}:: String. Serial number of the monitor. Empty if not available.
-%{monitor-width}:: Number. Width of the monitor in points
-%{monitor-height}:: Number. Height of the monitor in points
+include::util/format-vars-monitor.adoc[]
 
-%{right-padding}:: Expands to the minimum number of spaces required to right-pad the current column
-%{newline}:: Unicode U+000A newline symbol `\n`
-%{tab}:: Unicode U+0009 tab symbol `\t`
+include::util/format-vars-special.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`list-windows --focused` exits 1 when no window has focus.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Print the windows of the focused workspace: +
+`aerospork list-windows --workspace focused`
+* Print the ID of the focused window: +
+`aerospork list-windows --focused --format '%{window-id}'`
+* Count the Safari windows on every monitor: +
+`aerospork list-windows --monitor all --app-bundle-id com.apple.Safari --count`
+* Print every window as JSON, with its workspace: +
+`aerospork list-windows --all --json --format '%{window-id} %{app-name} %{window-title} %{workspace}'`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-list-apps(1), aerospork-list-workspaces(1), aerospork-focus(1)
 
 // end::body[]
 

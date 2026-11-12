@@ -97,7 +97,7 @@ private func parseBoundariesAction(arg: String, nextArgs: inout [String]) -> Par
     if let arg = nextArgs.nextNonFlagOrNil() {
         return parseEnum(arg, FocusCmdArgs.WhenBoundariesCrossed.self)
     } else {
-        return .failure("<action> is mandatory")
+        return .failure("<boundary-action> is mandatory")
     }
 }
 

@@ -2,7 +2,7 @@
 include::util/man-attributes.adoc[]
 :manname: aerospork-join-with
 // tag::purpose[]
-:manpurpose: Put the focused window and the nearest node in the specified direction under a common parent container
+:manpurpose: Put the focused window and its neighbor in a new container
 // end::purpose[]
 
 // =========================================================== Synopsis
@@ -17,22 +17,46 @@ aerospork join-with [-h|--help] [--window-id <window-id>] (left|down|up|right)
 == Description
 
 // tag::body[]
-{manpurpose}
+`join-with` puts the focused window and its neighbor in that direction into a new `tiles` container.
+The neighbor is the nearest node in that direction: a window, or a container.
+The new container takes the place of the neighbor, with the opposite orientation of its parent.
+
+`join-with` replaces the https://i3wm.org/docs/userguide.html#_splitting_containers[split command] of i3.
+You split a node almost always to put several windows under one parent, and `join-with` does that in one step.
+Unlike `split`, it works with https://aerospork.app/docs/guide.html#normalization[`enable-normalization-flatten-containers`] on.
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+
+--window-id <window-id>::
+include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+(left|down|up|right):: The direction of the neighbor to join.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`join-with` exits 1 when no window is focused, and when there is no node in that direction.
 
 // =========================================================== Examples
 include::util/conditional-examples-header.adoc[]
 
-Given this layout
-
+* Given this layout
++
 ----
 h_tiles
 ├── window 1
 ├── window 2 (focused)
 └── window 3
 ----
-
-`join-with right` will result in the following layout
-
++
+`join-with right` gives this layout
++
 ----
 h_tiles
 ├── window 1
@@ -41,17 +65,10 @@ h_tiles
     └── window 3
 ----
 
-NOTE: `join-with` is a high-level replacement for i3's https://i3wm.org/docs/userguide.html#_splitting_containers[split command].
-The reason to split a node is almost always to put several windows under a common parent, which is what `join-with` does directly.
-Unlike `split`, it works with xref:guide.adoc#normalization[`enable-normalization-flatten-containers`] enabled.
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
 
-// =========================================================== Options
-include::util/conditional-options-header.adoc[]
-
--h, --help:: Print help
-
---window-id <window-id>::
-include::util/window-id-flag-desc.adoc[]
+aerospork(1), aerospork-split(1), aerospork-flatten-workspace-tree(1), aerospork-layout(1)
 
 // end::body[]
 
