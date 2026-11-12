@@ -158,8 +158,9 @@ it keeps a deliberately small surface, so I kept the work here instead.
 
 What that turned into, in this codebase:
 
-- **The DisplayLink problem** is `model/MonitorFingerprint.swift`. A display is matched on the
-  per-display UUID first, then EDID vendor/model/serial from CoreGraphics, then name, then size.
+- **The DisplayLink problem** is `model/MonitorFingerprint.swift`. A display is matched on its
+  per-display UUID when the pattern gives one. Otherwise every key the pattern gives (EDID vendor,
+  model and serial from CoreGraphics, size, name) has to match.
   DisplayLink panels report no EDID at all, so the UUID is the only key that separates two of them.
   Screen reconfiguration is also debounced, because a dock connects in several stages and fires the
   change notification more than once.
