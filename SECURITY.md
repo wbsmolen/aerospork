@@ -3,8 +3,8 @@
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting: **Security → Report a vulnerability** on this
-repository. That keeps the report private until there is a fix. Please do not open a public issue
-for a security problem.
+repository. The report then stays private until there is a fix. Do not open a public issue for a
+security problem.
 
 If private reporting is unavailable, open an issue that says only that you have a security report
 and asks for a contact address. Do not include details in it.
@@ -13,36 +13,37 @@ and asks for a contact address. Do not include details in it.
 
 AeroSpork needs Accessibility permission, which is broad: with it, the app can read and change the
 windows of every other running application. It is not sandboxed, because the Accessibility APIs do
-not work in a sandbox. Anything that lets an attacker influence what AeroSpork executes is therefore
+not work in a sandbox. Anything that lets an attacker influence what AeroSpork runs is therefore
 serious, and the config file is the most likely route:
 
 - `exec-and-forget` and the `after-startup-command` / focus callbacks run shell commands through
-  `/bin/bash -c`. A config file is executable content, and should be treated like a shell script
-  rather than like a settings file.
-- Window rules act on `AXTitle` and bundle id, both of which are attacker-influenceable by any app
-  that can name its own window. A rule that runs a command on a title match is a way for another
-  application to trigger it.
+  `/bin/bash -c`. A config file is executable content. Treat it like a shell script, not like a
+  settings file.
+- Window rules act on `AXTitle` and the bundle ID. Any app that can name its own window controls
+  both. A rule that runs a command on a title match is a way for another application to trigger it.
 - The IPC socket is `AF_UNIX` at `/tmp/<bundle-id>-<user>.sock`, so it is reachable by any process
   running as the same user. Both ends check with `getpeereid` that the other runs as the same user
-  and hang up if it does not, but there is no other authentication, and commands arriving on it are
-  executed. This is the same trust model as the config file: same-user processes are already trusted.
-- Window placement is remembered across a restart in
-  `~/Library/Caches/<bundle-id>/workspace-memory.json`, mode `0600`, and it is read at startup and
-  acted on. A same-user process can edit it and move windows to a workspace you did not choose --
-  the same trust boundary as the socket and the config. It records bundle ids and monitor UUIDs, and
-  nothing else; a file from another window-server session, or one naming a different app for an id,
-  is discarded rather than applied.
+  and hang up if it does not. There is no other authentication, and the app runs the commands that
+  arrive on it. This is the same trust model as the config file: same-user processes are already
+  trusted.
+- AeroSpork remembers window placement across a restart in
+  `~/Library/Caches/<bundle-id>/workspace-memory.json`, mode `0600`. It reads that file at startup
+  and acts on it. A same-user process can edit the file and move windows to a workspace you did not
+  choose. That is the same trust boundary as the socket and the config. The file records window IDs,
+  workspace names, bundle IDs, monitor fingerprints and the tiling tree of each workspace, and
+  nothing else. AeroSpork discards a
+  file from another WindowServer session, and an entry that names a different app for a window ID.
 
 The CLI refuses `exec-and-forget`, and that refusal is UX, not a security boundary. It keeps a shell
 from looking like a window manager subcommand. A process that can reach the socket can already write
 the config, which runs `exec-and-forget` on the next reload, and as the same user it could run the
-shell itself anyway. Do not rely on it to contain anything; getting around it is not a vulnerability.
+shell itself anyway. Do not rely on it to contain anything. A way around it is not a vulnerability.
 
 Reports about any of the above are in scope. So are signing, notarization and update-channel
-problems: updates are verified against an EdDSA public key in the app's Info.plist before they are
-unpacked, and a way to make it accept an update signed by another key would be a serious finding. The
-feed is signed with the same key and a build refuses one that isn't, so whoever can serve the feed
-still can't offer an old version.
+problems. Sparkle checks each update against the EdDSA public key in the app's Info.plist before it
+unpacks the update, and a way to make it accept an update signed by another key would be a serious
+finding. The same key signs the feed, and a build refuses a feed that is not signed. Thus a party that
+can serve the feed still cannot offer an old version.
 
 ## Out of scope
 
