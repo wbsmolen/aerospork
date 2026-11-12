@@ -173,6 +173,52 @@ What that turned into, in this codebase:
   is created on demand and released when it empties, instead of being materialized for every name a
   keybinding mentions.
 
+## Why these choices
+
+If you compare AeroSpork with upstream, these are the reasons behind its stack. The stack itself is
+in [`dev-docs/architecture.md`](dev-docs/architecture.md#tech-stack).
+
+**Two dependencies instead of four, and each removal was a wrapper going away.** BlueSocket was
+wrapping a local Unix socket, so it became `AF_UNIX` directly. HotKey was wrapping Carbon's
+`RegisterEventHotKey`, which is one call plus the bookkeeping to unregister it. ISSoundAdditions was wrapping CoreAudio.
+swift-collections supplied one ordered dictionary. The ANTLR-generated shell grammar parsed command
+strings that `/bin/bash -c` already parses. Every one of those is a thing that can break on an OS
+update, or need a version bump before the app can be rebuilt, in exchange for code the platform
+already provides. Sparkle is the one addition, and only because there is no App Store update path
+to inherit.
+
+**Display identity comes from CoreGraphics, not IOKit.** Upstream reads EDID through
+`IOServiceMatching("IODisplayConnect")`. That IOKit class does not exist on Apple Silicon, so the
+iterator yields nothing and vendor/model/serial come back `nil` for every display. CoreGraphics
+returns the same values and adds the per-display UUID, which is the only field that survives a
+DisplayLink dock.
+
+**The private `_AXUIElementGetWindow` stays, and it costs something.** It is the only way to get a
+window id that is stable across refreshes, and window identity is what the whole tree is keyed on.
+The price is that the Mac App Store is permanently out: private symbols fail review, and the
+Accessibility APIs this app is built on do not work in a sandbox anyway. Hence Developer ID signing,
+notarization, and Sparkle rather than TestFlight.
+
+**Workspace placement survives a restart of AeroSpork.** Workspaces are emulated, so nothing
+outside the process knows that a window belongs to one. AeroSpork remembers each window's workspace,
+the monitor each workspace was on, and each workspace's layout, keyed on the window id that the macOS
+window server issues. That id is stable for as long as the window server runs: an update, a crash or a
+quit keeps it, and a logout, a reboot or an app that relaunches does not. Where the id is gone, there
+is no honest way to recognize a window, because every terminal window reports the same accessibility
+identifier. So AeroSpork places that window by its location and does not guess, and a window rule
+(`[on-window]`) remains the way to state intent.
+
+**The Xcode project is generated, not committed.** `project.yml` plus XcodeGen produces it, because
+SwiftPM cannot build an app bundle but a checked-in `.pbxproj` is a merge conflict waiting to happen.
+Debug builds skip Xcode entirely.
+
+**The config writer is line-based on purpose.** Re-serializing the whole file would be far simpler,
+and would destroy every comment plus anything the GUI cannot model, such as per-monitor gap arrays.
+Instead it rewrites only the keys you changed, preserves what the panes cannot model (a rich
+monitor fingerprint, a fallback list) field for field on every save, and refuses the few shapes it
+cannot rewrite safely, pointing you at the Raw TOML pane. That is what makes a GUI safe to put on
+top of a dotfile.
+
 ## Contribute
 
 [CONTRIBUTING.md](CONTRIBUTING.md) says how to build AeroSpork, run the checks and open a pull
