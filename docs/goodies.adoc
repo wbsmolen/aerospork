@@ -4,17 +4,17 @@ include::util/site-attributes.adoc[]
 include::util/header.adoc[]
 
 [#move-by-dragging-any-part-of-the-window]
-== Move windows by dragging any part of the window
+== Move a window by any part of it
 
 [source,bash]
 ----
 defaults write -g NSWindowShouldDragOnGesture -bool true
 ----
 
-Windows can then be moved by holding `ctrl + cmd` and dragging any part of the window, not only the title bar.
+Then hold `ctrl-cmd` and drag any part of a window to move it, not only the title bar.
 
 [#highlight-focused-windows-with-colored-borders]
-== Highlight focused windows with colored borders
+== Highlight the focused window with a colored border
 
 link:https://github.com/FelixKratz/JankyBorders[JankyBorders] draws a colored border around the focused window.
 
@@ -63,7 +63,7 @@ so they do not work with AeroSpork.
 [#show-aerospork-workspaces-in-sketchybar]
 == Show AeroSpork workspaces in Sketchybar
 
-AeroSpork workspace indicators can be driven from link:https://github.com/FelixKratz/SketchyBar[Sketchybar].
+link:https://github.com/FelixKratz/SketchyBar[Sketchybar] can show the AeroSpork workspaces.
 Use these snippets as a starting point.
 
 .~/.aerospork.toml

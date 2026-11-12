@@ -41,11 +41,11 @@ anywhere, stored beyond what is described below, or shared with anyone.</p>
 <h2>What it writes to your Mac</h2>
 <ul>
   <li>Your configuration, at <code>~/.aerospork.toml</code> or under
-      <code>$XDG_CONFIG_HOME</code> — whichever you use. The settings window edits this file in
+      <code>$XDG_CONFIG_HOME</code>, whichever you use. The Settings window edits this file in
       place.</li>
-  <li>Timestamped backups of that file beside it, so a bad edit is recoverable — and, once, a
-      <code>.pre-v2</code> copy of a config written in the older schema, kept when the file is
-      migrated to the current one.</li>
+  <li>Timestamped backups of that file beside it, so you can recover from a bad edit. Once, also a
+      <code>.pre-v2</code> copy of a config in the v1 spelling, kept when AeroSpork rewrites the file
+      in the v2 spelling.</li>
   <li><code>~/Library/Caches/com.wbs.aerospork/workspace-memory.json</code>, readable only by your
       user account. It records which workspace each open window was on, along with the bundle
       identifier of its application, an identifier for the monitor the workspace was on, and the
@@ -55,7 +55,7 @@ anywhere, stored beyond what is described below, or shared with anyone.</p>
       <code>~/Library/Logs/com.wbs.aerospork/</code>, with the error, a stack trace and the app and
       macOS versions. It is opened for you to read and is never sent.</li>
 </ul>
-<p>All of it stays on your Mac. Uninstalling the app leaves these files behind; delete them if you
+<p>All of it stays on your Mac. Uninstalling the app leaves these files behind. Delete them if you
 want them gone.</p>
 
 <h2>The update check</h2>
@@ -67,24 +67,24 @@ file listing the current version. Like any web request, it necessarily tells thi
 address, the time, and a user-agent string naming the app and its version. That is the whole of it:
 AeroSpork does not send a system profile, a machine identifier, or anything about your windows,
 configuration, or the applications you run. Sparkle, the update framework, can send a hardware and
-software profile — that feature is not enabled here.</p>
+software profile. AeroSpork does not enable that feature.</p>
 <p>If an update is available, the download comes from GitHub, and GitHub sees that request the same
 way any download host would.</p>
 
 <h2>What this website sees</h2>
-<p>These pages are static files on Azure Static Web Apps. Nothing is loaded from another host — no
-third-party fonts, images, scripts, embeds or trackers — there are no cookies, and nothing follows
+<p>These pages are static files on Azure Static Web Apps. Nothing comes from another host: no
+third-party fonts, images, scripts, embeds or trackers. There are no cookies, and nothing follows
 you between visits. That is not only a promise: the site sends a
 <code>Content-Security-Policy</code> of <code>default-src 'none'</code> that permits no other
-host anywhere — every allowance is <code>'self'</code>, plus inline styles on the documentation
+host anywhere. Every allowance is <code>'self'</code>, plus inline styles on the documentation
 pages, whose generator embeds its stylesheet in the page. Your browser refuses any off-site
 request this site might make, including one added by mistake.</p>
 <p>The only script on the site is <a href="/copy.js">a few lines on the front page</a> that put the
 install command on your clipboard when you click the copy button. It sends nothing anywhere, and you
 can read it.</p>
 <p>Azure receives the requests that serve these pages, which as with any web host includes IP
-addresses. That is infrastructure logging outside our control, and it is not collected, read, or
-combined with anything by this project.</p>
+addresses. That is infrastructure logging outside the control of this project, and this project does not
+collect it, read it, or combine it with anything.</p>
 
 <h2>Commands you configure</h2>
 <p>AeroSpork can run shell commands you put in your own configuration, through
