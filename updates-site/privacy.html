@@ -72,7 +72,7 @@ software profile. AeroSpork does not enable that feature.</p>
 way any download host would.</p>
 
 <h2>What this website sees</h2>
-<p>These pages are static files on Azure Static Web Apps. Nothing comes from another host: no
+<p>These pages are static files on Firebase Hosting, a Google service. Nothing comes from another host: no
 third-party fonts, images, scripts, embeds or trackers. There are no cookies, and nothing follows
 you between visits. That is not only a promise: the site sends a
 <code>Content-Security-Policy</code> of <code>default-src 'none'</code> that permits no other
@@ -82,7 +82,7 @@ request this site might make, including one added by mistake.</p>
 <p>The only script on the site is <a href="/copy.js">a few lines on the front page</a> that put the
 install command on your clipboard when you click the copy button. It sends nothing anywhere, and you
 can read it.</p>
-<p>Azure receives the requests that serve these pages, which as with any web host includes IP
+<p>Google receives the requests that serve these pages, which as with any web host includes IP
 addresses. That is infrastructure logging outside the control of this project, and this project does not
 collect it, read it, or combine it with anything.</p>
 
