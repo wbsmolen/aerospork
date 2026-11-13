@@ -9,7 +9,7 @@ a login of its own.
 ponytail: handles headers, redirects, cleanUrls and trailingSlash, the keys this site uses. Add a
 key here before you use it in firebase.json, or deploy with firebase-tools.
 """
-import gzip, hashlib, json, os, subprocess, sys, urllib.request
+import fnmatch, gzip, hashlib, json, os, subprocess, sys, urllib.request
 
 root, project = sys.argv[1], sys.argv[2]
 site = sys.argv[3] if len(sys.argv) > 3 else project
@@ -43,17 +43,23 @@ for k in ("cleanUrls", "trailingSlashBehavior"):
 if "trailingSlash" in hosting:
     config["trailingSlashBehavior"] = "ADD" if hosting["trailingSlash"] else "REMOVE"
 
-ignore = set(hosting.get("ignore", []))
+ignore = hosting.get("ignore", ["firebase.json", "**/.*", "**/node_modules/**"])
+
+
+def ignored(rel):
+    return any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(rel, g.removeprefix("**/")) for g in ignore)
+
+
 files, blobs = {}, {}
 for d, dirs, names in os.walk(public):
-    dirs[:] = [x for x in dirs if not x.startswith(".") and x not in ignore]
     for n in names:
-        if n.startswith(".") or n in ignore:
-            continue
         p = os.path.join(d, n)
+        rel = os.path.relpath(p, public).replace(os.sep, "/")
+        if ignored(rel):
+            continue
         blob = gzip.compress(open(p, "rb").read(), mtime=0)
         h = hashlib.sha256(blob).hexdigest()
-        files["/" + os.path.relpath(p, public).replace(os.sep, "/")] = h
+        files["/" + rel] = h
         blobs[h] = blob
 
 version = call("POST", f"sites/{site}/versions", {"config": config})["name"]
