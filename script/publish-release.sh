@@ -63,7 +63,7 @@ sparkle_zip=".release/AeroSpork-$build_version.zip"
 # `setup.sh` replaces PATH with `.deps/bin:/bin:/usr/bin` so a build cannot pick up whatever happens
 # to be installed. These three are linked in there alongside the build tools; the check stays because
 # failing here costs nothing and failing after the twenty-minute universal build costs the build.
-for tool in gh swa az node; do
+for tool in gh gcloud python3; do
     command -v "$tool" > /dev/null || {
         echo "Required tool not found: $tool" > /dev/stderr
         echo "Install it, then re-run: script/setup.sh links it into .deps/bin." > /dev/stderr
@@ -72,13 +72,15 @@ for tool in gh swa az node; do
 done
 
 # The appcast host has to be reachable before anything is published: everything after the tag is
-# irreversible-ish, and discovering the wrong Azure subscription then means a released version that
-# no existing install is offered.
-if ! az staticwebapp show --name aerospork-updates --resource-group aerospork-updates \
-        --query name -o tsv > /dev/null 2>&1; then
-    echo "Cannot reach the aerospork-updates Static Web App." > /dev/stderr
-    echo "Active subscription: '$(az account show --query name -o tsv 2>/dev/null)'." > /dev/stderr
-    echo "The appcast lives in 'billy MCT'; switch with: az account set --subscription <id>" > /dev/stderr
+# irreversible-ish, and a deploy that cannot authenticate then means a released version that no
+# existing install is offered.
+if ! curl -sf -o /dev/null \
+        -H "Authorization: Bearer $(gcloud auth print-access-token 2> /dev/null)" \
+        -H "x-goog-user-project: aerospork-site" \
+        https://firebasehosting.googleapis.com/v1beta1/projects/aerospork-site/sites/aerospork-site; then
+    echo "Cannot reach the aerospork-site Firebase Hosting site." > /dev/stderr
+    echo "Active gcloud account: '$(gcloud config get account 2> /dev/null)'. It must own aerospork-site." > /dev/stderr
+    echo "Sign in with: gcloud auth login" > /dev/stderr
     exit 1
 fi
 

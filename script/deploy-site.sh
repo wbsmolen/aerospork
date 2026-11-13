@@ -28,19 +28,7 @@ cat > "$staging/docs/index.html" << 'HTML'
 <a href="/docs/guide.html">AeroSpork guide</a>
 HTML
 
-# Resolved before use. `set -e` does not abort on a failure inside `$(...)` when the result is just
-# an argument, so a wrong Azure subscription -- the active one is global CLI state and can be changed
-# by anything else on the machine -- silently produced an empty token and the deploy failed after the
-# release was already public and the tag pushed.
-deployment_token="$(az staticwebapp secrets list --name aerospork-updates \
-    --resource-group aerospork-updates --query 'properties.apiKey' -o tsv)"
-if test -z "$deployment_token"; then
-    echo "!!! Could not read the Static Web App deployment token !!!" > /dev/stderr
-    echo "The active Azure subscription is '$(az account show --query name -o tsv 2>/dev/null)'." > /dev/stderr
-    echo "The appcast lives in 'billy MCT'; switch with: az account set --subscription <id>" > /dev/stderr
-    exit 1
-fi
-
-# In the environment, not on the command line: any account on the Mac can read argv with `ps`.
-SWA_CLI_DEPLOYMENT_TOKEN="$deployment_token" swa deploy "$staging" --env production
+# Firebase Hosting, project aerospork-site. firebase.json holds the headers; 404.html is served for
+# any missing path without configuration. The deploy authenticates with your gcloud login.
+python3 script/firebase-deploy.py . aerospork-site
 rm -rf "$staging"

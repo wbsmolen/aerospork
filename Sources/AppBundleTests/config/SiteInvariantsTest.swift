@@ -51,11 +51,11 @@ final class SiteInvariantsTest: XCTestCase {
     /// site no longer enforces -- which for a privacy page is worse than saying nothing.
     func testContentSecurityPolicyStillDeniesByDefault() throws {
         let config = try String(
-            contentsOf: siteRoot.appending(path: "staticwebapp.config.json"), encoding: .utf8,
+            contentsOf: projectRoot.appending(path: "firebase.json"), encoding: .utf8,
         )
         XCTAssertTrue(
             config.contains("default-src 'none'"),
-            "staticwebapp.config.json no longer sends default-src 'none'. privacy.html tells readers "
+            "firebase.json no longer sends default-src 'none'. privacy.html tells readers "
                 + "the browser refuses any off-site request this page makes. Either restore the policy "
                 + "or correct that page -- do not leave the claim standing without the mechanism.",
         )
