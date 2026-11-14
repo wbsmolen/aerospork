@@ -4,9 +4,6 @@ This document tells you how to build AeroSpork from source, which script does wh
 notarization work, and how to cut a release. `CONTRIBUTING.md` is the short path to a first pull
 request. This document is the reference behind it.
 
-If you cannot build locally, compare with the
-[builds in GitHub Actions](https://github.com/wbsmolen/aerospork/actions?query=branch%3Amain).
-
 ## Toolchain
 
 Use the Xcode that matches your macOS version, and build through Xcode's toolchain.
@@ -35,9 +32,6 @@ Use the Xcode that matches your macOS version, and build through Xcode's toolcha
 > If the toolchain does not match the macOS SDK, `swift build` can stop at 0 compiled files and use
 > 100% CPU with no error. The swiftly toolchain that `.swift-version` pins does this on a beta macOS,
 > on the TOMLKit manifest. If a build makes no progress for a minute, stop it and use the steps above.
-
-CI does the same: `.github/workflows/ci.yml` selects the newest installed Xcode and sets
-`AEROSPORK_SWIFT: xcrun`.
 
 ## Dependencies
 
@@ -94,15 +88,13 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 1. `build-debug.sh`.
 2. `swift test`, which runs `AppBundleTests` and `CommonTests`.
 3. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
-4. `swiftformat --lint` and `swiftlint lint`. Neither rewrites a file.
+4. `swiftformat --lint`, `swiftlint lint` and `shellcheck -S warning ./*.sh script/*.sh`. None of
+   them rewrites a file.
 5. `generate.sh --all`. The script records `git status` before step 1 and compares it after step 5.
    If the run changed the tree, the generated files are out of date and the script fails. Local
    work and untracked files do not fail it.
 
-CI runs `run-tests.sh` and then two more checks:
-
-- An unsigned Xcode build of the Release configuration.
-- `shellcheck -S warning ./*.sh script/*.sh`.
+The project has no CI service. `build-release.sh` is the only build of the Release configuration.
 
 ## Run a debug copy
 

@@ -13,8 +13,10 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test     # 
 `run-tests.sh` builds, runs both test targets, checks the CLI, lints, and checks that the generated
 files are current. `dev-docs/development.md` lists its steps and explains the toolchain rule.
 
-CI (`.github/workflows/ci.yml`) runs `run-tests.sh` on a hosted `macos-latest` runner, then an
-unsigned Release build and `shellcheck`. The `test` job is a required status check on `main`.
+The project has no CI service: `run-tests.sh` on your Mac is the check. Run it before you open a
+pull request and again before you merge. It also runs `shellcheck` (`brew install shellcheck`).
+`build-release.sh` builds the Release configuration, and `script/publish-release.sh` runs
+`run-tests.sh` first.
 
 ## What the suite covers
 

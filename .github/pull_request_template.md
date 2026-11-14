@@ -14,7 +14,7 @@
 ## Checks
 
 - [ ] `AEROSPORK_SWIFT=xcrun ./run-tests.sh` passes.
-- [ ] I ran `./format.sh` if I changed Swift, and `shellcheck` if I changed a shell script.
+- [ ] I ran `./format.sh` if I changed Swift.
 - [ ] I committed the files that `./generate.sh` or `./build-shell-completion.sh` changed.
 - [ ] If I changed a command or a doc page, I ran `./build-docs.sh` and examined the result.
 - [ ] If I changed behavior that a user sees, I added a bullet to `CHANGELOG.md`, on one line.
