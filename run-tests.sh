@@ -25,6 +25,9 @@ swift test
 ./script/install-dep.sh --swiftlint
 ./.deps/swiftlint/swiftlint lint --quiet
 
+command -v shellcheck > /dev/null || { echo "!!! Install shellcheck first: brew install shellcheck"; exit 1; }
+shellcheck -S warning ./*.sh script/*.sh
+
 ./generate.sh --all
 if test "$status_before" != "$(git status --porcelain)"; then
     git status --short

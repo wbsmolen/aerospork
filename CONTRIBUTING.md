@@ -52,14 +52,12 @@ See `dev-docs/development.md`, "Code signing".
    reports what it finds.
 2. Run `AEROSPORK_SWIFT=xcrun ./run-tests.sh`.
 
-`run-tests.sh` builds, runs both test targets, checks the CLI, runs the linters (which do not rewrite
-files), and runs `./generate.sh --all`. It fails when the run changes the tree, that is, when the generated files are
+`run-tests.sh` builds, runs both test targets, checks the CLI, runs the linters and `shellcheck`
+(none of which rewrite files), and runs `./generate.sh --all`. It fails when the run changes the tree, that is, when the generated files are
 out of date. Your uncommitted work and untracked files do not fail it.
 
-CI runs `run-tests.sh` and two more checks:
-
-- An unsigned Xcode build of the Release configuration.
-- `shellcheck -S warning ./*.sh script/*.sh`. If you changed a shell script, run `shellcheck` on it.
+The project has no CI service, so this run is the check. It needs `shellcheck`
+(`brew install shellcheck`).
 
 ## Open a pull request
 
