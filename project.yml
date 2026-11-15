@@ -52,7 +52,7 @@ targets:
         # Notarization requirements
         ENABLE_HARDENED_RUNTIME: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 AeroSpork. All rights reserved."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025-2026 SEDR LLC. All rights reserved."
         # The name macOS shows: Settings window title, Force Quit, Login Items, and the
         # Accessibility permission prompt. Kept even though PRODUCT_NAME now matches it, because
         # macOS prefers CFBundleDisplayName over CFBundleName wherever it shows an app to a human,
