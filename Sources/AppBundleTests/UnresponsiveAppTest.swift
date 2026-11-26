@@ -57,6 +57,30 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertNil(body[..<guardLine.lowerBound].range(of: "AppLog"), "a log line in destroy() that every quit writes")
     }
 
+    // MARK: - A stopped app shows in the log, once per episode
+
+    func testAnAppUnansweredForAMinuteIsLoggedOnceAndAnAnswerRearmsIt() {
+        let pid: pid_t = -113 // no real process
+        let start = Date()
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start), "the episode starts")
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start + 59))
+        XCTAssertTrue(MacApp.noteAnswer(pid: pid, answered: false, now: start + 60))
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start + 61), "a record on every refresh")
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: true, now: start + 62))
+        XCTAssertNil(MacApp.unansweredSince[pid], "an answer ends the episode")
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start + 63))
+        XCTAssertTrue(MacApp.noteAnswer(pid: pid, answered: false, now: start + 123), "the next episode gets its own record")
+        _ = MacApp.noteAnswer(pid: pid, answered: true, now: start + 124)
+    }
+
+    /// Or the map keeps every pid that ever stopped answering. `destroy()` needs a real app.
+    func testADestroyedAppsEpisodeIsForgotten() throws {
+        let body = try sourceBody("private func destroy()", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(body.contains("MacApp.unansweredSince.removeValue(forKey: pid)"))
+        let perApp = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(perApp.contains("MacApp.noteAnswer(pid: pid, answered: !outcome.timedOut"), "the window-list read no longer notes answers")
+    }
+
     func testEachPassChecksLivenessOnceAndAgainAfterItsAwait() throws {
         let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
         let gone = try XCTUnwrap(pass.range(of: "let gone = Set("))

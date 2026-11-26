@@ -38,6 +38,26 @@ final class MacApp: AbstractApp {
     /// the rest of the pass skips the app. Cleared when a pass starts, so an app that recovers is asked
     /// again at once.
     @MainActor static var timedOutThisPass: Set<pid_t> = []
+    /// Since when each app's window list has gone unanswered, and whether that episode has its record yet.
+    /// `timedOutThisPass` forgets every pass, so a stopped app left no trace in the logs.
+    @MainActor private(set) static var unansweredSince: [pid_t: (since: Date, logged: Bool)] = [:]
+    private static let unansweredLogAfter: TimeInterval = 60
+
+    /// Notes whether an app answered its window-list read. True once per episode, when it has gone unanswered
+    /// for a minute; an answer ends the episode. Never per refresh, since `AppLog` is kept (#logging).
+    @MainActor static func noteAnswer(pid: pid_t, answered: Bool, now: Date) -> Bool {
+        if answered {
+            unansweredSince.removeValue(forKey: pid)
+            return false
+        }
+        guard let episode = unansweredSince[pid] else {
+            unansweredSince[pid] = (now, false)
+            return false
+        }
+        if episode.logged || now.timeIntervalSince(episode.since) < unansweredLogAfter { return false }
+        unansweredSince[pid]?.logged = true
+        return true
+    }
 
     /*conforms*/ let name: String? // Kept: reading `localizedName` asks LaunchServices, and the menu bar lists every window's app per refresh.
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
@@ -598,6 +618,10 @@ final class MacApp: AbstractApp {
             return (Array(result.keys), tabs, timedOut)
         }
         if outcome.timedOut { MacApp.timedOutThisPass.insert(pid) }
+        if MacApp.noteAnswer(pid: pid, answered: !outcome.timedOut, now: .now) {
+            let windowCount = MacWindow.allWindowsMap.values.count(where: { $0.macApp === self })
+            AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) has not answered Accessibility for a minute; keeping its \(windowCount, privacy: .public) windows; process gone: \(processIsGone(self.pid), privacy: .public)")
+        }
         backgroundTabsSeen = outcome.tabs
         return outcome.ids
     }
@@ -610,6 +634,7 @@ final class MacApp: AbstractApp {
             AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) is gone but LaunchServices still lists it; removing \(windowCount, privacy: .public) windows")
         }
         MacApp.allAppsMap.removeValue(forKey: pid)
+        MacApp.unansweredSince.removeValue(forKey: pid)
         for (_, job) in setFrameJobs {
             job.cancel()
         }
