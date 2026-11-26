@@ -12,6 +12,23 @@ let projectRoot: URL = {
     return url
 }()
 
+/// Points the URL-less config reads and writes at a new temp file holding `text` until `test` ends, so
+/// a save can run for real. A save reloads the config, so the loaded config is put back afterwards.
+@MainActor func useTemporaryConfig(_ text: String, for test: XCTestCase) throws -> URL {
+    let dir = URL(filePath: NSTemporaryDirectory()).appending(path: "aerospork-config-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let url = dir.appending(path: "config.toml")
+    try text.write(to: url, atomically: true, encoding: .utf8)
+    let (savedConfig, savedUrl, savedFailure, savedWarnings) = (config, configUrl, configLoadFailure, configWarnings)
+    testConfigOverride = url
+    test.addTeardownBlock { @MainActor in
+        testConfigOverride = nil
+        (config, configUrl, configLoadFailure, configWarnings) = (savedConfig, savedUrl, savedFailure, savedWarnings)
+        try? FileManager.default.removeItem(at: dir)
+    }
+    return url
+}
+
 /// The source from `declaration` on, `length` characters of it, for tests that pin wiring which needs a
 /// real `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment
 /// explaining a fix would satisfy or trip the assertion.

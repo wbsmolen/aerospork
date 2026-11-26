@@ -29,6 +29,10 @@ import TOMLKit
     // happen -- and under `swift test` this resolves to the DEVELOPER'S own ~/.aerospork-debug.toml.
     guard !isUnitTest else { return }
     guard case .file(let url) = findCustomConfigUrl() else { return }
+    migrateConfigToV2(at: url)
+}
+
+@MainActor func migrateConfigToV2(at url: URL) {
     let backup = url.appendingPathExtension("pre-v2")
     // Already migrated, or the user deliberately went back to v1. Either way, migrating a second
     // time would overwrite the only copy of what they originally wrote.

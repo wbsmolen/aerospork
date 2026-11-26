@@ -53,6 +53,18 @@ final class ConfigSafetyStartupTest: XCTestCase {
         assertEquals(configLoadFailure, "Failed to parse ~/.aerospork.toml")
     }
 
+    /// Under `swift test` the URL-less read resolved to the developer's own `~/.aerospork-debug.toml`.
+    func testUnitTestsNeverResolveTheRealConfig() {
+        XCTAssertNil(testConfigOverride)
+        guard case .failure(let reason) = readConfig() else { return XCTFail("a test read a real config") }
+        assertEquals(reason, "tests may not touch a real config")
+        assertEquals(configBaseText(), "")
+        guard case .failure = userConfigTargetUrl() else { return XCTFail("a test resolved a real config to write") }
+        // A forced read still reads exactly the file it names.
+        guard case .success((_, let url)) = readConfig(forceConfigUrl: defaultConfigUrl) else { return XCTFail() }
+        assertEquals(url, defaultConfigUrl)
+    }
+
     /// The migration rewrites the user's file, so it belongs to startup. Inside `readConfig` it also
     /// ran for `reload-config --dry-run`, which promises to change nothing, and every Settings save.
     func testTheV2MigrationRunsOnceAtStartupAndNotOnEveryRead() throws {

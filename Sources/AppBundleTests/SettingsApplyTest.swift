@@ -178,16 +178,6 @@ final class SettingsApplyTest: XCTestCase {
         XCTAssertTrue(source.contains(".onDisappear { Task { await viewModel.flushPendingAutoSave() } }"))
     }
 
-    /// A save cannot run headlessly without writing a real file, so the refresh is checked in the source.
-    func testASavedChangeIsAppliedOnScreenWithoutWaitingForAWindowEvent() throws {
-        let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationViewModel.swift"), encoding: .utf8)
-        let save = try XCTUnwrap(source.range(of: "func saveConfiguration()"))
-        let body = source[save.lowerBound...].prefix(4000)
-        let write = try XCTUnwrap(body.range(of: "try ConfigurationWriter.write(rendered)"))
-        let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("), "a GUI save no longer refreshes")
-        XCTAssertLessThan(write.lowerBound, refresh.lowerBound)
-    }
-
     // MARK: - Window rule rows are found by id
 
     /// Removing a selected rule took the whole app down: SwiftUI read the toggle's old binding before
@@ -233,16 +223,34 @@ final class SettingsApplyTest: XCTestCase {
     // MARK: - A save that changes nothing
 
     /// A save that changed nothing still wrote, reloaded and took a backup, which pushed a real one out of
-    /// the five kept. Merely opening Settings could do it. In the source for the reason given above.
-    func testASaveThatChangesNothingTouchesNothing() throws {
-        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift", length: 4000)
-        let guardLine = try XCTUnwrap(body.range(of: "if rendered != base {"))
-        let write = try XCTUnwrap(body.range(of: "try ConfigurationWriter.write(rendered)"))
-        let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("))
-        XCTAssertLessThan(guardLine.lowerBound, write.lowerBound)
-        XCTAssertLessThan(write.lowerBound, refresh.lowerBound)
+    /// the five kept. Merely opening Settings could do it.
+    func testASaveThatChangesNothingTouchesNothing() async throws {
+        let text = "accordion-padding = 30 # comment\n\n[gaps]\ninner = 10\nouter = 12\n"
+        let url = try useTemporaryConfig(text, for: self)
+        let before = try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: text)
+        ConfigurationWriter.startBackupSession()
+        vm.settings.general.accordionPadding = 42
+        vm.settings.general.accordionPadding = 30 // undone
+
+        await vm.saveConfiguration()
+
+        XCTAssertNil(vm.errorMessage)
+        assertEquals(try String(contentsOf: url, encoding: .utf8), text)
+        assertEquals(try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date, before)
+        assertEquals(ConfigurationWriter.backups(of: url), [])
         // The view model has to hear about it either way, or a change undone stays "unsaved".
-        let closing = try XCTUnwrap(body.range(of: "didWrite(rendered)"))
-        XCTAssertLessThan(refresh.lowerBound, closing.lowerBound)
+        XCTAssertFalse(vm.hasUnsavedChanges)
+    }
+
+    /// The save reloads without a refresh session, so a gap or layout change did nothing on screen
+    /// until an unrelated window event. Tests skip that refresh (it enumerates the machine's apps), so
+    /// only its place after the write is checked in the source.
+    func testASavedChangeIsAppliedOnScreenWithoutWaitingForAWindowEvent() throws {
+        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift", length: 4000)
+        let write = try XCTUnwrap(body.range(of: "try ConfigurationWriter.write(rendered)"))
+        let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("), "a GUI save no longer refreshes")
+        XCTAssertLessThan(write.lowerBound, refresh.lowerBound)
     }
 }

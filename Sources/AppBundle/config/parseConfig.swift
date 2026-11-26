@@ -4,6 +4,10 @@ import TOMLKit
 
 @MainActor
 func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
+    if isUnitTest {
+        guard let url = forceConfigUrl ?? testConfigOverride else { return .failure("tests may not touch a real config") }
+        return readConfig(at: url)
+    }
     let customConfigUrl: URL
     let isUserConfig: Bool
     switch findCustomConfigUrl() {
@@ -28,10 +32,14 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
     }
     let configUrl: URL = forceConfigUrl ?? customConfigUrl
     let finalIsUserConfig = forceConfigUrl != nil ? true : isUserConfig
+    return readConfig(at: configUrl, isUserConfig: finalIsUserConfig)
+}
 
+@MainActor
+func readConfig(at configUrl: URL, isUserConfig: Bool = true) -> Result<(Config, URL), String> {
     let configContent = try? String(contentsOf: configUrl)
     var warnings: [TomlParseError] = []
-    let parseResult = configContent.map { parseConfig($0, isUserConfig: finalIsUserConfig, warnings: &warnings) } ?? .success(defaultConfig)
+    let parseResult = configContent.map { parseConfig($0, isUserConfig: isUserConfig, warnings: &warnings) } ?? .success(defaultConfig)
 
     // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
     // Recording health here would erase the only surviving record that the user's config failed --
