@@ -31,7 +31,6 @@ struct ReloadConfigCommand: Command {
     switch result {
         case .success(let (parsedConfig, url)):
             if !args.dryRun {
-                resetHotKeys()
                 config = parsedConfig
                 configUrl = url
                 activateMode(activeMode)
