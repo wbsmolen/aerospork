@@ -107,6 +107,24 @@ enum FormatVar: Equatable {
     }
 }
 
+/// The error that formatting any object of `kind` with `format` reports, or nil, without an object to
+/// format: which variables are known depends only on the kind. So a command can check before it reads
+/// the values. The same message as `format` (every unknown variable of the line) and `formatToJson` (the
+/// first one) give.
+func validateFormat(_ format: [StringInterToken], for kind: AeroObjKind, json: Bool) -> String? {
+    let known = getAvailableInterVars(for: kind)
+    let errors = format.compactMap { token -> String? in
+        guard case .interVar(let name) = token, !known.contains(name) else { return nil }
+        return unknownInterVarError(name, for: kind)
+    }
+    guard let first = errors.first else { return nil }
+    return json ? first : errors.joinErrors()
+}
+
+private func unknownInterVarError(_ name: String, for kind: AeroObjKind) -> String {
+    "Unknown interpolation variable '\(name)'. Possible values: \(getAvailableInterVars(for: kind).joined(separator: "|"))"
+}
+
 private func getAvailableInterVars(for kind: AeroObjKind) -> [String] {
     _getAvailableInterVars(for: kind) + PlainInterVar.allCases.map(\.rawValue)
 }
@@ -209,8 +227,7 @@ extension String {
         }
         if self == PlainInterVar.newline.rawValue { return .success(.string("\n")) }
         if self == PlainInterVar.tab.rawValue { return .success(.string("\t")) }
-        return .failure("Unknown interpolation variable '\(self)'. " +
-            "Possible values: \(getAvailableInterVars(for: obj.kind).joined(separator: "|"))")
+        return .failure(unknownInterVarError(self, for: obj.kind))
     }
 
     private func toFormatVar() -> FormatVar? {

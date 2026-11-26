@@ -22,7 +22,8 @@ struct ListWindowsCommand: Command {
                         switch filter {
                             case .focused: [focus.workspace]
                             case .visible: Workspace.all.filter(\.isVisible)
-                            case .name(let name): [Workspace.get(byName: name.raw)]
+                            // A query never creates a workspace: an unknown name lists nothing.
+                            case .name(let name): Workspace.existing(byName: name.raw).map { [$0] } ?? []
                         }
                     }
                     .toSet()
@@ -43,11 +44,18 @@ struct ListWindowsCommand: Command {
         if args.outputOnlyCount {
             return io.out("\(windows.count)")
         } else {
-            var windowList: [(window: Window, title: String)] = []
-            for window in windows where window.isBound {
-                windowList.append((window, try await window.title))
+            let bound = windows.filter(\.isBound)
+            // Before any AX read, so a bad variable costs no round trip to an app. Only when there is a
+            // window to format: an empty list never reported one, and its output stays the same.
+            if !bound.isEmpty, let error = validateFormat(args.format, for: .window, json: args.json) {
+                return io.err(error)
             }
-            windowList = windowList
+            let titles = try await fetchTitles(bound)
+            // Rebuilt in the original order, not the order the reads finished: the sort below keys only on
+            // app name and title, so same-titled windows (several terminals titled `zsh`) would swap places
+            // between two polls.
+            let windowList = bound
+                .compactMap { window in window.isBound ? titles[window.windowId].map { (window: window, title: $0) } : nil }
                 .sortedBy([{ (w: (window: Window, title: String)) -> String in w.window.app.name ?? "" }, \.title])
 
             return formatListOutput(
@@ -60,5 +68,19 @@ struct ListWindowsCommand: Command {
                 io: io,
             )
         }
+    }
+}
+
+/// Every title at once, one task per window: each read is a round trip to the app's thread, and status
+/// bars poll this command. Same fan-out as `prefetchNativeStates`.
+@MainActor
+private func fetchTitles(_ windows: [Window]) async throws -> [UInt32: String] {
+    try await withThrowingTaskGroup(of: (UInt32, String).self) { group in
+        for window in windows {
+            group.addTask { @Sendable @MainActor in (window.windowId, try await window.title) }
+        }
+        var result: [UInt32: String] = [:]
+        for try await (id, title) in group { result[id] = title }
+        return result
     }
 }
