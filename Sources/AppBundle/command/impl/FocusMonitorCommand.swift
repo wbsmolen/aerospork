@@ -12,5 +12,3 @@ struct FocusMonitorCommand: Command {
         }
     }
 }
-
-// MonitorTarget.resolve() and Monitor helper extensions moved to MonitorResolution.swift

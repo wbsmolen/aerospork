@@ -114,8 +114,8 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
 }
 
 @TaskLocal
-var _isStartup: Bool? = false
-var isStartup: Bool { _isStartup ?? dieT("isStartup is not initialized") }
+var _isStartup: Bool = false
+var isStartup: Bool { _isStartup }
 
 struct ServerArgs: Sendable {
     var configLocation: String? = nil
