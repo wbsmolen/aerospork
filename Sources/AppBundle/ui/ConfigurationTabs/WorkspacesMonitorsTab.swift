@@ -132,7 +132,6 @@ struct WorkspacesMonitorsTab: View {
             value: uuid,
             help: "Copy monitor UUID\n\(uuid)\nA DisplayLink monitor reports no vendor or serial, so its UUID is the only thing that pins a workspace to that exact panel.",
         )
-        .settingsHitTarget()
     }
 
     private func chipLine(_ monitor: ConfigurationViewModel.MonitorRow) -> some View {
@@ -475,10 +474,9 @@ private struct MonitorBox: View {
         .buttonStyle(.plain)
         .focused($isFocused)
         .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .onHover { hovering in
-            isHovered = hovering
-            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-        }
+        // No pointing-hand cursor: macOS buttons do not use one, and a box torn down while
+        // hovered (routine on a display hotplug) never popped it.
+        .onHover { isHovered = $0 }
         .accessibilityLabel("Position \(monitor.position), \(monitor.name), \(monitor.resolution)\(monitor.isMain ? ", main display" : "")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

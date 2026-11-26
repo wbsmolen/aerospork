@@ -180,6 +180,31 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertTrue(source.contains("case .muted: Color.secondary.opacity(0.2)"))
     }
 
+    /// Icon-only controls get the 24pt hit shape from the one place that defines it, and that shape
+    /// must not change layout: a `frame(minWidth:)` there made the Keys filter pill jump when its
+    /// clear button appeared. A headless render cannot hit-test, so this reads the source.
+    func testIconControlsGetTheHitTargetWithoutGrowingLayout() throws {
+        for name in ["struct IconButton", "struct CopyButton"] {
+            let body = try sourceBody(name, in: Self.chrome)
+            XCTAssertTrue(body.contains(".settingsHitTarget()"), "\(name) has no settingsHitTarget")
+        }
+        let hitTarget = try sourceBody("func settingsHitTarget()", in: Self.chrome)
+        XCTAssertFalse(hitTarget.contains("frame("), "settingsHitTarget must not change layout: \(hitTarget)")
+        let actionBar = try sourceBody("struct ListActionBar", in: Self.chrome)
+        XCTAssertFalse(
+            actionBar.replacingOccurrences(of: "IconButton(", with: "").contains("Button"),
+            "ListActionBar's +/- should be IconButtons: \(actionBar)",
+        )
+    }
+
+    /// macOS buttons do not use a pointing hand, and a hovered view torn down before its pop left the
+    /// cursor stack unbalanced.
+    func testNoPaneUsesAPointingHandCursor() throws {
+        try forEachCodeLine { path, line, code in
+            XCTAssertFalse(code.contains("NSCursor.pointingHand.push"), "\(path):\(line): \(code)")
+        }
+    }
+
     /// The chip is rasterized at 40pt and scaled to the menu bar's ~22pt. At 0.72 the glyphs come
     /// out well above the ~14pt of the clock beside them; 0.62 is what the design system specifies.
     func testMenuBarChipUsesTheDesignSystemFontRatio() throws {
