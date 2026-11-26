@@ -148,7 +148,7 @@ final class AwayWindowTest: XCTestCase {
         config.enableNormalizationFlattenContainers = true
         let nested = TilingContainer(parent: root, adaptiveWeight: 1, .v, .tiles, index: INDEX_BIND_LAST)
         let inner = row([2, 3], in: nested)
-        row([1])
+        _ = row([1])
         leave(inner[1])
         workspace.normalizeContainers()
         XCTAssertNotNil(inner[0].parent as? TilingContainer)
