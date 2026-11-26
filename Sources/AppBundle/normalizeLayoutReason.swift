@@ -54,8 +54,7 @@ private func prefetchNativeStates(_ windows: [Window]) async throws -> [UInt32: 
         for window in windows {
             group.addTask { @Sendable @MainActor in
                 // One hop per window, not two. `macosNativeState` reads both flags inside a single
-                // `runInLoop` and keeps the same short-circuit (a fullscreen window is never asked
-                // whether it is minimized).
+                // `runInLoop`, in one batched AX read.
                 let state = try await window.macosNativeState()
                 return (window.windowId, state.fullscreen, state.minimized)
             }

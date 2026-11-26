@@ -66,6 +66,14 @@ final class FakeAxElement: AxUiElementMock {
 
     static let frameRead = "getFrame"
 
+    /// The same, for the fullscreen and minimized batch.
+    func getNativeFlags() -> (fullscreen: Bool?, minimized: Bool?) {
+        reads.append(FakeAxElement.nativeFlagsRead)
+        return (attrs[Ax.isFullscreenAttr.key].flatMap(Ax.isFullscreenAttr.getter), attrs[Ax.minimizedAttr.key].flatMap(Ax.minimizedAttr.getter))
+    }
+
+    static let nativeFlagsRead = "getNativeFlags"
+
     func containingWindowId() -> CGWindowID? { 1 }
 
     func resetCounters() {
@@ -336,7 +344,9 @@ final class AxWindowTypeReadTest: XCTestCase {
 /// window; `readMacosNativeState` is the single-traversal form. Asserted on the AX mock's recorded
 /// operations rather than on wall-clock, per dev-docs/performance.md.
 final class AxNativeStateReadTest: XCTestCase {
-    func testAnOrdinaryWindowIsAskedBothFlagsOnce() {
+    /// One batched read through the element's own `getNativeFlags`, not the two-read default, so a
+    /// `getNativeFlags` that is no longer a protocol requirement fails here.
+    func testAnOrdinaryWindowIsAskedBothFlagsInOneRead() {
         let win = FakeAxElement()
         win.seed(Ax.isFullscreenAttr, false)
         win.seed(Ax.minimizedAttr, false)
@@ -344,21 +354,20 @@ final class AxNativeStateReadTest: XCTestCase {
         let state = readMacosNativeState(win)
         assertEquals(state.fullscreen, false)
         assertEquals(state.minimized, false)
-        // Exactly one read each -- no duplicate probing.
-        assertEquals(win.reads, [Ax.isFullscreenAttr.key, Ax.minimizedAttr.key])
+        assertEquals(win.reads, [FakeAxElement.nativeFlagsRead])
     }
 
-    /// The short-circuit, and the reason it is worth keeping: the minimized read is an IPC to an app
-    /// that may be wedged, and a fullscreen window cannot be minimized.
-    func testAFullscreenWindowIsNeverAskedAboutMinimized() {
+    /// The short-circuit used to save the minimized read, an IPC; a batch has no second IPC to save.
+    /// What stays is the answer: a fullscreen window cannot be minimized, whatever the app says.
+    func testAFullscreenWindowIsNeverMinimized() {
         let win = FakeAxElement()
         win.seed(Ax.isFullscreenAttr, true)
-        win.seed(Ax.minimizedAttr, true) // would be a lie; must not be consulted
+        win.seed(Ax.minimizedAttr, true) // would be a lie; must not count
 
         let state = readMacosNativeState(win)
         assertEquals(state.fullscreen, true)
         assertEquals(state.minimized, false)
-        assertEquals(win.reads, [Ax.isFullscreenAttr.key])
+        assertEquals(win.reads, [FakeAxElement.nativeFlagsRead])
     }
 
     /// A window that answers nothing (dying, or an unresponsive app) must read as "conventional",

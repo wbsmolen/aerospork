@@ -261,15 +261,23 @@ extension AXUIElement: AxUiElementMock {
     /// (dev-docs/performance.md). Without it a failed attribute comes back as an `AXValue` of type
     /// `kAXValueAXErrorType`, which the getters below decode to nil, as a failed single read would.
     /// Signposted as `get(_:)`, so Instruments counts stay comparable with the single reads it replaces.
-    func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
-        let state = signposter.beginInterval("get(_:)", id: signposter.makeSignpostID(), "attr: \(kAXPositionAttribute)+\(kAXSizeAttribute) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+    private func get<A: ReadableAttr, B: ReadableAttr>(_ a: A, _ b: B) -> (A.T?, B.T?) {
+        let state = signposter.beginInterval("get(_:)", id: signposter.makeSignpostID(), "attr: \(a.key)+\(b.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval("get(_:)", state) }
         var raw: CFArray?
-        let keys = [kAXPositionAttribute, kAXSizeAttribute] as CFArray
-        guard AXUIElementCopyMultipleAttributeValues(self, keys, [], &raw) == .success,
+        guard AXUIElementCopyMultipleAttributeValues(self, [a.key, b.key] as CFArray, [], &raw) == .success,
               let values = raw as? [AnyObject], values.count == 2
         else { return (nil, nil) }
-        return (Ax.topLeftCornerAttr.getter(values[0]), Ax.sizeAttr.getter(values[1]))
+        return (a.getter(values[0]), b.getter(values[1]))
+    }
+
+    func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
+        get(Ax.topLeftCornerAttr, Ax.sizeAttr)
+    }
+
+    /// On Finder `AXFullScreen` comes back as an error slot, which decodes to nil, as its single read did.
+    func getNativeFlags() -> (fullscreen: Bool?, minimized: Bool?) {
+        get(Ax.isFullscreenAttr, Ax.minimizedAttr)
     }
 
     @discardableResult func set<Attr: WritableAttr>(_ attr: Attr, _ value: Attr.T) -> Bool {

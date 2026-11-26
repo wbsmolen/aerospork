@@ -491,9 +491,7 @@ final class MacApp: AbstractApp {
     /// `runInLoop` round trips per window -- two suspensions, two continuations, twice the
     /// opportunity for the refresh to be cancelled mid-window and start over.
     ///
-    /// The short-circuit is preserved exactly: `minimized` is not read at all when the window is
-    /// fullscreen, because a fullscreen window cannot be minimized and the read is an IPC to a
-    /// possibly-wedged app.
+    /// Inside the hop, both flags are one AX round trip too (`readMacosNativeState`).
     @MainActor
     func macosNativeState(_ windowId: UInt32) async throws -> (fullscreen: Bool, minimized: Bool)? {
         try await withWindow(windowId) { window, job in
@@ -879,14 +877,15 @@ func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at 
 /// `kAXFocusedAttribute` first, and it is the load-bearing one: it is what
 /// `kAXFocusedWindowAttribute` reports back, which is what `getNativeFocusedWindow` reads. `isMain`
 /// only changes which window the app considers primary for ordering.
-/// The two AX reads behind `macosNativeState`, over the mockable element seam.
+/// The AX read behind `macosNativeState`, over the mockable element seam.
 ///
-/// Extracted so the *read pattern* is assertable: that both flags come from one traversal, and that
-/// a fullscreen window is never asked whether it is minimized.
+/// Extracted so the *read pattern* is assertable: both flags in one batched read. It used to skip the
+/// minimized read for a fullscreen window, to save an IPC; a batch has no second IPC to save, so only
+/// the answer is kept: a fullscreen window is never minimized.
 func readMacosNativeState(_ window: some AxUiElementMock) -> (fullscreen: Bool, minimized: Bool) {
-    let fullscreen = window.get(Ax.isFullscreenAttr) == true
-    // Short-circuit: a fullscreen window is never minimized, and this read is an IPC.
-    return (fullscreen, fullscreen ? false : window.get(Ax.minimizedAttr) == true)
+    let flags = window.getNativeFlags()
+    let fullscreen = flags.fullscreen == true
+    return (fullscreen, !fullscreen && flags.minimized == true)
 }
 
 func setAxFocus(_ window: some AxUiElementMock) {

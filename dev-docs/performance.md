@@ -295,7 +295,7 @@ many alternating trials from a warm process, or Instruments.
   batching at all. `normalizeLayoutReason` now takes one round trip per window rather than two,
   which captured most of the available win without the batching API.
 
-  It is now used for position plus size only: `AxUiElementMock.getFrame()` with options `[]`, never
+  It is now used for position plus size: `AxUiElementMock.getFrame()` with options `[]`, never
   `.stopOnError`, behind the two-sided `isFrameSatisfied`, the parking guard (`parkAxWindow`) and
   `axRect`. A probe measured one batched read at the cost of one single read (41-131 µs against
   35-135 µs). A failed slot decodes to nil through the existing getters. `getFrame` must stay a
@@ -303,6 +303,18 @@ many alternating trials from a warm process, or Instruments.
   (`AxWriteTest.testGuardReadsTheFrameOnceThroughTheElementsOwnBatch`). The batch is signposted as
   `get(_:)`, so to measure it, count `get(_:)` intervals per workspace switch before and after: a
   parked window should go from two to one per layout. **Not measured end to end.**
+
+  The native-state read is the second user: `getNativeFlags()` reads `AXFullScreen` and
+  `AXMinimized` in one batch inside `readMacosNativeState`, still in item 4's one hop per window, a
+  protocol requirement for the same reason
+  (`AxNativeStateReadTest.testAnOrdinaryWindowIsAskedBothFlagsInOneRead`). Finder answers
+  `AXFullScreen` with an error slot, which decodes to false as its single read did. The old
+  short-circuit skipped the minimized read for a fullscreen window; the batch has no second IPC to
+  skip, so only its answer stays (fullscreen is never minimized). Item 4's fresh re-read before a
+  mutation is unchanged and is the same batched read. Measure: `get(_:)` intervals tagged
+  `AXFullScreen+AXMinimized` per refresh; expect one per window where an ordinary window used to
+  cost two. Moving the read into the enumeration job (PERF-3 step 2) waits for a measurement that
+  shows the per-window hops matter after this.
 - **Regression coverage is structural, not timing-based.** `PerfInvariantsTest` pins the algorithmic
   properties (workspace GC, the tray publish guard, `aliveWindowIds` being a `Set`, the `debugLog`
   autoclosure) and `AxWriteTest` counts AX operations through the mock. Neither measures wall clock,
