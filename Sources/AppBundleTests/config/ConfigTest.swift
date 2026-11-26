@@ -1081,7 +1081,7 @@ final class ConfigTest: XCTestCase {
             "q": .q,
             "unicorn": .u,
         ]))
-        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))])
+        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("wonderland").getOrDie())))])
         assertEquals(config.modes[mainModeId]?.bindings, [binding.descriptionWithKeyCode: binding])
 
         let (_, errors1) = parseConfigForTest(
