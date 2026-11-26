@@ -39,12 +39,20 @@ protocol AxUiElementMock {
     /// statically to the default below, so `AXUIElement`'s batch would never run and every test would
     /// still pass. `AxWriteTest.testGuardReadsTheFrameOnceThroughTheElementsOwnBatch` fails if it slips back.
     func getFrame() -> (topLeft: CGPoint?, size: CGSize?)
+
+    /// `AXFullScreen` and `AXMinimized`, in one round trip on a real `AXUIElement`. A requirement for the
+    /// same reason as `getFrame`. `AxNativeStateReadTest.testAnOrdinaryWindowIsAskedBothFlagsInOneRead`.
+    func getNativeFlags() -> (fullscreen: Bool?, minimized: Bool?)
 }
 
 extension AxUiElementMock {
     /// Two reads. What every test double gets unless it implements the batch itself.
     func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
         (get(Ax.topLeftCornerAttr), get(Ax.sizeAttr))
+    }
+
+    func getNativeFlags() -> (fullscreen: Bool?, minimized: Bool?) {
+        (get(Ax.isFullscreenAttr), get(Ax.minimizedAttr))
     }
 }
 

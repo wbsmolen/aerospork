@@ -285,16 +285,14 @@ final class MacApp: AbstractApp {
                 // if it had spends `updateFocusCache`'s record of what macOS last said -- so the app's
                 // next, stale answer reads as a focus change and bounces the user back across a workspace
                 // switch. On macOS 26 and 27 a busy app's read fails `.cannotComplete` after
-                // the full timeout. (`windowOrNil` makes a second AX call, `_AXUIElementGetWindow`, which
-                // can still time out and read as nil; not covered.)
+                // the full timeout. (A window AeroSpork does not know yet costs a second AX call,
+                // `_AXUIElementGetWindow`, which can still time out and read as nil; not covered.)
                 var raw: AnyObject?
                 let error = AXUIElementCopyAttributeValue(axApp.threadGuarded, Ax.focusedWindowAttr.key as CFString, &raw)
                 if error == .cannotComplete { throw NativeFocusUnknown() }
-                let axWindow = (error == .success ? raw.flatMap(Ax.focusedWindowAttr.getter) : nil)
-                    .flatMap {
-                        guard let casted = $0.ax.cast else { return nil as AxWindow? }
-                        return windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, casted, axObserver.threadGuarded)
-                    }
+                let element = error == .success ? raw.flatMap { CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil } : nil
+                let axWindow = identifyWindows(element.map { [$0] } ?? [], known: knownElements(windows.threadGuarded)).first
+                    .flatMap { windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax, axObserver.threadGuarded) }
                 return axWindow?.windowId
             }
         } catch let unknown as NativeFocusUnknown {
@@ -411,7 +409,7 @@ final class MacApp: AbstractApp {
     func knownTabsBeside(_ windowId: UInt32) async throws -> [UInt32] {
         try await withWindow(windowId) { [axApp, windows, bundleId] window, job in
             guard (window.tabTitles?.count ?? 0) > 1 else { return [] }
-            let listed = Set(listedWindows(axApp.threadGuarded, bundleId).map(\.windowId))
+            let listed = Set(listedWindows(axApp.threadGuarded, bundleId, known: windows.threadGuarded).map(\.windowId))
             return windows.threadGuarded.keys.filter { !listed.contains($0) }
         } ?? []
     }
@@ -493,9 +491,7 @@ final class MacApp: AbstractApp {
     /// `runInLoop` round trips per window -- two suspensions, two continuations, twice the
     /// opportunity for the refresh to be cancelled mid-window and start over.
     ///
-    /// The short-circuit is preserved exactly: `minimized` is not read at all when the window is
-    /// fullscreen, because a fullscreen window cannot be minimized and the read is an IPC to a
-    /// possibly-wedged app.
+    /// Inside the hop, both flags are one AX round trip too (`readMacosNativeState`).
     @MainActor
     func macosNativeState(_ windowId: UInt32) async throws -> (fullscreen: Bool, minimized: Bool)? {
         try await withWindow(windowId) { window, job in
@@ -598,7 +594,7 @@ final class MacApp: AbstractApp {
         let outcome = try await thread.runInLoop { [axObserver, windows, axApp, bundleId] (job) -> (ids: [UInt32], tabs: [UInt32: UInt32], timedOut: Bool) in
             var result: [UInt32: AxWindow] = windows.threadGuarded
             let listStart = DispatchTime.now()
-            let listed = listedWindows(axApp.threadGuarded, bundleId)
+            let listed = listedWindows(axApp.threadGuarded, bundleId, known: result)
             // Once one read has waited out the timeout the rest would too; keeping the window is what a
             // timed-out `isDestroyed()` answers anyway. See `timedOutThisPass`.
             var timedOut = isAxTimeout(since: listStart)
@@ -713,9 +709,21 @@ func isAxTimeout(elapsedSeconds: Double) -> Bool {
 /// window, and nothing showed which of its windows had left the screen.
 /// ponytail: Finder only, the one app on a whole Mac that answers this way. The second read would otherwise fall
 /// on every app without a window, on every refresh.
-private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?) -> [WindowIdAndAxUiElement] {
-    let listed = axApp.get(Ax.windowsAttr) ?? []
-    return listed.isEmpty && bundleId == "com.apple.finder" ? axApp.get(Ax.childWindowsAttr) ?? [] : listed
+///
+/// A window in `known` costs no window id read (`identifyWindows`), so with no new windows a refresh reads one list
+/// per app and nothing per window.
+private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?, known: [UInt32: AxWindow]) -> [WindowIdAndAxUiElement] {
+    let index = knownElements(known)
+    let listed = identifyWindows(axApp.get(Ax.windowElementsAttr) ?? [], known: index)
+    if !listed.isEmpty || bundleId != "com.apple.finder" { return listed }
+    // Its other children are a menu bar and the desktop.
+    let children = axApp.get(Ax.childrenAttr)?.compactMap(\.cast) ?? []
+    return identifyWindows(children, known: index) { $0.get(Ax.roleAttr) == kAXWindowRole }
+}
+
+/// The reverse of an app's `windows`: which window each tracked element is.
+private func knownElements(_ known: [UInt32: AxWindow]) -> [AXUIElement: UInt32] {
+    Dictionary(known.map { ($0.value.ax, $0.key) }, uniquingKeysWith: { first, _ in first })
 }
 
 private func axRect(_ window: AXUIElement) -> Rect? {
@@ -789,7 +797,7 @@ private class AxWindow {
     static func new(windowId: UInt32, _ ax: AXUIElement, _ observer: AXObserver) -> AxWindow? {
         _ = AXUIElementSetMessagingTimeout(ax, axMessagingTimeout)
         let keys = [kAXUIElementDestroyedNotification, kAXWindowDeminiaturizedNotification, kAXWindowMiniaturizedNotification, kAXMovedNotification, kAXResizedNotification]
-        return AxSubscription.subscribe(observer, ax, keys).map { AxWindow(windowId: windowId, ax, $0) }
+        return AxSubscription.subscribe(observer, ax, keys, windowId: windowId).map { AxWindow(windowId: windowId, ax, $0) }
     }
 }
 
@@ -869,14 +877,15 @@ func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at 
 /// `kAXFocusedAttribute` first, and it is the load-bearing one: it is what
 /// `kAXFocusedWindowAttribute` reports back, which is what `getNativeFocusedWindow` reads. `isMain`
 /// only changes which window the app considers primary for ordering.
-/// The two AX reads behind `macosNativeState`, over the mockable element seam.
+/// The AX read behind `macosNativeState`, over the mockable element seam.
 ///
-/// Extracted so the *read pattern* is assertable: that both flags come from one traversal, and that
-/// a fullscreen window is never asked whether it is minimized.
+/// Extracted so the *read pattern* is assertable: both flags in one batched read. It used to skip the
+/// minimized read for a fullscreen window, to save an IPC; a batch has no second IPC to save, so only
+/// the answer is kept: a fullscreen window is never minimized.
 func readMacosNativeState(_ window: some AxUiElementMock) -> (fullscreen: Bool, minimized: Bool) {
-    let fullscreen = window.get(Ax.isFullscreenAttr) == true
-    // Short-circuit: a fullscreen window is never minimized, and this read is an IPC.
-    return (fullscreen, fullscreen ? false : window.get(Ax.minimizedAttr) == true)
+    let flags = window.getNativeFlags()
+    let fullscreen = flags.fullscreen == true
+    return (fullscreen, !fullscreen && flags.minimized == true)
 }
 
 func setAxFocus(_ window: some AxUiElementMock) {
