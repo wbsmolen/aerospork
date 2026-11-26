@@ -210,25 +210,30 @@ final class ConfigTest: XCTestCase {
         }
     }
 
+    /// A warning: it was fatal, so one `split` binding cost the user every binding they had, and the
+    /// text said "disabled" where `SplitCommand` refuses when the flag is enabled.
     func testSplitCommandAndFlattenContainersNormalization() {
-        let (_, errors) = parseConfigForTest(
+        var warnings: [TomlParseError] = []
+        let result = parseConfig(
             """
             enable-normalization-flatten-containers = true
             [mode.main.binding]
             [mode.foo.binding]
                 alt-s = 'split horizontal'
             """,
+            warnings: &warnings,
         )
+        assertEquals(try? result.get().modes["foo"]?.bindings.count, 1)
         assertEquals(
             ["""
                 The config contains:
                 1. usage of 'split' command
                 2. enable-normalization-flatten-containers = true
-                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is disabled.
+                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is enabled.
 
                 My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
                 """],
-            errors.descriptions,
+            warnings.descriptions,
         )
     }
 

@@ -312,7 +312,9 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
             .flatMap { $0.commands }
             .contains { $0 is SplitCommand }
         if containsSplitCommand {
-            errors += [.semantic(
+            // A warning, not an error. It was fatal, so one `split` binding cost the user every binding
+            // they had, while `SplitCommand` already refuses at run time with this same advice.
+            errors += [.deprecation(
                 // `.emptyRoot` because the conflict is between two coordinates in different
                 // sections (a `split` binding and a top-level flag) and `TomlBacktrace` can only
                 // name one. Pointing at either alone would be misleading. A `.pair` of backtraces
@@ -322,7 +324,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
                 The config contains:
                 1. usage of 'split' command
                 2. enable-normalization-flatten-containers = true
-                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is disabled.
+                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is enabled.
 
                 My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
                 """,
