@@ -129,11 +129,14 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         // must not hijack a bound name -- but that needs only the NAME SET.
         let persistent = config.persistentWorkspaces
         for name in persistent { _ = get(byName: name) }
+        // Once, before the filter: `focus` creates the focused workspace when it is missing, and inside the
+        // filter that write went into the dictionary being replaced, so the workspace was created and lost.
+        let focusedName = focus.workspace.name
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
             persistent.contains(workspace.name) ||
                 !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
-                workspace.name == focus.workspace.name
+                workspace.name == focusedName
         }
     }
 
