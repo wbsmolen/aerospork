@@ -47,7 +47,7 @@ struct RawTomlTab: View {
         // SwiftUI update that produced it. `task(id:)` gives us cancellation for free: only the
         // last buffer in a burst is validated, while Apply remains disabled during the short wait.
         .task(id: viewModel.rawToml) {
-            let needsValidation = viewModel.rawTomlEdited
+            let needsValidation = Self.needsValidation(edited: viewModel.rawTomlEdited, fallback: isRunningFallbackDefaults)
             validationPending = needsValidation
             guard needsValidation else {
                 validationDiagnostic = nil
@@ -207,6 +207,10 @@ struct RawTomlTab: View {
         guard let date = backupTimestampParser.date(from: stamp) else { return url.lastPathComponent }
         return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
     }
+
+    /// In fallback mode the buffer is the file that failed to load, so its error must show before
+    /// the user types anything. Apply stays gated on `rawTomlEdited` alone.
+    static func needsValidation(edited: Bool, fallback: Bool) -> Bool { edited || fallback }
 
     private func jump(to line: Int) {
         // Clearing first makes repeated clicks on the same destination actionable.

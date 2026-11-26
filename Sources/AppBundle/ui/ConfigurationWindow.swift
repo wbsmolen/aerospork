@@ -29,6 +29,7 @@ public struct ConfigurationWindow: View {
         var symbol: String {
             switch self {
                 case .general: "gearshape"
+                // "square.resize" is SF Symbols 5 (macOS 14); this app targets 13, where it renders blank.
                 case .gaps: "rectangle.split.3x3"
                 case .keys: "keyboard"
                 case .monitors: "display.2"
@@ -64,7 +65,6 @@ public struct ConfigurationWindow: View {
                 .tag(SettingsPane.general.rawValue)
 
             GapsSettingsTab(viewModel: viewModel)
-                // "square.resize" is SF Symbols 5 (macOS 14); this app targets 13, where it renders blank.
                 .tabItem { paneLabel(.gaps) }
                 .tag(SettingsPane.gaps.rawValue)
 

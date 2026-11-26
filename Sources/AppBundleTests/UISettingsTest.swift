@@ -203,6 +203,14 @@ final class UISettingsTest: XCTestCase {
         }
     }
 
+    /// In fallback mode Raw TOML holds the file that failed to load. It said "Matches the file on
+    /// disk", with no error line, until the user typed.
+    func testRawTomlValidatesTheBrokenFileInFallbackMode() {
+        assertTrue(RawTomlTab.needsValidation(edited: false, fallback: true))
+        assertTrue(RawTomlTab.needsValidation(edited: true, fallback: false))
+        assertFalse(RawTomlTab.needsValidation(edited: false, fallback: false))
+    }
+
     func testRawTomlSectionNavigationKeepsDocumentOrder() {
         let headers = RawTomlTab.sections(in: """
             title = '[not-a-header]'

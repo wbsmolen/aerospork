@@ -99,17 +99,15 @@ struct IconButton: View {
     let systemImage: String
     let label: String
     var role: ButtonRole?
-    var isEnabled = true
     let action: () -> Void
 
     var body: some View {
         Button(role: role, action: action) {
             Image(systemName: systemImage)
                 .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
+                .settingsHitTarget()
         }
         .buttonStyle(.borderless)
-        .disabled(!isEnabled)
         .help(label)
         .accessibilityLabel(label)
     }
@@ -189,16 +187,11 @@ struct ListActionBar: View {
             HStack(spacing: 10) {
                 // Icon-only buttons carry no title, so the help text has to double as the label or
                 // VoiceOver reads them as "button".
-                Button(action: onAdd) { Image(systemName: "plus") }
-                    .help(addHelp)
-                    .accessibilityLabel(addHelp)
-                Button { onRemove?() } label: { Image(systemName: "minus") }
+                IconButton(systemImage: "plus", label: addHelp, action: onAdd)
+                IconButton(systemImage: "minus", label: removeHelp) { onRemove?() }
                     .disabled(onRemove == nil)
-                    .help(removeHelp)
-                    .accessibilityLabel(removeHelp)
                 Spacer(minLength: 12)
             }
-            .buttonStyle(.borderless)
             .padding(.horizontal, 12)
             .padding(.top, 7)
             .padding(.bottom, hint == nil ? 7 : 3)
@@ -235,9 +228,9 @@ struct WorkspaceChip: View {
                 .padding(.vertical, 2)
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 1))
+                .settingsHitTarget()
         }
         .buttonStyle(.plain)
-        .settingsHitTarget()
         .help(help)
         .accessibilityLabel(help)
     }
@@ -245,9 +238,12 @@ struct WorkspaceChip: View {
 
 extension View {
     /// 24×24 is the WCAG 2.5.8 floor; caption-size pills and 14pt icon buttons are visually right
-    /// but physically too small, so the hit shape grows without moving a pixel.
+    /// but physically too small, so the hit shape grows 5pt on each side without moving a pixel.
+    /// Not a `frame(minWidth:minHeight:)`: that grew layout, so the Keys filter pill jumped when
+    /// its clear button appeared, and a clear button overflowed the 22pt recorder. Apply it to a
+    /// button's label: the label's shape is what the button hit-tests.
     func settingsHitTarget() -> some View {
-        frame(minWidth: 24, minHeight: 24).contentShape(Rectangle())
+        contentShape(Rectangle().inset(by: -5))
     }
 }
 
@@ -509,6 +505,7 @@ struct CopyButton: View {
                 // The colour change is the entire confirmation -- there is no toast anywhere in
                 // this app -- so the checkmark has to read as "done" and not just as a third icon.
                 .foregroundStyle(copied ? StatusLabel.Kind.ok.tint : Color.secondary)
+                .settingsHitTarget()
         }
         .buttonStyle(.borderless)
         .help(help)
