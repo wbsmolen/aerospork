@@ -84,13 +84,13 @@ final class UnresponsiveAppTest: XCTestCase {
     // MARK: - Wiring (needs a real MacApp and a real stopped app, so pinned in the source)
 
     func testMacWindowFallsBackToWhatTheTreeRecords() throws {
-        let body = try sourceBody("override func macosNativeState()", in: "Sources/AppBundle/tree/MacWindow.swift", length: 300)
+        let body = try sourceBody("override func macosNativeState()", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(body.contains("?? nativeStateTheTreeRecords(for: self)"), "an unanswered read is reported as \"neither\" again")
     }
 
     func testEveryPassStartsWithACleanSlate() throws {
         for declaration in ["func runRefreshSessionBlocking(", "func runSession<T>("] {
-            let body = try sourceBody(declaration, in: "Sources/AppBundle/layout/refresh.swift", length: 1800)
+            let body = try sourceBody(declaration, in: "Sources/AppBundle/layout/refresh.swift")
             let reset = try XCTUnwrap(body.range(of: "MacApp.timedOutThisPass = []"), "\(declaration) does not clear the record, so a recovered app stays skipped")
             let firstRead = try XCTUnwrap(body.range(of: "try await syncFocusFromMacOs()"))
             XCTAssertLessThan(reset.lowerBound, firstRead.lowerBound, "\(declaration) clears the record after its first AX read")
@@ -98,15 +98,15 @@ final class UnresponsiveAppTest: XCTestCase {
     }
 
     func testAnAppThatTimedOutIsNotAskedAgainInTheSamePass() throws {
-        let read = try sourceBody("private func withWindow<T>(", in: "Sources/AppBundle/tree/MacApp.swift", length: 900)
+        let read = try sourceBody("private func withWindow<T>(", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertTrue(read.contains("if MacApp.timedOutThisPass.contains(pid) { return nil }"))
         XCTAssertTrue(read.contains("MacApp.timedOutThisPass.insert(pid)"))
 
-        let focused = try sourceBody("func getFocusedWindow()", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
+        let focused = try sourceBody("func getFocusedWindow()", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertTrue(focused.contains("if MacApp.timedOutThisPass.contains(pid) { throw NativeFocusUnknown() }"))
         XCTAssertTrue(focused.contains("MacApp.timedOutThisPass.insert(pid)"))
 
-        let alive = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
+        let alive = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertTrue(alive.contains("if timedOut { return true }"), "the alive filter asks every window of a stopped app")
         XCTAssertTrue(alive.contains("if !timedOut {"), "the window list is read from a stopped app")
     }

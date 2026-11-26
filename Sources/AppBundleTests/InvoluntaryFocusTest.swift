@@ -46,7 +46,7 @@ final class InvoluntaryFocusTest: XCTestCase {
     /// `.cannotComplete` (the app missed the 1s `axMessagingTimeout`) into the same `nil`, and using
     /// it to decide liveness is what collected live windows out of busy apps.
     func testTheAliveWindowFilterDoesNotDecideLivenessFromContainingWindowId() throws {
-        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
+        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertTrue(body.contains("isDestroyed()"), "the alive-window filter stopped using isDestroyed()")
         XCTAssertFalse(
             body.contains("containingWindowId() != nil"),
@@ -184,7 +184,7 @@ final class InvoluntaryFocusTest: XCTestCase {
     /// would leave the keyboard on a window parked off screen.
     /// A source check: `garbageCollect` needs a real `MacApp`.
     func testTheRestorePushesFocusWhenMacOsMovedUsToAnotherWorkspaceEvenInTheSameApp() throws {
-        let body = try sourceBody("func garbageCollect(skipClosedWindowsCache", in: "Sources/AppBundle/tree/MacWindow.swift", length: 3200)
+        let body = try sourceBody("func garbageCollect(skipClosedWindowsCache", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(
             body.contains("if focus.workspace != deadWindowWorkspace || focus.windowOrNil?.app.pid != app.pid"),
             "the #201 pid guard no longer lets the push through when focus is on another workspace",

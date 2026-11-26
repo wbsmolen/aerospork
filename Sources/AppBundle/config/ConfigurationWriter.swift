@@ -13,6 +13,7 @@ import TOMLKit
 ///   * under `.ambiguousConfigError` the base text fell back to the *bundled default*, so a save
 ///     would overwrite a real user config with defaults-plus-edits.
 @MainActor func userConfigTargetUrl() -> Result<URL, String> {
+    if isUnitTest { return testConfigOverride.map { .success($0) } ?? .failure("tests may not write a real config") }
     // An explicit --config-path is the only file the server reads; honour it even if absent.
     if let explicit = serverArgs.configLocation { return .success(URL(filePath: explicit)) }
     switch findCustomConfigUrl() {
@@ -31,9 +32,17 @@ import TOMLKit
 /// The text we edit in place. The user config if present, else the shipped default config so a
 /// first save produces a full, commented config seeded from the defaults.
 @MainActor func configBaseText() -> String {
-    let url = findCustomConfigUrl().urlOrNil ?? defaultConfigUrl
-    return (try? String(contentsOf: url)) ?? ""
+    // "" is what an unreadable file gives too. A real read never returns it: the default is the floor.
+    if isUnitTest { return testConfigOverride.map(configBaseText(at:)) ?? "" }
+    return configBaseText(at: findCustomConfigUrl().urlOrNil ?? defaultConfigUrl)
 }
+
+func configBaseText(at url: URL) -> String { (try? String(contentsOf: url)) ?? "" }
+
+/// Under XCTest, the one config file that reads and writes may touch. With none set, the URL-less
+/// reads and writes fail: under `swift test` they resolved to the developer's own
+/// `~/.aerospork-debug.toml`, and a save test that slipped past its refusal overwrote it.
+@MainActor var testConfigOverride: URL?
 
 /// The one and only config writer.
 ///
@@ -59,19 +68,21 @@ enum ConfigurationWriter {
     }
 
     static func write(_ result: String) throws {
-        let target: URL
         switch userConfigTargetUrl() {
-            case .success(let url): target = url
+            case .success(let url): try write(result, to: url)
             case .failure(let reason): throw WriteRefused(reason: reason)
         }
+    }
 
+    static func write(_ result: String, to target: URL) throws {
         let existed = FileManager.default.fileExists(atPath: target.path)
         if existed { backUpOncePerSession(target) }
         ConfigFileWatcher.suppressNextSelfWrite()
         try result.write(to: target, atomically: true, encoding: .utf8)
         // The watcher bails when the file doesn't exist, and only re-arms from its own event
         // handler -- so the first-ever GUI save left hot-reload dead until an app restart.
-        if !existed { ConfigFileWatcher.start() }
+        // Not under XCTest: it watches the real config, not the test's file.
+        if !existed, !isUnitTest { ConfigFileWatcher.start() }
     }
 
     // MARK: - Backups

@@ -167,9 +167,9 @@ final class PerfInvariantsTest: XCTestCase {
     /// an uncatchable exception on it. Asking once per row per redraw took the app down within a few pane
     /// switches. What draws by hand keeps its fonts.
     func testDrawingCodeDoesNotAskForFonts() throws {
-        let recorder = try sourceBody("override func draw(_ dirtyRect: NSRect)", in: "Sources/AppBundle/ui/ConfigurationTabs/KeyBindingsTab.swift", length: 1000)
+        let recorder = try sourceBody("override func draw(_ dirtyRect: NSRect)", in: "Sources/AppBundle/ui/ConfigurationTabs/KeyBindingsTab.swift")
         XCTAssertFalse(recorder.contains("NSFont."), recorder)
-        let ruler = try sourceBody("override func drawHashMarksAndLabels", in: "Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift", length: 800)
+        let ruler = try sourceBody("override func drawHashMarksAndLabels", in: "Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift")
         XCTAssertFalse(ruler.contains("NSFont."), ruler)
     }
 }

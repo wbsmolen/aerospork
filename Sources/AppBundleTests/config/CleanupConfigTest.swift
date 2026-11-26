@@ -30,6 +30,40 @@ final class CleanupConfigTest: XCTestCase {
         assertTrue(FileManager.default.fileExists(atPath: root!.appending(component: ".git").path))
     }
 
+    /// The tests' own root comes from `#filePath`, not a `.git` walk, so a tree with no `.git` runs too.
+    func testProjectRootIsThePackageRoot() {
+        assertTrue(FileManager.default.fileExists(atPath: projectRoot.appending(component: "Package.swift").path))
+    }
+
+    // MARK: - Source scans read whole declarations
+
+    func testSourceBodyIsTheWholeDeclaration() throws {
+        let source = """
+            enum E {
+                func a() {
+                    if x {
+                        // }
+                        let s = "}"
+                    }
+                    last()
+                }
+
+                func b() {}
+            }
+            """
+        let body = try XCTUnwrap(declarationBody("func a()", in: source))
+        XCTAssertTrue(body.hasPrefix("    func a() {"), body)
+        XCTAssertTrue(body.hasSuffix("        last()\n    }"), body)
+        XCTAssertFalse(body.contains("func b"), body)
+        XCTAssertFalse(body.contains("// }"), "comments are stripped")
+    }
+
+    /// `sourceBody` turns nil into a test failure.
+    func testSourceBodyFailsWithoutItsClosingLine() {
+        XCTAssertNil(declarationBody("func a()", in: "    func a() {\n        last()\n}\n"), "closed at the wrong indentation")
+        XCTAssertNil(declarationBody("func gone()", in: "func a() {\n}\n"))
+    }
+
     // MARK: - Branding: `during-aerospork-startup`
 
     private func startupMatcher(_ key: String) -> (Bool?, warnings: [String], errors: [String]) {

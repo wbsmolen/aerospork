@@ -13,21 +13,21 @@ import XCTest
 @MainActor
 final class WindowDetectionRetryTest: XCTestCase {
     func testAFailedRegistrationSchedulesItsRetry() throws {
-        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift", length: 5000)
+        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift")
         let failure = try XCTUnwrap(body.range(of: "failedPids[pid] = (nextAttempt:"))
         let retry = try XCTUnwrap(body.range(of: "scheduleFollowUpRefresh(after: backoff"), "a failed registration no longer schedules a look back")
         XCTAssertLessThan(failure.lowerBound, retry.lowerBound)
     }
 
     func testAWindowThatArrivesLookingLikeAPopupIsLookedAtAgain() throws {
-        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift", length: 4800)
+        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(body.contains("if window.isPopup {"))
         XCTAssertTrue(body.contains(#"scheduleFollowUpRefresh(after: 1, "popupRecheck")"#))
     }
 
     /// Promoted a second or three after it appeared, by when the user may have switched away.
     func testAPopupThatTurnsOutToBeAWindowGoesWhereItAppeared() throws {
-        let body = try sourceBody("private func validateStillPopups", in: "Sources/AppBundle/normalizeLayoutReason.swift", length: 800)
+        let body = try sourceBody("private func validateStillPopups", in: "Sources/AppBundle/normalizeLayoutReason.swift")
         XCTAssertTrue(body.contains("popup.workspaceNameAtRegistration"))
         XCTAssertFalse(body.contains("relayoutWindow(on: focus.workspace)"))
     }
@@ -35,7 +35,7 @@ final class WindowDetectionRetryTest: XCTestCase {
     /// `close` may only raise an unsaved-changes sheet. Skipping the cache brought the window back as a
     /// new one, on the focused workspace, with its rules run a second time.
     func testAWindowThatSurvivesItsCloseIsPutBack() throws {
-        let body = try sourceBody("override func closeAxWindow()", in: "Sources/AppBundle/tree/MacWindow.swift", length: 600)
+        let body = try sourceBody("override func closeAxWindow()", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(body.contains("garbageCollect(skipClosedWindowsCache: false)"))
     }
 
@@ -63,7 +63,7 @@ final class WindowDetectionRetryTest: XCTestCase {
             ("Sources/AppBundle/normalizeLayoutReason.swift", "private func validateStillPopups"),
         ]
         for (file, declaration) in sites {
-            let body = try sourceBody(declaration, in: file, length: 3600)
+            let body = try sourceBody(declaration, in: file)
             let shield = try XCTUnwrap(body.range(of: "shieldedFromCancellation {"), "\(file): window rules run unshielded")
             let rules = try XCTUnwrap(body.range(of: "tryOnWindowDetected("), "\(file): \(declaration) no longer runs window rules")
             XCTAssertLessThan(shield.lowerBound, rules.lowerBound, "\(file): window rules run before the shield")
