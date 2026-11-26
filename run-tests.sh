@@ -6,7 +6,8 @@ source ./script/setup.sh
 status_before="$(git status --porcelain)"
 
 ./build-debug.sh
-swift test
+# --skip-build is safe only here, right after the build that compiled the tests.
+swift test --skip-build
 
 ./.debug/aerospork -h > /dev/null
 ./.debug/aerospork --help > /dev/null

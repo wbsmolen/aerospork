@@ -63,11 +63,11 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 
 | Script | What it does | Output |
 |---|---|---|
-| `build-debug.sh` | Builds the app, the CLI and the test target with SwiftPM. Xcode is not involved. | `.debug/aerosporkApp`, `.debug/aerospork` |
+| `build-debug.sh` | Builds the app, the CLI and both test targets with one SwiftPM build. Xcode is not involved. | `.debug/aerosporkApp`, `.debug/aerospork` |
 | `build-debug-app.sh` | Runs `build-debug.sh`, then assembles and signs a debug `.app` bundle with Sparkle, `Info-Debug.plist`, the default config and the icon. A debug copy needs the bundle to get Accessibility permission. | `.debug/AeroSpork-Debug.app` |
 | `launch-debug-app.sh` | Opens the debug bundle. It builds the bundle first if it does not exist. | — |
-| `run-debug.sh` | Runs `build-debug.sh`, then runs the bare binary `.debug/aerosporkApp` in the terminal. Arguments go to the binary. | — |
-| `run-cli.sh` | Builds if needed, then runs the debug CLI. Arguments go to `aerospork`. | — |
+| `run-debug.sh` | Builds only the app, then runs the bare binary `.debug/aerosporkApp` in the terminal. Arguments go to the binary. | — |
+| `run-cli.sh` | Builds only the CLI, then runs it. Arguments go to `aerospork`. | — |
 | `run-tests.sh` | The full check. See [What run-tests.sh checks](#what-run-testssh-checks). | — |
 | `format.sh` | Runs SwiftFormat, which rewrites files in place, then SwiftLint, which only reports. | — |
 | `generate.sh` | Regenerates the `*Generated.swift` files and `aerospork.xcodeproj`. `--ignore-xcodeproj` skips the project. `--all` regenerates everything. | — |
@@ -89,7 +89,7 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 `run-tests.sh` runs these steps in order and stops at the first failure:
 
 1. `build-debug.sh`.
-2. `swift test`, which runs `AppBundleTests` and `CommonTests`.
+2. `swift test --skip-build`, which runs `AppBundleTests` and `CommonTests` from the build of step 1.
 3. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
 4. `swiftformat --lint`, `swiftlint lint` and `shellcheck -S warning ./*.sh script/*.sh`. None of
    them rewrites a file.
