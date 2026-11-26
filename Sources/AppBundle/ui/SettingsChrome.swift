@@ -152,27 +152,10 @@ struct SettingsHint: View {
     }
 }
 
-/// A hint pinned to the bottom of a tab that has no action bar of its own to hang it off.
-struct SettingsFooter: View {
-    let text: String
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            SettingsHint(text)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-        }
-        .background(.bar)
-    }
-}
-
 /// The macOS "table with a +/- strip glued to its bottom edge" idiom, once instead of three times.
 ///
-/// The caveat text lives in here rather than in a separate `SettingsFooter` below it, because two
-/// stacked `.bar` strips with two dividers is more chrome than the content it explains.
+/// The caveat text lives in here rather than in a separate strip below it, because two stacked
+/// `.bar` strips with two dividers is more chrome than the content it explains.
 struct ListActionBar: View {
     let addHelp: String
     let removeHelp: String
@@ -334,6 +317,9 @@ struct Badge: View {
     let text: String
     var tone: Tone = .standard
     let help: String
+
+    /// A binding that `mod` and `workspaces` generate. Three rows of the Keys pane show it.
+    static let generated = Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
 
     init(_ text: String, tone: Tone = .standard, help: String) {
         self.text = text

@@ -291,7 +291,7 @@ struct KeyBindingsTab: View {
                 .truncationMode(.middle)
             Spacer(minLength: 8)
             if match.binding.origin == .generated {
-                Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+                Badge.generated
             }
             Button("Go") { selectedMode = match.mode }
                 .buttonStyle(.borderless)
@@ -335,7 +335,7 @@ struct KeyBindingsTab: View {
                 Spacer(minLength: 8)
                 // Generated bindings appear nowhere in the config file, so without this the tab
                 // shows dozens of rows the user cannot find when they go looking.
-                Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+                Badge.generated
                 IconButton(systemImage: "doc.on.doc", label: "Duplicate “\(b.command)”") { duplicate(b) }
                 Button("Override") { override(b) }
                     .buttonStyle(.borderless)
@@ -445,7 +445,7 @@ struct KeyBindingsTab: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             if conflict.origin == .generated {
-                Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+                Badge.generated
             }
             Button("Show") { query = conflict.key }
                 .buttonStyle(.borderless)

@@ -230,7 +230,7 @@ invented to round out a "standard" set.
 **`components/controls/`.** `Button`, `Toggle`, `TextField`, `NumberField`, `SegmentedPicker`,
 `Select`, `CopyButton`, `IconButton`, `KeyRecorderField`, `KeyCaps`
 
-**`components/layout/`.** `FormSection`, `SectionLabel`, `SettingsHint`, `SettingsFooter`,
+**`components/layout/`.** `FormSection`, `SectionLabel`, `SettingsHint`, `SettingsFooter` (removed from the app, kept for older mocks),
 `BarStrip`, `ListActionBar`, `PanelHeader`, `TabBar`, `LabeledContent`, `DataTable`, `MenuPanel`
 
 **`components/feedback/`.** `Banner`, `StatusLabel`, `ContentUnavailable`, `Badge`

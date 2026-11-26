@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-/** Bottom-pinned caveat strip for a tab with no action bar. */
+/** Removed from the app: use a `SettingsHint` in a section footer. Kept so older mocks render. */
 export interface SettingsFooterProps {
   children?: React.ReactNode;
 }
