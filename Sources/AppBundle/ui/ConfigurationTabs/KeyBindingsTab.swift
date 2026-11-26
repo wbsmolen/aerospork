@@ -64,12 +64,10 @@ struct KeyBindingsTab: View {
     /// shrinking a control that has a hard floor.
     static func modePickerIsSegmented(count: Int) -> Bool { count <= 5 }
 
-    private var allRows: [ConfigurationViewModel.DisplayBinding] { viewModel.displayBindings(mode: selectedMode) }
-
     /// A real keymap is 40-80 bindings -- and under config v2 most of them are *generated*, so the
     /// list is longer than anything written in the file. Scrolling it looking for "the one that
     /// moves a window to monitor 2" is the single slowest thing in this window.
-    private var rows: [ConfigurationViewModel.DisplayBinding] {
+    private func filtered(_ allRows: [ConfigurationViewModel.DisplayBinding]) -> [ConfigurationViewModel.DisplayBinding] {
         let needle = normalizedQuery
         guard !needle.isEmpty else { return allRows }
         return allRows.filter { $0.key.lowercased().contains(needle) || $0.command.lowercased().contains(needle) }
@@ -81,9 +79,9 @@ struct KeyBindingsTab: View {
 
     /// Search is global even though editing remains scoped to the selected mode. A shortcut can
     /// otherwise look missing simply because the user forgot which mode owns it.
-    private var otherModeMatches: [OtherModeMatch] {
+    private func otherModeMatches(modes: [String]) -> [OtherModeMatch] {
         guard !normalizedQuery.isEmpty else { return [] }
-        return viewModel.allModeNames
+        return modes
             .filter { $0 != selectedMode }
             .flatMap { mode in
                 viewModel.displayBindings(mode: mode).compactMap { binding in
@@ -96,11 +94,15 @@ struct KeyBindingsTab: View {
     }
 
     var body: some View {
+        // Each of these walks the whole keymap. As computed properties they ran about 15 times per
+        // pass, and this body runs again on every edit in any pane, Raw TOML keystrokes included.
+        let modes = viewModel.allModeNames
+        let allRows = viewModel.displayBindings(mode: selectedMode)
         VStack(spacing: 0) {
-            modeBar
+            modeBar(modes: modes)
             Divider()
-            content
-            composer
+            content(modes: modes, rows: filtered(allRows))
+            composer(modes: modes, allRows: allRows)
         }
         .onAppear {
             let names = viewModel.allModeNames
@@ -108,13 +110,13 @@ struct KeyBindingsTab: View {
         }
     }
 
-    private var modeBar: some View {
+    private func modeBar(modes: [String]) -> some View {
         HStack(spacing: 10) {
-            if viewModel.allModeNames.isEmpty {
+            if modes.isEmpty {
                 Text("No modes").foregroundStyle(.secondary)
-            } else if Self.modePickerIsSegmented(count: viewModel.allModeNames.count) {
+            } else if Self.modePickerIsSegmented(count: modes.count) {
                 Picker("Mode", selection: $selectedMode) {
-                    ForEach(viewModel.allModeNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(modes, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -124,7 +126,7 @@ struct KeyBindingsTab: View {
                 // it -- past this many modes it overflows the window no matter what its neighbours
                 // give up. `.menu` is bounded to one control's width regardless of option count.
                 Picker("Mode", selection: $selectedMode) {
-                    ForEach(viewModel.allModeNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(modes, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
@@ -188,8 +190,9 @@ struct KeyBindingsTab: View {
     }
 
     @ViewBuilder
-    private var content: some View {
-        if viewModel.allModeNames.isEmpty {
+    private func content(modes: [String], rows: [ConfigurationViewModel.DisplayBinding]) -> some View {
+        let others = otherModeMatches(modes: modes)
+        if modes.isEmpty {
             ContentUnavailableViewCompat(
                 icon: "keyboard",
                 title: "No key bindings",
@@ -199,8 +202,8 @@ struct KeyBindingsTab: View {
                 message: "Your config binds nothing and generates nothing. Record a shortcut below to add the first binding.",
             )
         } else if rows.isEmpty {
-            let matchingModeSet = Set(otherModeMatches.map(\.mode))
-            let matchingModes = viewModel.allModeNames.filter { matchingModeSet.contains($0) }
+            let matchingModeSet = Set(others.map(\.mode))
+            let matchingModes = modes.filter { matchingModeSet.contains($0) }
             ContentUnavailableViewCompat(
                 icon: query.isEmpty ? "keyboard" : "magnifyingglass",
                 title: query.isEmpty ? "“\(selectedMode)” has no bindings" : "No matches",
@@ -220,14 +223,13 @@ struct KeyBindingsTab: View {
         } else {
             List {
                 if normalizedQuery.isEmpty {
-                    let populated = Self.categories.filter { category in
-                        rows.contains { self.category(for: $0.command) == category.id }
-                    }
+                    let grouped = Dictionary(grouping: rows) { category(for: $0.command) }
+                    let populated = Self.categories.filter { grouped[$0.id] != nil }
                     if populated.count < 2 {
                         ForEach(rows) { row($0) }
                     } else {
                         ForEach(populated) { category in
-                            let categoryRows = rows.filter { self.category(for: $0.command) == category.id }
+                            let categoryRows = grouped[category.id] ?? []
                             Section {
                                 ForEach(categoryRows) { row($0) }
                             } header: {
@@ -241,9 +243,9 @@ struct KeyBindingsTab: View {
                             ForEach(rows) { row($0) }
                         }
                     }
-                    if !otherModeMatches.isEmpty {
-                        Section("In other modes — \(otherModeMatches.count)") {
-                            ForEach(otherModeMatches) { otherModeRow($0) }
+                    if !others.isEmpty {
+                        Section("In other modes — \(others.count)") {
+                            ForEach(others) { otherModeRow($0) }
                         }
                     }
                 }
@@ -389,14 +391,11 @@ struct KeyBindingsTab: View {
         Binding(get: { recordingRow == key }, set: { recordingRow = $0 ? key : nil })
     }
 
-    /// What the shortcut in the composer is bound to *right now*, if anything. Recomputed per
-    /// keystroke over ~80 rows, which is nothing next to the SwiftUI update it rides along with.
-    private var conflict: ConfigurationViewModel.DisplayBinding? {
-        viewModel.existingBinding(mode: selectedMode, key: newKey)
-    }
-
-    private var composer: some View {
-        VStack(spacing: 0) {
+    private func composer(modes: [String], allRows: [ConfigurationViewModel.DisplayBinding]) -> some View {
+        // What the shortcut in the composer is bound to *right now*, if anything.
+        let conflict = viewModel.existingBinding(mode: selectedMode, key: newKey)
+        let hint = summary(allRows)
+        return VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
                 KeyRecorderField(notation: $newKey, isRecording: $recording, keys: recorderKeys)
@@ -417,7 +416,7 @@ struct KeyBindingsTab: View {
                     .padding(.top, 7)
             }
 
-            if let otherModeSummary {
+            if let otherModeSummary = otherModeSummary(modes: modes) {
                 StatusLabel(otherModeSummary, kind: .neutral)
                     .padding(.horizontal, 14)
                     .padding(.top, 7)
@@ -428,9 +427,9 @@ struct KeyBindingsTab: View {
             // sentences) and the tab has no ScrollView wrapping modeBar+composer, so an unbounded
             // hint could push the composer past the window edge. Capped at two lines with the full
             // text on hover/VoiceOver instead.
-            SettingsHint(summary)
+            SettingsHint(hint)
                 .lineLimit(2)
-                .help(summary)
+                .help(hint)
                 .padding(.horizontal, 14)
                 .padding(.top, 7)
                 .padding(.bottom, 10)
@@ -465,7 +464,7 @@ struct KeyBindingsTab: View {
     /// Says out loud how many of the listed bindings are written in the file and how many are not.
     /// Without it the tab looks like a config with 91 binding lines, which is the misconception
     /// config v2 exists to kill.
-    private var summary: String {
+    private func summary(_ allRows: [ConfigurationViewModel.DisplayBinding]) -> String {
         let generated = allRows.count { $0.origin == .generated }
         var parts: [String] = []
         if generated > 0 { parts.append("\(generated) generated by mod") }
@@ -498,15 +497,15 @@ struct KeyBindingsTab: View {
         recording = false
     }
 
-    private var otherModeOwners: [String] {
+    private func otherModeOwners(modes: [String]) -> [String] {
         guard !newKey.isEmpty else { return [] }
-        return viewModel.allModeNames.filter { mode in
+        return modes.filter { mode in
             mode != selectedMode && viewModel.existingBinding(mode: mode, key: newKey) != nil
         }
     }
 
-    private var otherModeSummary: String? {
-        let owners = otherModeOwners
+    private func otherModeSummary(modes: [String]) -> String? {
+        let owners = otherModeOwners(modes: modes)
         guard !owners.isEmpty else { return nil }
         if owners.count == 1 { return "Also bound in “\(owners[0])” mode." }
         let named = owners.prefix(2).map { "“\($0)”" }.joined(separator: ", ")
