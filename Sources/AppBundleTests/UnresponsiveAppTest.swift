@@ -153,6 +153,36 @@ final class UnresponsiveAppTest: XCTestCase {
         _ = noteTrustRegained(isTrusted: true)
     }
 
+    // MARK: - Reads of many windows ask a stopped app once
+
+    private var reads: [UInt32] = []
+
+    /// `list-windows` and every refresh read all windows together. One task per window let each read of a
+    /// stopped app pass `MacApp.withWindow`'s check before the first came back: a second per window.
+    func testAStoppedAppIsReadOnceAndTheOtherAppsStillAre() async throws {
+        MacApp.timedOutThisPass = []
+        defer { MacApp.timedOutThisPass = [] }
+        let workspace = Workspace.get(byName: "ws")
+        let stopped = (1 ... 4).map { TestWindow.new(id: $0, parent: workspace.rootTilingContainer) }
+        let answering = (10 ... 11).map {
+            Window(id: $0, AnsweringApp(), lastFloatingSize: nil, parent: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        }
+        reads = []
+
+        // What `withWindow` does: check, the round trip, then record a timeout.
+        let titles = try await readEachAppInOrder(stopped + answering) { window in
+            if MacApp.timedOutThisPass.contains(window.app.pid) { return "" }
+            self.reads.append(window.windowId)
+            await Task.yield()
+            if window.app === TestApp.shared { MacApp.timedOutThisPass.insert(window.app.pid) }
+            return "title"
+        }
+
+        assertEquals(reads.filter { $0 < 10 }, [1], additionalMsg: "the stopped app was asked again in the same pass")
+        assertEquals(reads.filter { $0 >= 10 }, [10, 11])
+        assertEquals(titles.count, 6, additionalMsg: "a window was left out of the result")
+    }
+
     // MARK: - An unanswered native-state read moves nothing
 
     /// Read as "neither", a timeout pulled a minimized window out of the minimized container and tiled
@@ -225,4 +255,14 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertTrue(alive.contains("if timedOut { return true }"), "the alive filter asks every window of a stopped app")
         XCTAssertTrue(alive.contains("if !timedOut {"), "the window list is read from a stopped app")
     }
+}
+
+/// A second app, with a pid of its own.
+private final class AnsweringApp: AbstractApp {
+    let pid: Int32 = 4242
+    let bundleId: String? = "com.bsmolen.aerospork.answering-app"
+    let name: String? = nil
+    let execPath: String? = nil
+    let bundlePath: String? = nil
+    @MainActor func getFocusedWindow() -> Window? { nil }
 }
