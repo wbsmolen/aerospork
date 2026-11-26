@@ -92,14 +92,18 @@ let configParseFailurePrefix = "Failed to parse "
 let ambiguousConfigFailurePrefix = "Ambiguous config error."
 
 /// What the banner and the menu warning show, from the read that is applied.
+///
+/// `searched` says the read looked for the user's config, so the bundled default it returned means
+/// none exists. A forced read of the default does not say that.
 @MainActor
-func recordConfigHealth(_ result: Result<(Config, URL), String>, warnings: [String]) {
+func recordConfigHealth(_ result: Result<(Config, URL), String>, warnings: [String], searched: Bool = false) {
     switch result {
         case .success((_, let url)):
-            // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
-            // Recording it would erase the only surviving record that the user's config failed --
+            // A forced read of the BUNDLED default is the startup fallback, not a load of the user's
+            // config. Recording it would erase the only surviving record that the user's config failed --
             // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
-            guard url != defaultConfigUrl else { return }
+            // A search that found no config is a healthy load: deleting a broken config left its banner.
+            guard url != defaultConfigUrl || searched else { return }
             configLoadFailure = nil
             configWarnings = warnings
         case .failure(let msg):

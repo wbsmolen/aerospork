@@ -30,7 +30,7 @@ struct ReloadConfigCommand: Command {
     let applied = args.dryRun || forceConfigUrl != nil ? nil : ConfigSnapshot.now()
     let result = readConfig(forceConfigUrl: forceConfigUrl, warnings: &warnings)
     // A dry run promises to change nothing, and that includes what the banner says.
-    if !args.dryRun { recordConfigHealth(result, warnings: warnings) }
+    if !args.dryRun { recordConfigHealth(result, warnings: warnings, searched: forceConfigUrl == nil) }
     // A failure too, so saving the same broken bytes again does not raise a second dialog.
     if let applied { ConfigFileWatcher.recordApplied(applied) }
     switch result {
