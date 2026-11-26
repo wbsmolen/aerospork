@@ -133,6 +133,9 @@ final class MacApp: AbstractApp {
         // Never our own windows. Registered, the Settings window was bound to whichever workspace was
         // focused and parked off screen on the next switch -- so it "never appeared" (#40).
         if nsApp.processIdentifier == ProcessInfo.processInfo.processIdentifier { return nil }
+        // A dead pid, even one still in allAppsMap: `focusedApp` passes on whatever LaunchServices calls
+        // frontmost, and a failed registration of it would re-arm the follow-up refreshes. See `isGone`.
+        if nsApp.isGone { return nil }
         let pid = nsApp.processIdentifier
 
         if let existing = allAppsMap[pid] { return existing }
@@ -515,12 +518,13 @@ final class MacApp: AbstractApp {
 
     @MainActor
     static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: [UInt32]] {
-        regularApps = regularApps.filter { !$0.value.isGone } // or the loop below registers it again
-        for (_, app) in MacApp.allAppsMap { // gc dead apps
+        // One liveness check per app per pass. `refreshAndGetAliveWindowIds` checks again after its
+        // `await`, for an app that dies in the middle of the pass.
+        let gone = Set((Array(regularApps.values) + allAppsMap.values.map(\.nsApp)).filter(\.isGone).map(\.processIdentifier))
+        regularApps = regularApps.filter { !gone.contains($0.key) } // or the loop below registers it again
+        for (pid, app) in MacApp.allAppsMap where gone.contains(pid) { // gc dead apps
             try checkCancellation()
-            if app.nsApp.isGone {
-                app.destroy()
-            }
+            app.destroy()
         }
         return try await withThrowingTaskGroup(of: (pid_t, [UInt32]).self, returning: [MacApp: [UInt32]].self) { group in
             func refreshTheApp(_ nsApp: NSRunningApplication) {
@@ -605,6 +609,11 @@ final class MacApp: AbstractApp {
 
     @MainActor
     private func destroy() {
+        if !nsApp.isTerminated {
+            // The Discord case (see `isGone`): the one record that says LaunchServices lied. Once per app.
+            let windowCount = MacWindow.allWindowsMap.values.count(where: { $0.macApp === self })
+            AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) is gone but LaunchServices still lists it; removing \(windowCount, privacy: .public) windows")
+        }
         MacApp.allAppsMap.removeValue(forKey: pid)
         for (_, job) in setFrameJobs {
             job.cancel()

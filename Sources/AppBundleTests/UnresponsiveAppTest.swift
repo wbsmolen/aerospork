@@ -38,6 +38,34 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertFalse(processIsGone(1), "launchd is not ours to signal, which is EPERM, not gone")
     }
 
+    /// `NSRunningApplication(processIdentifier:)` is nil for a bare child process, so no real gone app can
+    /// be handed to `getOrRegister` here. Pinned in the source instead.
+    func testADeadPidIsNotRegisteredOrReturned() throws {
+        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift")
+        let guardLine = try XCTUnwrap(body.range(of: "if nsApp.isGone { return nil }"), "getOrRegister registers a dead pid again")
+        let early = try XCTUnwrap(body.range(of: "if let existing = allAppsMap[pid] { return existing }"))
+        XCTAssertLessThan(guardLine.lowerBound, early.lowerBound, "a gone app still in allAppsMap is returned before the guard")
+    }
+
+    /// The record the Discord incident lacked, and only for the case LaunchServices got wrong: a normal
+    /// quit (`isTerminated`) must not write it.
+    func testAGoneAppThatLaunchServicesStillListsIsLogged() throws {
+        let body = try sourceBody("private func destroy()", in: "Sources/AppBundle/tree/MacApp.swift")
+        let guardLine = try XCTUnwrap(body.range(of: "if !nsApp.isTerminated {"))
+        let notice = try XCTUnwrap(body.range(of: "AppLog.session.notice(\"app "))
+        XCTAssertLessThan(guardLine.lowerBound, notice.lowerBound)
+        XCTAssertNil(body[..<guardLine.lowerBound].range(of: "AppLog"), "a log line in destroy() that every quit writes")
+    }
+
+    func testEachPassChecksLivenessOnceAndAgainAfterItsAwait() throws {
+        let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
+        let gone = try XCTUnwrap(pass.range(of: "let gone = Set("))
+        XCTAssertEqual(pass.components(separatedBy: ".isGone").count - 1, 1, "liveness asked more than once per app per pass")
+        XCTAssertNotNil(pass.range(of: "where gone.contains(pid)", range: gone.upperBound ..< pass.endIndex))
+        let perApp = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(perApp.contains("if nsApp.isGone {"), "an app that dies mid-pass is enumerated anyway")
+    }
+
     // MARK: - An unanswered native-state read moves nothing
 
     /// Read as "neither", a timeout pulled a minimized window out of the minimized container and tiled
