@@ -371,6 +371,22 @@ final class UISettingsTest: XCTestCase {
         XCTAssertEqual(vm.unpinnedDefinedWorkspaces, ["1", "3"], "dedupe, config order, assigned excluded")
     }
 
+    /// Identify shows one overlay per connected monitor, numbered as the schematic numbers it, in the
+    /// middle of that monitor's AppKit frame (whose y axis goes up from the main screen's bottom).
+    func testIdentifyHasOneOverlayPerMonitorNumberedByPosition() {
+        let rows = Self.twoMonitors()
+        let entries = MonitorIdentifyOverlay.entries(for: rows, mainScreenHeight: 1440)
+        XCTAssertEqual(entries.count, rows.count)
+        XCTAssertEqual(entries.map(\.position), [1, 2])
+        XCTAssertEqual(entries.map(\.name), rows.map(\.name))
+        XCTAssertEqual(entries[0].screenFrame, CGRect(x: 0, y: 0, width: 2560, height: 1440))
+        XCTAssertEqual(entries[1].screenFrame, CGRect(x: 2560, y: 360, width: 1920, height: 1080))
+        XCTAssertEqual(
+            MonitorIdentifyOverlay.announcement(for: rows),
+            "Position 1: DELL U3223QE (1), main display. Position 2: LG HDR 4K.",
+        )
+    }
+
     private static func twoMonitors() -> [ConfigurationViewModel.MonitorRow] {
         [
             ConfigurationViewModel.MonitorRow(

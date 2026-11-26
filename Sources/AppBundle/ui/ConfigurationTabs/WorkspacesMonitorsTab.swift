@@ -55,7 +55,19 @@ struct WorkspacesMonitorsTab: View {
 
     private var monitors: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PanelHeader("Connected monitors", "display.2")
+            HStack(alignment: .firstTextBaseline) {
+                PanelHeader("Connected monitors", "display.2")
+                Spacer()
+                if !viewModel.liveMonitors.isEmpty {
+                    Button("Identify") {
+                        MonitorIdentifyOverlay.show(viewModel.liveMonitors)
+                        settingsAnnounce(MonitorIdentifyOverlay.announcement(for: viewModel.liveMonitors))
+                    }
+                    .controlSize(.small)
+                    .help("Show each monitor's position number on its screen")
+                    .padding(.trailing, 16)
+                }
+            }
 
             if viewModel.liveMonitors.isEmpty {
                 SettingsHint("No monitors reported yet — they appear as soon as macOS reports one, and their UUIDs are what pins a workspace to a physical panel.")
