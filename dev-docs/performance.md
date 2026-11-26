@@ -227,6 +227,13 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     reads dominate: it reorders AX reads against the commands rules run. Measure: `get(_:)` intervals
     tagged `AXSubrole` and `AXTitle` per new window.
 
+21. **An established drag does not re-read the focused window.** `isManipulatedWithMouse` read it
+    on every moved or resized event, about 60 a second. It now skips the read while the drag id
+    names the window and the system's left mouse-down counter
+    (`CGEventSource.counterForEventType`) is the one the check last passed with, so the same
+    physical press. Not on the id alone: after a missed mouse-up it is stale. Measure: `get(_:)`
+    intervals tagged `AXFocusedWindow` during a one-second drag; expect one instead of about 60.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and

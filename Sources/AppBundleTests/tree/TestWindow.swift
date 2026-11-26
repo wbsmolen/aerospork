@@ -30,6 +30,8 @@ final class TestWindow: Window, CustomStringConvertible {
         unbindFromParent()
     }
 
+    override var isHiddenInCorner: Bool { false }
+
     /// How many times the title was asked for: on a real window each is an AX round trip.
     @MainActor private(set) var titleReads = 0
     @MainActor override var title: String {
