@@ -2,6 +2,7 @@
 import Common
 import Darwin
 import Foundation
+import os
 import XCTest
 
 /// A connected socket pair: the raw fd stands in for a hostile client that writes bytes by hand,
@@ -45,7 +46,7 @@ final class UnixSocketTest: XCTestCase {
     func testAcceptsHeaderAtTheLimit() throws {
         let (peerFd, conn) = socketPair()
         defer { Darwin.close(peerFd); conn.close() }
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200))
         writeRawHeader(peerFd, UnixSocketConnection.maxFrameSize)
         // Legal header, so we wait for the (never sent) payload and time out rather than throw.
         assertNil(try conn.recvMessage())
@@ -54,7 +55,7 @@ final class UnixSocketTest: XCTestCase {
     func testReadTimeoutEndsASilentConnection() throws {
         let (peerFd, conn) = socketPair()
         defer { Darwin.close(peerFd); conn.close() }
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200))
         let start = Date()
         assertNil(try conn.recvMessage()) // client connected and never spoke
         assertTrue(Date().timeIntervalSince(start) < 10)
@@ -74,7 +75,7 @@ final class UnixSocketTest: XCTestCase {
         let (peerFd, conn) = socketPair()
         defer { conn.close() }
         _ = UnixSocketConnection(fd: peerFd) // SO_NOSIGPIPE: the last drip lands after we hang up
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200)) // twice the drip interval, so a per-read deadline would never fire
         writeRawHeader(peerFd, 40)
         Thread.detachNewThread {
             var byte: UInt8 = 0
@@ -89,7 +90,7 @@ final class UnixSocketTest: XCTestCase {
     func testSendGivesUpOnAClientThatNeverReads() {
         let (peerFd, conn) = socketPair()
         defer { Darwin.close(peerFd); conn.close() }
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200))
         let gaveUp = expectation(description: "sendMessage returned false")
         Thread.detachNewThread {
             if !conn.sendMessage(Data(count: 4 << 20)) { gaveUp.fulfill() }
@@ -119,6 +120,30 @@ final class UnixSocketTest: XCTestCase {
         defer { second.close() }
         let accepted = try XCTUnwrap(listener.accept())
         accepted.close()
+    }
+
+    func testAcceptBackoffRetriesOnceAtOnceThenPauses() {
+        assertNil(acceptBackoff(consecutiveFailures: 1)) // EINTR, or one peer run by another user
+        assertEquals(acceptBackoff(consecutiveFailures: 2), .milliseconds(100))
+        assertEquals(acceptBackoff(consecutiveFailures: 1000), .milliseconds(100))
+    }
+
+    /// An accept that always fails stands in for EMFILE. Without the backoff the loop calls it
+    /// millions of times in the window.
+    func testAcceptLoopDoesNotSpinWhenAcceptKeepsFailing() {
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let exited = DispatchSemaphore(value: 0)
+        let loop = Thread {
+            acceptConnections({ calls.withLock { $0 += 1 }; return nil }) { _ in XCTFail("nothing was accepted") }
+            exited.signal()
+        }
+        loop.start()
+        usleep(300_000)
+        let callsIn300ms = calls.withLock { $0 }
+        loop.cancel()
+        assertEquals(exited.wait(timeout: .now() + 2), .success)
+        XCTAssertGreaterThanOrEqual(callsIn300ms, 2, "the first failure retries at once")
+        XCTAssertLessThanOrEqual(callsIn300ms, 10, "accept calls in 300 ms")
     }
 
     private func assertThrowsFrameTooLarge(_ body: () throws -> Data?, file: StaticString = #filePath, line: UInt = #line) {

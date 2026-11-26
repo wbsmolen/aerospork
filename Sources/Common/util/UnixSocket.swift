@@ -66,13 +66,15 @@ public final class UnixSocketConnection: @unchecked Sendable {
 
     public func close() { _ = Darwin.close(fd) }
 
-    /// Give up on a frame, in either direction, that takes longer than `seconds` from start to finish,
+    /// Give up on a frame, in either direction, that takes longer than `timeout` from start to finish,
     /// reporting it as a dropped connection. Without it a client that connects and never speaks, or
     /// never reads its reply, holds a server thread forever.
     ///
     /// The whole frame, not each call: SO_RCVTIMEO restarts with every `read`, so a client dripping
     /// one byte just inside it could keep a 16 MiB frame open for years.
-    public func setFrameTimeout(seconds: Int) { frameTimeout = .seconds(seconds) }
+    public func setFrameTimeout(_ timeout: Duration) { frameTimeout = timeout }
+
+    public func setFrameTimeout(seconds: Int) { setFrameTimeout(.seconds(seconds)) }
 
     private var frameDeadline: ContinuousClock.Instant? { frameTimeout.map { ContinuousClock.now + $0 } }
 

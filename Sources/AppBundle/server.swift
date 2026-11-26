@@ -7,7 +7,8 @@ import Common
 private let clientFrameTimeoutSec = 30
 
 func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock") {
-    DispatchQueue.global().async {
+    // A thread of its own: the loop never returns, so on `DispatchQueue.global()` it held a pool worker forever.
+    Thread.detachNewThread {
         guard let listener = UnixSocketListener.bind(to: socketFile) else {
             // Not `die`. /tmp is world-writable and sticky, so another account can create this path
             // before us, and then we can neither remove it nor bind it. Dying here would let it stop
@@ -16,11 +17,42 @@ func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUs
             return
         }
         AppLog.server.notice("CLI socket listening on \(socketFile, privacy: .public)")
-        while true {
-            guard let connection = listener.accept() else { continue }
+        acceptConnections({ listener.accept() }) { connection in
             connection.setFrameTimeout(seconds: clientFrameTimeoutSec)
             Task { await newConnection(connection) }
         }
+    }
+}
+
+/// How long the accept loop pauses after `consecutiveFailures` accepts in a row came back empty. nil
+/// means retry at once.
+///
+/// One empty accept is ordinary: a signal (EINTR), or one client run by another user. A streak means
+/// accept keeps failing, usually because the process is out of file descriptors (EMFILE), which no
+/// retry fixes until a connection closes. Without the pause that streak spins a core inside the
+/// window manager. It also slows a flood of connects from another user, which is no loss.
+func acceptBackoff(consecutiveFailures: Int) -> Duration? {
+    consecutiveFailures <= 1 ? nil : .milliseconds(100)
+}
+
+/// The accept loop, with the accept call passed in so a test can hand it one that always fails. It
+/// returns only when its thread is cancelled, which only a test does.
+func acceptConnections(_ accept: () -> UnixSocketConnection?, handle: (UnixSocketConnection) -> Void) {
+    var failures = 0
+    while !Thread.current.isCancelled {
+        guard let connection = accept() else {
+            failures += 1
+            // Once per streak, not per failure: `AppLog` is always on.
+            if failures == 10 {
+                AppLog.server.error("CLI socket: accept failed 10 times in a row (out of file descriptors, or rejected peers); backing off")
+            }
+            if let pause = acceptBackoff(consecutiveFailures: failures) {
+                Thread.sleep(forTimeInterval: Double(pause.components.seconds) + Double(pause.components.attoseconds) / 1e18)
+            }
+            continue
+        }
+        failures = 0
+        handle(connection)
     }
 }
 
@@ -32,10 +64,14 @@ var releaseServerSocketPath: String {
     return "/tmp/\(aeroSporkAppId.dropLast(".debug".count))-\(unixUserName).sock"
 }
 
-func sendCommandToReleaseServer(args: [String]) {
+/// Best effort. It runs on the main actor at launch, before this build's own socket exists, and again at
+/// quit, so a release server that is running but wedged must not hang the debug build: after `timeout`
+/// it gives up.
+func sendCommandToReleaseServer(args: [String], socketPath: String = releaseServerSocketPath, timeout: Duration = .seconds(2)) {
     check(isDebug)
-    guard let socket = UnixSocketConnection.connect(to: releaseServerSocketPath) else { return } // release server not running
+    guard let socket = UnixSocketConnection.connect(to: socketPath) else { return } // release server not running
     defer { socket.close() }
+    socket.setFrameTimeout(timeout)
     guard let data = try? JSONEncoder().encode(ClientRequest(args: args, stdin: "")) else { return }
     socket.sendMessage(data)
     _ = try? socket.recvMessage()
@@ -53,6 +89,8 @@ func serverAnswer(_ exitCode: Int32, stdout: String = "", stderr: String = "") -
 func nonRunningAnswer(command: (any Command)?, help: String?, err: String?) -> ServerAnswer? {
     if let help { return serverAnswer(ExitCode.success, stdout: help) }
     if let err { return serverAnswer(ExitCode.badArgs, stderr: err) }
+    // Defence in depth. The socket parses an args array, where `exec-and-forget` is not registered and
+    // fails as `err` above, so a request from the socket never reaches this branch.
     if command?.isExec == true { return serverAnswer(ExitCode.badArgs, stderr: "exec-and-forget is prohibited in CLI") }
     return nil
 }

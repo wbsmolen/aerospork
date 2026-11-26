@@ -19,7 +19,17 @@ final class ServerProtocolTest: XCTestCase {
         assertEquals(answer("no-such-subcommand")?.exitCode, ExitCode.badArgs)
     }
 
+    /// The socket sends an args array, and the args parser does not register `exec-and-forget`, so it
+    /// fails to parse before `nonRunningAnswer` ever sees a command.
     func testExecOverSocketGetsBadArgs() {
+        let (cmd, help, err) = parseCommand(["exec-and-forget", "echo", "hi"]).unwrap()
+        assertNil(cmd)
+        assertEquals(nonRunningAnswer(command: cmd, help: help, err: err)?.exitCode, ExitCode.badArgs)
+    }
+
+    /// Only the string parser, which the config uses, builds an `ExecAndForgetCommand`. The socket never
+    /// reaches this refusal; it is defence in depth in case a later path hands one over.
+    func testAnExecCommandIsStillRefusedIfOneReachesTheServer() {
         assertEquals(answer("exec-and-forget echo hi")?.exitCode, ExitCode.badArgs)
     }
 
@@ -43,5 +53,19 @@ final class ServerProtocolTest: XCTestCase {
     func testReleaseSocketPathUsesThisProjectsBundleId() {
         // The fork inherited the upstream project's bundle id in this socket name.
         assertEquals(releaseServerSocketPath, "/tmp/com.wbs.aerospork-\(unixUserName).sock")
+    }
+
+    /// A release server that is running but wedged: it takes the connection into its backlog and never
+    /// answers. Without a frame timeout the debug build hangs at launch and at quit.
+    func testTalkingToAWedgedReleaseServerGivesUp() throws {
+        let path = "/tmp/aerospork-test-\(getpid())-\(UInt32.random(in: 0 ... .max)).sock"
+        let listener = try XCTUnwrap(UnixSocketListener.bind(to: path))
+        defer { listener.close(); unlink(path) }
+        let gaveUp = expectation(description: "sendCommandToReleaseServer returned")
+        Thread.detachNewThread {
+            sendCommandToReleaseServer(args: ["enable", "off"], socketPath: path, timeout: .milliseconds(200))
+            gaveUp.fulfill()
+        }
+        wait(for: [gaveUp], timeout: 3)
     }
 }
