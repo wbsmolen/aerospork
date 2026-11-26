@@ -213,6 +213,12 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     re-checks every parked window. Measure: `runRefreshSessionBlocking` interval for a refresh caused
     by a cmd-tab, with several windows on hidden workspaces.
 
+19. **Layout resolves the workspace's monitor once per pass.** `LayoutContext.monitor`, the same local
+    hoist as `updateTrayText`, not the reverted global cache under "Known remaining items". Each
+    `workspaceMonitor` of a visible workspace rebuilt `monitors` from `NSScreen.screens`, and a pass
+    asked it per tiled window. Measure: Time Profiler samples under `layoutWorkspace` with many
+    windows and two or more monitors; expected to be microseconds per window.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and
