@@ -5,7 +5,7 @@ Notable changes to AeroSpork, newest first. This file starts at version 1.2.0. T
 <!--
 How to write this file. script/publish-release.sh reads the section of the version that it publishes, and that section becomes the update dialog and the GitHub release.
 
-- Write each bullet on one line. The converter in the release script turns the second line of a wrapped bullet into a separate paragraph, and it reports no error.
+- Write each bullet on one line. `script/release-notes-html.py` keeps an indented continuation line inside its bullet, but one line per bullet is easier to review.
 - Add a change to "Unreleased" in the pull request that makes it. Before a release, rename "Unreleased" to "X.Y.Z (YYYY-MM-DD)" and add a new empty "Unreleased" above it. The release script stops when the section of the version is missing or empty.
 - Start a version with one sentence about the change that a user notices first. Do not copy a bullet.
 - Use these headings, in this order, and leave out a heading with no items: Upgrade notes, Added, Changed, Fixed, Security. In a large release, group the items under a heading in themes with "####".
@@ -16,6 +16,51 @@ How to write this file. script/publish-release.sh reads the section of the versi
 -->
 
 ## Unreleased
+
+### Upgrade notes
+
+- If your config file exists but cannot be read (wrong permissions, not UTF-8 text, or a link to a missing file), AeroSpork now says so and keeps your file, instead of quietly running the defaults. Fix the file, or the permissions, and it loads again.
+- If you migrated a config that binds `swap`, it now loads: `swap` is a command.
+
+### Added
+
+- `swap` trades the focused window with its neighbour, keeping both slots and sizes.
+- `sticky` keeps a floating window on screen as you switch workspaces on its monitor, for video calls and picture-in-picture. A window rule can run `sticky on`, and `%{window-is-sticky}` reports it.
+- Window rules can run `move-node-to-monitor` and `fullscreen on`, so a rule can open an app on the monitor you want.
+- `debug-windows --tree` prints the whole window tree as JSON, with anything that looks inconsistent, for bug reports.
+- Settings has "Check for updates…" and an automatic-check switch under General.
+- The Monitors pane has an Identify button that shows each monitor's number on that screen.
+- "Show config error…" in the menu opens Settings on Raw TOML at the line with the error.
+
+### Changed
+
+- AeroSpork asks apps for less on every workspace switch and refresh, so switching is quicker with many windows open.
+- Saving in Settings no longer re-registers every hotkey, so a key pressed during a save is not lost.
+- One `split` binding while flatten normalization is on is now a warning, instead of rejecting the whole config.
+- A config that names upstream keys on several lines gets one warning per kind, listing the lines.
+- Errors in Settings name what happened and offer the way out, on every pane.
+- The shortcut recorder starts recording on a click, Space or Return, and no longer when Tab moves onto it.
+- VoiceOver reads the menu bar as a sentence, for example "Workspace 1, focused".
+- Monitor sizes in Settings are shown in points, the unit `[monitors]` fingerprints use.
+
+### Fixed
+
+- A window of an app that quit while updating itself no longer leaves an empty tile behind.
+- AeroSpork no longer quits when every display is asleep or a DisplayLink dock is reconnecting.
+- AeroSpork no longer quits at startup when both `~/.aerospork.toml` and `~/.config/aerospork/aerospork.toml` exist.
+- Saving in Settings keeps a symlinked config a symlink, so a dotfiles manager keeps managing it.
+- A config file you create, replace or restore is picked up without a restart, and deleting it falls back to the defaults after a second.
+- The shortcut recorder can record Shift with a digit or punctuation key, function keys and keypad keys, and follows the key mapping preset.
+- Raw TOML shows errors from Apply, Restore and a changed file, undo no longer cuts text out of the config, and Reload waits until unapplied edits are applied or reverted.
+- Focusing a minimized window whose workspace was cleaned up brings it back on the focused monitor, instead of on the main monitor.
+- A window that stays minimized across a restart keeps its workspace's monitor.
+- `reload-config --dry-run` no longer hides the banner that says the defaults are running.
+- `list-windows --workspace` with a name that does not exist no longer creates that workspace.
+- The `.pre-v2` backup keeps your config's file permissions.
+
+### Security
+
+- The CLI socket no longer spins a CPU core when the process runs out of file descriptors.
 
 ## 1.3.4 (2026-11-06)
 
