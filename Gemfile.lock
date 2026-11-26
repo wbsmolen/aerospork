@@ -2,6 +2,8 @@ GEM
   remote: https://rubygems.org/
   specs:
     asciidoctor (2.0.23)
+    logger (1.7.0)
+    ostruct (0.6.3)
     pygments.rb (3.0.0)
 
 PLATFORMS
@@ -9,6 +11,8 @@ PLATFORMS
 
 DEPENDENCIES
   asciidoctor (= 2.0.23)
+  logger (= 1.7.0)
+  ostruct (= 0.6.3)
   pygments.rb (= 3.0)
 
 RUBY VERSION
