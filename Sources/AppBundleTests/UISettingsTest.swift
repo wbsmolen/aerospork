@@ -491,6 +491,23 @@ final class UISettingsTest: XCTestCase {
         XCTAssertFalse(vm.configPath.isEmpty)
     }
 
+    /// The first save creates the config. General and Raw TOML kept showing the bundled default's path,
+    /// and the copy button handed out a file AeroSpork no longer read.
+    func testTheFirstSaveMovesTheConfigPathToTheNewFile() async throws {
+        let url = try useTemporaryConfig("", for: self)
+        try FileManager.default.removeItem(at: url)
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        await vm.loadConfiguration()
+        XCTAssertEqual(vm.configPath, defaultConfigUrl.path(percentEncoded: false))
+
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+        XCTAssertNil(vm.errorMessage)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(vm.configPath, url.path(percentEncoded: false))
+    }
+
     func testPinUnpinRoundTripThroughTheMenuFlow() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
