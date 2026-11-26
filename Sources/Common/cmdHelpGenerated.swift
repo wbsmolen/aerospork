@@ -26,6 +26,7 @@ let config_help_generated = """
     """
 let debug_windows_help_generated = """
     USAGE: debug-windows [-h|--help] [--window-id <window-id>]
+       OR: debug-windows [-h|--help] --tree
 
     See: man aerospork-debug-windows
     """

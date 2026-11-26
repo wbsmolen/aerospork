@@ -49,11 +49,10 @@ extension [Command] {
         debugLog("CMDSEQ: Running \(self.count) command(s)")
         var isSucc = true
         for (index, command) in self.enumerated() {
-            let commandName = String(describing: Swift.type(of: command))
-            debugLog("CMDSEQ: Executing command \(index + 1)/\(self.count): \(commandName)")
+            debugLog("CMDSEQ: Executing command \(index + 1)/\(self.count): \(Swift.type(of: command))")
             let commandResult = try await command.run(env, io)
             isSucc = commandResult && isSucc
-            debugLog("CMDSEQ: Command \(commandName) returned: \(commandResult)")
+            debugLog("CMDSEQ: Command \(Swift.type(of: command)) returned: \(commandResult)")
             refreshModel()
         }
         debugLog("CMDSEQ: Sequence completed with overall success: \(isSucc)")

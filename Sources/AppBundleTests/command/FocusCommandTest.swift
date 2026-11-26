@@ -101,11 +101,18 @@ final class FocusCommandTest: XCTestCase {
 
     /// Through the command, because resolving a target fails on a minimized window, and it has to be
     /// brought back before that. Found live: the method alone passed and the command still failed.
-    func testTheCommandBringsAMinimizedWindowBackBeforeResolvingIt() throws {
-        let body = try sourceBody("func run(_ env: CmdEnv", in: "Sources/AppBundle/command/impl/FocusCommand.swift")
-        let bringBack = try XCTUnwrap(body.range(of: "exitMacosMinimizedOrHidden()"))
-        let resolve = try XCTUnwrap(body.range(of: "resolveTargetOrReportError"))
-        XCTAssertLessThan(bringBack.lowerBound, resolve.lowerBound)
+    func testTheCommandBringsAMinimizedWindowBackBeforeResolvingIt() async throws {
+        defer { for child in macosMinimizedWindowsContainer.children { child.unbindFromParent() } }
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: macosMinimizedWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name)
+
+        let result = try await parseCommand("focus --window-id 1").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertTrue(window.nodeWorkspace === workspace)
+        assertEquals(window.layoutReason, .standard)
+        assertEquals(focus.windowOrNil?.windowId, 1)
     }
 
     func testAWindowOfAHiddenAppCanBeFocused() async throws {

@@ -67,8 +67,6 @@ struct LayoutCommand: Command {
     }
     switch parent.cases {
         case .tilingContainer(let parent):
-            let currentLayout = parent.layout
-            let currentOrientation = parent.orientation
             let targetOrientation = targetOrientation ?? parent.orientation
             let targetLayout = targetLayout ?? parent.layout
 

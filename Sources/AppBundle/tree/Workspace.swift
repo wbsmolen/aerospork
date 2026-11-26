@@ -163,6 +163,10 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 extension Workspace {
     @MainActor
     var isVisible: Bool { visibleWorkspaceToScreenPoint.keys.contains(self) }
+    /// Where the workspace is shown, raw: no monitor approximation, and never creates anything, unlike
+    /// `Monitor.activeWorkspace`. For `debug-windows --tree`, which must report a stale point as stale.
+    @MainActor
+    var visibleScreenPoint: CGPoint? { visibleWorkspaceToScreenPoint[self] }
     @MainActor
     var workspaceMonitor: Monitor {
         forceAssignedMonitor

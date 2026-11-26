@@ -24,8 +24,13 @@ class Window: TreeNode, Hashable {
     }
 
     @MainActor static func get(byId windowId: UInt32) -> Window? {
+        // The test branch also searches the two global containers, which hang off no workspace, so a
+        // minimized or popup test window can be found as `allWindowsMap` finds it in production.
         isUnitTest
-            ? Workspace.all.flatMap { $0.allLeafWindowsRecursive }.first(where: { $0.windowId == windowId })
+            ? (Workspace.all.flatMap(\.allLeafWindowsRecursive)
+                + macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self)
+                + macosPopupWindowsContainer.children.filterIsInstance(of: Window.self))
+            .first(where: { $0.windowId == windowId })
             : MacWindow.allWindowsMap[windowId]
     }
 
