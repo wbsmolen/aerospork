@@ -157,6 +157,19 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertFalse(strip.contains("selectedPane"), "the error strip is hidden on some pane: \(strip)")
     }
 
+    /// Reload replaces the Raw TOML buffer with the file, which threw away unapplied typing with no
+    /// warning. A headless render cannot tell whether a button is disabled, so this reads the source.
+    func testRawTomlReloadIsDisabledWhileThereAreUnappliedEdits() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift"),
+            encoding: .utf8,
+        ))
+        let reload = try XCTUnwrap(source.range(of: "Button(\"Reload\")"), "the Reload button moved: update this test")
+        let modifiers = source[reload.upperBound...].prefix(600)
+        XCTAssertTrue(modifiers.contains(".disabled(viewModel.rawTomlEdited)"), String(modifiers))
+        XCTAssertTrue(modifiers.contains("Apply or revert your edits first"), String(modifiers))
+    }
+
     /// Both badges are the same shape; only the wash differs. Pinning the geometry in one place is
     /// the entire point of the shared component.
     func testBadgeTonesDifferOnlyInTheirFill() throws {

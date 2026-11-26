@@ -114,7 +114,11 @@ struct RawTomlTab: View {
                     }
                 }
                 .buttonStyle(.borderless)
-                .help("Only needed for a config file created outside the app — every other edit is picked up on save.")
+                // Reload replaces the buffer with the file, so it would throw away unapplied typing.
+                .disabled(viewModel.rawTomlEdited)
+                .help(viewModel.rawTomlEdited
+                    ? "Apply or revert your edits first"
+                    : "Only needed for a config file created outside the app — every other edit is picked up on save.")
             }
         }
         .padding(.horizontal, 14)
