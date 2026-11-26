@@ -29,16 +29,37 @@ let projectRoot: URL = {
     return url
 }
 
-/// The source from `declaration` on, `length` characters of it, for tests that pin wiring which needs a
-/// real `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment
-/// explaining a fix would satisfy or trip the assertion.
-func sourceBody(_ declaration: String, in relativePath: String, length: Int) throws -> String {
+/// The whole declaration that `declaration` starts, for tests that pin wiring which needs a real
+/// `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment explaining a
+/// fix would satisfy or trip the assertion.
+func sourceBody(_ declaration: String, in relativePath: String) throws -> String {
     let source = try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
-    let start = try XCTUnwrap(
-        source.range(of: declaration),
-        "\(declaration) was renamed; re-point this test rather than deleting it",
+    return try XCTUnwrap(
+        declarationBody(declaration, in: source),
+        "\(declaration) was renamed, or no line closes it at its indentation; re-point this test rather than deleting it",
     )
-    return withoutComments(source[start.lowerBound...].prefix(length))
+}
+
+/// From the line holding `declaration` through the first later line that is that line's indentation
+/// followed by `}`, or nil when either is missing. swiftformat enforces the indentation, so a brace in
+/// a string or a comment cannot end the body early. A fixed character window was cut short by some
+/// bodies and ran into the next declaration for others.
+func declarationBody(_ declaration: String, in source: String) -> String? {
+    guard let start = source.range(of: declaration) else { return nil }
+    let lines = source[source.lineRange(for: start).lowerBound...].split(separator: "\n", omittingEmptySubsequences: false)
+    let close = lines[0].prefix { $0 == " " } + "}"
+    guard let end = lines.firstIndex(where: { $0 == close }) else { return nil }
+    return withoutComments(lines[...end].joined(separator: "\n"))
+}
+
+/// The `.swift` files under `relativePath`. Fails when there are none, or a moved directory would
+/// leave every check over it passing with nothing to check.
+func sourceFiles(in relativePath: String) throws -> [URL] {
+    let dir = projectRoot.appending(path: relativePath)
+    let files = (FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+        .filter { $0.pathExtension == "swift" }
+    _ = try XCTUnwrap(files.first, "no Swift files under \(relativePath)")
+    return files
 }
 
 func withoutComments(_ text: some StringProtocol) -> String {

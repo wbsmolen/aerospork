@@ -248,7 +248,7 @@ final class SettingsApplyTest: XCTestCase {
     /// until an unrelated window event. Tests skip that refresh (it enumerates the machine's apps), so
     /// only its place after the write is checked in the source.
     func testASavedChangeIsAppliedOnScreenWithoutWaitingForAWindowEvent() throws {
-        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift", length: 4000)
+        let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift")
         let write = try XCTUnwrap(body.range(of: "try ConfigurationWriter.write(rendered)"))
         let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("), "a GUI save no longer refreshes")
         XCTAssertLessThan(write.lowerBound, refresh.lowerBound)

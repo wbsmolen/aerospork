@@ -51,7 +51,7 @@ final class MoveMouseCommandTest: XCTestCase {
     /// `move left; move-mouse window-lazy-center` went to the old spot, because the rect comes from layout
     /// and nothing had laid out the first command yet. In the source because the command moves the real mouse.
     func testASequenceIsLaidOutBeforeTheWindowsRectIsRead() throws {
-        let body = try sourceBody("func run(_ env: CmdEnv", in: "Sources/AppBundle/command/impl/MoveMouseCommand.swift", length: 800)
+        let body = try sourceBody("func run(_ env: CmdEnv", in: "Sources/AppBundle/command/impl/MoveMouseCommand.swift")
         let layout = try XCTUnwrap(body.range(of: "try await layoutWorkspaces()"))
         let read = try XCTUnwrap(body.range(of: "windowSubjectRectOrReportError"))
         XCTAssertLessThan(layout.lowerBound, read.lowerBound)

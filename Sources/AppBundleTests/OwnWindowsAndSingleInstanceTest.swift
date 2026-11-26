@@ -20,7 +20,7 @@ final class OwnWindowsAndSingleInstanceTest: XCTestCase {
     /// A source check: registering a real `MacApp` spawns an AX thread, and in a test process whose
     /// subscription fails anyway, a behavioural check would pass with the guard deleted.
     func testAeroSporkNeverRegistersItsOwnProcess() throws {
-        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift", length: 1200)
+        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift")
         let guardLine = try XCTUnwrap(
             body.range(of: "if nsApp.processIdentifier == ProcessInfo.processInfo.processIdentifier { return nil }"),
             "AeroSpork manages its own windows again",
@@ -36,9 +36,9 @@ final class OwnWindowsAndSingleInstanceTest: XCTestCase {
     }
 
     func testOpeningSettingsPutsTheWindowInFront() throws {
-        let open = try sourceBody("func openSettingsWindow()", in: "Sources/AppBundle/ui/MenuBar.swift", length: 400)
+        let open = try sourceBody("func openSettingsWindow()", in: "Sources/AppBundle/ui/MenuBar.swift")
         XCTAssertTrue(open.contains("bringSettingsWindowForward()"), "reopening an existing window leaves it behind")
-        let window = try sourceBody("override func viewDidMoveToWindow()", in: "Sources/AppBundle/ui/ConfigurationWindow.swift", length: 800)
+        let window = try sourceBody("override func viewDidMoveToWindow()", in: "Sources/AppBundle/ui/ConfigurationWindow.swift")
         XCTAssertTrue(window.contains("bringSettingsWindowForward()"), "a first open leaves the new window behind")
     }
 
@@ -85,7 +85,7 @@ final class OwnWindowsAndSingleInstanceTest: XCTestCase {
     }
 
     func testTheCheckNeverAsksAppKitWhoThisProcessIs() throws {
-        let body = try sourceBody("private func exitIfAnotherCopyIsRunning()", in: "Sources/AppBundle/initAppBundle.swift", length: 900)
+        let body = try sourceBody("private func exitIfAnotherCopyIsRunning()", in: "Sources/AppBundle/initAppBundle.swift")
         XCTAssertFalse(body.contains("NSRunningApplication.current"), "pid -1 before NSApplication exists")
         XCTAssertTrue(body.contains("runningCopyToYieldTo(me: currentCopyIdentity()"))
     }
@@ -97,7 +97,7 @@ final class OwnWindowsAndSingleInstanceTest: XCTestCase {
 
     /// Yielding after the socket is bound would already have taken the running copy's socket.
     func testTheCheckRunsBeforeAnythingWithSideEffects() throws {
-        let body = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift", length: 4000)
+        let body = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift")
         let check = try XCTUnwrap(body.range(of: "exitIfAnotherCopyIsRunning()"))
         for sideEffect in ["sendCommandToReleaseServer", "interceptTermination(SIGINT)", "WorkspaceMemory.load()", "startUnixSocketServer()"] {
             let site = try XCTUnwrap(body.range(of: sideEffect), sideEffect)

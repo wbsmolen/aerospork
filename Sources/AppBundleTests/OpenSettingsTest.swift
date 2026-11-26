@@ -34,14 +34,7 @@ final class OpenSettingsTest: XCTestCase {
     /// looked like coverage. The difference exists solely in a real app, where `sendAction` returns
     /// true for a selector that opens nothing.
     func testTheSelectorFallbackIsNotReachedOnModernMacOS() throws {
-        let source = try String(
-            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/MenuBar.swift"),
-            encoding: .utf8,
-        )
-        let body = try XCTUnwrap(
-            source.range(of: "func openSettingsWindow()").map { String(source[$0.lowerBound...].prefix(1400)) },
-            "openSettingsWindow() not found",
-        )
+        let body = try sourceBody("func openSettingsWindow()", in: "Sources/AppBundle/ui/MenuBar.swift")
         let guardIndex = try XCTUnwrap(body.range(of: "#available(macOS 14, *) { return false }")?.lowerBound)
         let selectorIndex = try XCTUnwrap(body.range(of: "showPreferencesWindow:")?.lowerBound)
         XCTAssertLessThan(

@@ -147,9 +147,7 @@ final class RefreshSchedulerTest: XCTestCase {
 
     /// `FifoGate` deadlocks on a session that awaits another, so nothing a session runs may start one.
     func testNoCommandStartsANestedSession() throws {
-        let commands = projectRoot.appending(path: "Sources/AppBundle/command")
-        let files = try XCTUnwrap(FileManager.default.enumerator(at: commands, includingPropertiesForKeys: nil))
-        for case let url as URL in files where url.pathExtension == "swift" {
+        for url in try sourceFiles(in: "Sources/AppBundle/command") {
             let source = try String(contentsOf: url, encoding: .utf8)
             XCTAssertFalse(withoutComments(source).contains("runSession("), "\(url.lastPathComponent) would deadlock on sessionGate")
         }
@@ -158,14 +156,14 @@ final class RefreshSchedulerTest: XCTestCase {
     // MARK: - Wiring (needs real apps, so pinned in the source)
 
     func testARefreshDoesNotAskLaunchServicesAboutEveryProcess() throws {
-        let body = try sourceBody("static func refreshAllAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 1400)
+        let body = try sourceBody("static func refreshAllAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertFalse(body.contains("activationPolicy"))
         XCTAssertFalse(body.contains("runningApplications"))
     }
 
     /// Its comment promised one comparison, and it was a round trip to LaunchServices on every refresh.
     func testARefreshDoesNotAskLaunchServicesAboutItself() throws {
-        let body = try sourceBody("@MainActor func syncAppVisibility()", in: "Sources/AppBundle/ui/TrayMenuModel.swift", length: 500)
+        let body = try sourceBody("@MainActor func syncAppVisibility()", in: "Sources/AppBundle/ui/TrayMenuModel.swift")
         XCTAssertFalse(body.contains("NSApp.activationPolicy()"))
     }
 
@@ -186,7 +184,7 @@ final class RefreshSchedulerTest: XCTestCase {
     }
 
     func testOneWindowListAnswersForEveryWindowItNames() throws {
-        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
+        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         let shortcut = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key) { return true }"))
         let perWindow = try XCTUnwrap(body.range(of: "isDestroyed()"))
         XCTAssertLessThan(shortcut.lowerBound, perWindow.lowerBound)

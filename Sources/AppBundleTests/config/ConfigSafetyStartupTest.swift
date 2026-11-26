@@ -68,9 +68,11 @@ final class ConfigSafetyStartupTest: XCTestCase {
     /// The migration rewrites the user's file, so it belongs to startup. Inside `readConfig` it also
     /// ran for `reload-config --dry-run`, which promises to change nothing, and every Settings save.
     func testTheV2MigrationRunsOnceAtStartupAndNotOnEveryRead() throws {
-        let read = try sourceBody("func readConfig(", in: "Sources/AppBundle/config/parseConfig.swift", length: 1500)
-        XCTAssertFalse(read.contains("migrateUserConfigToV2IfNeeded"))
-        let start = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift", length: 3000)
+        for declaration in ["func readConfig(forceConfigUrl", "func readConfig(at"] {
+            let read = try sourceBody(declaration, in: "Sources/AppBundle/config/parseConfig.swift")
+            XCTAssertFalse(read.contains("migrate"), declaration)
+        }
+        let start = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift")
         let migrate = try XCTUnwrap(start.range(of: "migrateUserConfigToV2IfNeeded()"))
         let firstLoad = try XCTUnwrap(start.range(of: "reloadConfig()"))
         XCTAssertLessThan(migrate.lowerBound, firstLoad.lowerBound)
