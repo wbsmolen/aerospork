@@ -31,7 +31,7 @@ final class ConfigSafetyBackupTest: XCTestCase {
     func testEachSaveKeepsItsOwnGeneration() throws {
         for i in 0 ..< 3 {
             try write("accordion-padding = \(i)")
-            ConfigurationWriter.backUp(config, now: at(i))
+            try ConfigurationWriter.backUp(config, now: at(i))
         }
         let backups = ConfigurationWriter.backups(of: config)
         assertEquals(backups.count, 3)
@@ -43,7 +43,7 @@ final class ConfigSafetyBackupTest: XCTestCase {
     func testOldGenerationsArePruned() throws {
         for i in 0 ..< (ConfigurationWriter.backupsToKeep + 4) {
             try write("accordion-padding = \(i)")
-            ConfigurationWriter.backUp(config, now: at(i))
+            try ConfigurationWriter.backUp(config, now: at(i))
         }
         let backups = ConfigurationWriter.backups(of: config)
         assertEquals(backups.count, ConfigurationWriter.backupsToKeep)
@@ -56,9 +56,9 @@ final class ConfigSafetyBackupTest: XCTestCase {
     /// keeps the version furthest from whatever the user is trying to undo.
     func testSameSecondDoesNotOverwriteTheEarlierCopy() throws {
         try write("good")
-        ConfigurationWriter.backUp(config, now: at(0))
+        try ConfigurationWriter.backUp(config, now: at(0))
         try write("bad")
-        ConfigurationWriter.backUp(config, now: at(0))
+        try ConfigurationWriter.backUp(config, now: at(0))
         assertEquals(ConfigurationWriter.backups(of: config).compactMap { read($0) }, ["good"])
     }
 
@@ -68,7 +68,7 @@ final class ConfigSafetyBackupTest: XCTestCase {
         try write("before settings opened")
         ConfigurationWriter.startBackupSession()
         for i in 0 ..< (ConfigurationWriter.backupsToKeep + 3) {
-            ConfigurationWriter.backUpOncePerSession(config, now: at(i))
+            try ConfigurationWriter.backUpOncePerSession(config, now: at(i))
             try write("autosave \(i)")
         }
         assertEquals(ConfigurationWriter.backups(of: config).compactMap { read($0) }, ["before settings opened"])
@@ -78,18 +78,29 @@ final class ConfigSafetyBackupTest: XCTestCase {
     func testANewSessionGetsItsOwnBackup() throws {
         try write("first")
         ConfigurationWriter.startBackupSession()
-        ConfigurationWriter.backUpOncePerSession(config, now: at(0))
+        try ConfigurationWriter.backUpOncePerSession(config, now: at(0))
         try write("second")
         ConfigurationWriter.startBackupSession()
-        ConfigurationWriter.backUpOncePerSession(config, now: at(1))
+        try ConfigurationWriter.backUpOncePerSession(config, now: at(1))
         assertEquals(ConfigurationWriter.backups(of: config).compactMap { read($0) }, ["second", "first"])
+    }
+
+    /// The copy failed quietly, and the atomic write still replaced the file, since a rename needs only
+    /// the directory to be writable. So the one write with no backup was the one most likely to hurt.
+    func testAWriteThatCannotBackUpIsRefused() throws {
+        try write("mine")
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: config.path)
+        ConfigurationWriter.startBackupSession()
+        XCTAssertThrowsError(try ConfigurationWriter.write("replaced", to: config))
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: config.path)
+        assertEquals(read(config), "mine")
     }
 
     /// Backups must not be mistaken for configs, or `findCustomConfigUrl` starts reporting the
     /// config directory as ambiguous and the app refuses to write at all.
     func testBackupNamesAreNotTomlFiles() throws {
         try write("x")
-        ConfigurationWriter.backUp(config, now: at(0))
+        try ConfigurationWriter.backUp(config, now: at(0))
         let name = ConfigurationWriter.backups(of: config).first!.lastPathComponent
         XCTAssertTrue(name.hasSuffix(".backup"), name)
         XCTAssertFalse(name.hasSuffix(".toml"), name)
@@ -100,7 +111,7 @@ final class ConfigSafetyBackupTest: XCTestCase {
         try write("x")
         try "other".write(to: dir.appending(path: "notes.txt"), atomically: true, encoding: .utf8)
         try "other".write(to: dir.appending(path: "other.toml.20200101-000000.backup"), atomically: true, encoding: .utf8)
-        ConfigurationWriter.backUp(config, now: at(0))
+        try ConfigurationWriter.backUp(config, now: at(0))
         assertEquals(ConfigurationWriter.backups(of: config).count, 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appending(path: "notes.txt").path))
     }

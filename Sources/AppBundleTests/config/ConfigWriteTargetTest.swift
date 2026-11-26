@@ -13,8 +13,7 @@ final class ConfigWriteTargetTest: XCTestCase {
         XCTAssertNil(testConfigOverride)
         guard case .failure = userConfigTargetUrl() else { return XCTFail("a test resolved a real config to write") }
         assertEquals(ConfigurationWriter.backupsOfUserConfig(), [])
-        // A real read never gives "": with no user config it is the default config's text.
-        assertEquals(configBaseText(), "")
+        guard case .failure = configBaseText() else { return XCTFail("a test read a real config") }
         guard case .failure = readConfig() else { return XCTFail("a test read a real config") }
     }
 
@@ -24,7 +23,7 @@ final class ConfigWriteTargetTest: XCTestCase {
         guard case .success(let target) = userConfigTargetUrl() else { return XCTFail() }
         assertEquals(target, url)
         XCTAssertFalse(target.path.hasPrefix(home), target.path)
-        assertEquals(configBaseText(), Self.text)
+        assertEquals(try configBaseText().get(), Self.text)
         guard case .success((let parsed, let readUrl)) = readConfig() else { return XCTFail() }
         assertEquals(readUrl, url)
         assertEquals(parsed.accordionPadding, 31)

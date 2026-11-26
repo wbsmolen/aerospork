@@ -49,7 +49,7 @@ var defaultConfigUrl: URL {
 }
 @MainActor let defaultConfig: Config = {
     // Try to load default config from file, but use hardcoded defaults if not available
-    if let configString = try? String(contentsOf: defaultConfigUrl) {
+    if let configString = try? String(contentsOf: defaultConfigUrl, encoding: .utf8) {
         let result = parseConfig(configString, isUserConfig: false)
         switch result {
             case .success(let config):

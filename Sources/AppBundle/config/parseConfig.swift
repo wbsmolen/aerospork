@@ -2,49 +2,63 @@ import AppKit
 import Common
 import TOMLKit
 
+/// `found` stands in for the search for the user's config, so a test can hand it files of its own.
 @MainActor
-func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
-    if isUnitTest {
-        guard let url = forceConfigUrl ?? testConfigOverride else { return .failure("tests may not touch a real config") }
-        return readConfig(at: url)
+func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil) -> Result<(Config, URL), String> {
+    // Before the search, not after it. The forced read is `initAppBundle`'s fallback once the user's
+    // config failed, and it `check`s the result. When the search itself was what failed (two
+    // configs), the fallback failed the same way and the app died at startup.
+    if let forceConfigUrl { return readConfig(at: forceConfigUrl) }
+    let customConfig: ConfigFile
+    if let found {
+        customConfig = found
+    } else if isUnitTest {
+        guard let testConfigOverride else { return .failure("tests may not touch a real config") }
+        customConfig = .file(testConfigOverride)
+    } else {
+        customConfig = findCustomConfigUrl()
     }
-    let customConfigUrl: URL
-    let isUserConfig: Bool
-    switch findCustomConfigUrl() {
+    switch customConfig {
         case .file(let url):
-            customConfigUrl = url
-            isUserConfig = true
+            return readConfig(at: url)
         case .noCustomConfigExists:
-            customConfigUrl = defaultConfigUrl
-            isUserConfig = false
             // A migrating user's first launch: the config they brought is right there and not read,
             // so they get the default keymap and no hint why.
             if let hint = upstreamConfigLeftBehindHint() {
                 AppLog.config.notice("\(hint, privacy: .public)")
                 printStderr(hint)
             }
+            return readConfig(at: defaultConfigUrl, isUserConfig: false)
         case .ambiguousConfigError(let candidates):
             let msg = """
                 Ambiguous config error. Several configs found:
                 \(candidates.map(\.path).joined(separator: "\n"))
                 """
+            // Recorded like any other failure, so the defaults that run instead show the banner.
+            configLoadFailure = msg
             return .failure(msg)
     }
-    let configUrl: URL = forceConfigUrl ?? customConfigUrl
-    let finalIsUserConfig = forceConfigUrl != nil ? true : isUserConfig
-    return readConfig(at: configUrl, isUserConfig: finalIsUserConfig)
 }
 
 @MainActor
 func readConfig(at configUrl: URL, isUserConfig: Bool = true) -> Result<(Config, URL), String> {
-    let configContent = try? String(contentsOf: configUrl)
-    var warnings: [TomlParseError] = []
-    let parseResult = configContent.map { parseConfig($0, isUserConfig: isUserConfig, warnings: &warnings) } ?? .success(defaultConfig)
-
     // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
     // Recording health here would erase the only surviving record that the user's config failed --
     // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
     let recordHealth = configUrl != defaultConfigUrl
+
+    let configContent: String
+    switch readConfigText(at: configUrl) {
+        case .success(let text):
+            configContent = text
+        case .failure(let reason):
+            // The bundled default has `Config()` behind it, and the startup fallback must not fail.
+            guard recordHealth else { return .success((defaultConfig, configUrl)) }
+            configLoadFailure = reason
+            return .failure(reason)
+    }
+    var warnings: [TomlParseError] = []
+    let parseResult = parseConfig(configContent, isUserConfig: isUserConfig, warnings: &warnings)
 
     switch parseResult {
         case .success(let parsedConfig):
@@ -230,7 +244,11 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
         return parseCommand(rawString).toEither().map { [$0] }
     } else if let rawArray = raw.array {
         let commands: Parsed<[any Command]> = (0 ..< rawArray.count).mapAllOrFailure { index in
-            let rawString: String = rawArray[index].string ?? expectedActualTypeError(expected: .string, actual: rawArray[index].type)
+            // The type error used to be handed to `parseCommand` as if it were a command, which reported
+            // "Unrecognized subcommand 'Expected'" and no index.
+            guard let rawString = rawArray[index].string else {
+                return .failure("[\(index)]: " + expectedActualTypeError(expected: .string, actual: rawArray[index].type))
+            }
             return parseCommand(rawString).toEither()
         }
         return commands.filter("macos-native-* commands are only allowed to be the last commands in the list") {
@@ -303,7 +321,9 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
             .flatMap { $0.commands }
             .contains { $0 is SplitCommand }
         if containsSplitCommand {
-            errors += [.semantic(
+            // A warning, not an error. It was fatal, so one `split` binding cost the user every binding
+            // they had, while `SplitCommand` already refuses at run time with this same advice.
+            errors += [.deprecation(
                 // `.emptyRoot` because the conflict is between two coordinates in different
                 // sections (a `split` binding and a top-level flag) and `TomlBacktrace` can only
                 // name one. Pointing at either alone would be misleading. A `.pair` of backtraces
@@ -313,7 +333,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
                 The config contains:
                 1. usage of 'split' command
                 2. enable-normalization-flatten-containers = true
-                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is disabled.
+                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is enabled.
 
                 My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
                 """,

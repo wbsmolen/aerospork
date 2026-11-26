@@ -545,6 +545,35 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
 
         assertEquals(ConfigurationWriter.render(baseText: "accordion-padding = 30", from: vm), "accordion-padding = 7\n")
     }
+
+    // MARK: - A base that can't be read refuses every save
+
+    /// An unreadable base read as "", which has no keys for `refusal` to protect, so a save replaced
+    /// the whole file with the edited key. Raw TOML Apply would replace a file nobody had seen.
+    func testUnreadableBaseRefusesStructuredSaveAndRawApply() async throws {
+        let text = "accordion-padding = 31 # mine\n"
+        let url = try useTemporaryConfig(text, for: self)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: url.path)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+        ConfigurationWriter.startBackupSession()
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        vm.load(fromText: text)
+
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+        XCTAssertTrue(vm.errorMessage?.contains("permission denied") == true, vm.errorMessage ?? "saved")
+
+        vm.load(fromText: text)
+        vm.rawToml = "accordion-padding = 7\n"
+        vm.rawTomlApplyRequested = true
+        await vm.saveConfiguration()
+        XCTAssertTrue(vm.errorMessage?.contains("permission denied") == true, vm.errorMessage ?? "applied")
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        assertEquals(try String(contentsOf: url, encoding: .utf8), text)
+        assertEquals(ConfigurationWriter.backups(of: url), [])
+    }
 }
 
 /// The damage this guard exists to prevent, taken verbatim from a real config it destroyed.

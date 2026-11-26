@@ -210,25 +210,41 @@ final class ConfigTest: XCTestCase {
         }
     }
 
-    func testSplitCommandAndFlattenContainersNormalization() {
+    /// The type error was parsed as a command: "Unrecognized subcommand 'Expected'", with no index.
+    func testNonStringItemInCommandArrayReportsTypeAndIndex() {
         let (_, errors) = parseConfigForTest(
+            """
+            [mode.main.binding]
+                alt-x = ['focus left', 42]
+            """,
+        )
+        assertEquals(errors.descriptions, ["mode.main.binding.alt-x: [1]: Expected type is 'string'. But actual type is 'integer'"])
+    }
+
+    /// A warning: it was fatal, so one `split` binding cost the user every binding they had, and the
+    /// text said "disabled" where `SplitCommand` refuses when the flag is enabled.
+    func testSplitCommandAndFlattenContainersNormalization() {
+        var warnings: [TomlParseError] = []
+        let result = parseConfig(
             """
             enable-normalization-flatten-containers = true
             [mode.main.binding]
             [mode.foo.binding]
                 alt-s = 'split horizontal'
             """,
+            warnings: &warnings,
         )
+        assertEquals(try? result.get().modes["foo"]?.bindings.count, 1)
         assertEquals(
             ["""
                 The config contains:
                 1. usage of 'split' command
                 2. enable-normalization-flatten-containers = true
-                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is disabled.
+                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is enabled.
 
                 My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
                 """],
-            errors.descriptions,
+            warnings.descriptions,
         )
     }
 
@@ -318,30 +334,6 @@ final class ConfigTest: XCTestCase {
                 run = ['move-node-to-workspace S', 'layout h_tiles']
             """,
         )
-        /*assertEquals(parsed.onWindowDetected, [
-             WindowDetectedCallback(
-                 matcher: WindowDetectedCallbackMatcher(
-                     appId: nil,
-                     appNameRegexSubstring: nil,
-                     windowTitleRegexSubstring: nil,
-                 ),
-                 checkFurtherCallbacks: true,
-                 rawRun: [
-                     LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.floating])),
-                     MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W")),
-                 ],
-             ),
-             WindowDetectedCallback(
-                 matcher: WindowDetectedCallbackMatcher(
-                     appId: "com.apple.systempreferences",
-                     appNameRegexSubstring: nil,
-                     windowTitleRegexSubstring: nil,
-                 ),
-                 checkFurtherCallbacks: false,
-                 rawRun: [],
-             ),
-         ])*/
-
         assertEquals(errors.descriptions, [
             "on-window-detected[2]: \'run\' is mandatory key",
             "on-window-detected[3]: For now, \'move-node-to-workspace\' must be the latest instruction in the callback (otherwise it\'s error-prone). Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
