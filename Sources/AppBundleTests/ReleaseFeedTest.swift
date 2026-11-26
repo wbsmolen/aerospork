@@ -26,6 +26,23 @@ final class ReleaseFeedTest: XCTestCase {
         XCTAssertLessThan(deploy.lowerBound, served.lowerBound)
     }
 
+    /// A release from a stale tree, with a version that is not new, or onto a tag cut from other code must stop
+    /// before the 20-minute build. A local feed that is not the live one would also drop the newest live item.
+    func testPublishingRefusesAStaleTreeOrVersionBeforeTheBuild() throws {
+        let script = try read("script/publish-release.sh")
+        let tests = try XCTUnwrap(script.range(of: "./run-tests.sh"))
+        let checks = [
+            #"!= "$(git rev-parse origin/main)""#,
+            #"cmp -s "$live_feed" updates-site/appcast.xml"#,
+            #"| sort -V | tail -1)" != "$build_version""#,
+            #"git rev-parse -q --verify "refs/tags/v$build_version^{commit}""#,
+        ]
+        for check in checks {
+            let range = try XCTUnwrap(script.range(of: check), check)
+            XCTAssertLessThan(range.lowerBound, tests.lowerBound, check)
+        }
+    }
+
     /// A site deploy from a tree without the newest appcast serves the older, still validly signed feed, and
     /// clients stop being offered the new release. A feed that does not verify makes them offer nothing.
     func testASiteDeployRefusesARolledBackOrUnverifiedFeed() throws {

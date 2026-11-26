@@ -226,8 +226,12 @@ and updates the Homebrew tap. It needs a Developer ID certificate, a notary prof
    each bullet on one line.
    The script converts the notes to HTML for the update dialog, and its converter turns the second
    line of a wrapped bullet into a separate paragraph.
-2. Merge the changelog to `main`, and switch to a clean, up-to-date `main`. The script refuses a tree
-   with uncommitted or untracked files.
+2. Merge the changelog to `main`, and switch to a clean, up-to-date `main`. Before it builds, the
+   script refuses a tree with uncommitted or untracked files, a HEAD that is not `origin/main`, an
+   `updates-site/appcast.xml` that differs from the live feed (the previous release's appcast PR has
+   not merged), a version that is not above the newest in the feed, and a `vX.Y.Z` tag that exists
+   but is not at HEAD. A tag at HEAD is reused, so you can run the script again after a later step
+   fails.
 3. Run the script:
 
    ```bash

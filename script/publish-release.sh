@@ -92,6 +92,49 @@ if test -n "$(git status --porcelain)"; then
     exit 1
 fi
 
+# The rest of the pre-flight, so that a bad release stops in seconds and not after the build.
+#
+# What is on GitHub's main, nothing older and nothing unpushed. --tags also brings a v$V tag someone
+# pushed from another clone, which the tag check below must see.
+git fetch -q --tags origin main
+if test "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)"; then
+    echo "HEAD is not origin/main. A release is built from main as it is on GitHub: switch to main and pull." > /dev/stderr
+    exit 1
+fi
+
+# generate_appcast builds the new feed on updates-site/appcast.xml. If the previous release's appcast PR
+# has not merged, that file lacks the newest live item and the new signed feed silently drops it. Equal
+# bytes prove that PR merged, and that the version check below reads what clients see.
+live_feed="$work_dir/live-appcast.xml"
+curl -fsS -o "$live_feed" "https://aerospork.app/appcast.xml?preflight=$(date +%s)" ||
+    { echo "Could not fetch the live appcast to compare it with updates-site/appcast.xml." > /dev/stderr; exit 1; }
+if ! cmp -s "$live_feed" updates-site/appcast.xml; then
+    echo "updates-site/appcast.xml is not the live appcast. Merge the PR that publishes the previous release in the appcast, pull, and run again." > /dev/stderr
+    exit 1
+fi
+
+# project.yml: the version must never go backwards, or Sparkle never offers the build.
+feed_version="$({ grep -o '<sparkle:version>[^<]*</sparkle:version>' updates-site/appcast.xml || true; } | sed 's/<[^>]*>//g' | sort -V | tail -1)"
+if test -z "$feed_version"; then
+    echo "No <sparkle:version> in updates-site/appcast.xml, so cannot tell whether $build_version is new." > /dev/stderr
+    exit 1
+fi
+if test "$build_version" = "$feed_version" || test "$(printf '%s\n%s\n' "$feed_version" "$build_version" | sort -V | tail -1)" != "$build_version"; then
+    echo "--build-version $build_version is not above $feed_version, the newest version in the appcast." > /dev/stderr
+    exit 1
+fi
+
+# A tag at HEAD is a re-run after a later step failed, so the tag step reuses it. Anywhere else, the
+# version was already cut from other code.
+tag_exists=false
+if tagged_commit="$(git rev-parse -q --verify "refs/tags/v$build_version^{commit}")"; then
+    if test "$tagged_commit" != "$(git rev-parse HEAD)"; then
+        echo "Tag v$build_version already exists and points at $tagged_commit, not HEAD." > /dev/stderr
+        exit 1
+    fi
+    tag_exists=true
+fi
+
 ./run-tests.sh
 ./build-release.sh --build-version "$build_version"
 
@@ -118,7 +161,10 @@ for app in "$notary_check_dir/dist/aerospork-v$build_version/AeroSpork.app" "$no
 done
 rm -rf "$notary_check_dir"
 
-git tag -a "v$build_version" -m "v$build_version"
+if ! "$tag_exists"; then
+    git tag -a "v$build_version" -m "v$build_version"
+fi
+# Also when the tag existed: a no-op if it is on GitHub, and the missing step if the last push failed.
 git push origin "v$build_version"
 
 gh release create "v$build_version" --repo "$repo" --title "AeroSpork $build_version" \
