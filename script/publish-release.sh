@@ -232,8 +232,7 @@ if ! "$sparkle_bin/sign_update" --verify "$published" "$signature" > /dev/null 2
 fi
 
 # Deploys the appcast together with the site pages and the built docs under /docs/, so the hosted
-# documentation always matches the newest published build. Token handling and its subscription
-# gotcha live in the script.
+# documentation always matches the newest published build. It authenticates with your gcloud login.
 ./script/deploy-site.sh
 
 # What clients get has to be what was signed. A single changed byte between here and them, from a CDN

@@ -25,4 +25,17 @@ final class ReleaseFeedTest: XCTestCase {
         XCTAssertLessThan(sign.lowerBound, deploy.lowerBound)
         XCTAssertLessThan(deploy.lowerBound, served.lowerBound)
     }
+
+    /// A site deploy from a tree without the newest appcast serves the older, still validly signed feed, and
+    /// clients stop being offered the new release. A feed that does not verify makes them offer nothing.
+    func testASiteDeployRefusesARolledBackOrUnverifiedFeed() throws {
+        let script = try read("script/deploy-site.sh")
+        let upload = try XCTUnwrap(script.range(of: "firebase-deploy.py"))
+        let fetchLive = try XCTUnwrap(script.range(of: "https://aerospork.app/appcast.xml?deploy="))
+        let compare = try XCTUnwrap(script.range(of: #"sort -V | tail -1)" != "$local_version""#))
+        let verify = try XCTUnwrap(script.range(of: #"sign_update" --verify updates-site/appcast.xml"#))
+        XCTAssertLessThan(fetchLive.lowerBound, upload.lowerBound)
+        XCTAssertLessThan(compare.lowerBound, upload.lowerBound)
+        XCTAssertLessThan(verify.lowerBound, upload.lowerBound)
+    }
 }

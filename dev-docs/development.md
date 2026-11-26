@@ -14,7 +14,7 @@ Use the Xcode that matches your macOS version, and build through Xcode's toolcha
    - Select it for the whole machine: `sudo xcode-select -s /Applications/Xcode.app`.
    - Select it for one command: put `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
      before the command.
-3. Route the build scripts through `xcrun`. Set `AEROSPORK_SWIFT=xcrun` before each script:
+3. Run the scripts. They build through `xcrun` by default:
 
    ```bash
    AEROSPORK_SWIFT=xcrun ./run-tests.sh
@@ -23,15 +23,18 @@ Use the Xcode that matches your macOS version, and build through Xcode's toolcha
    ```
 
 > [!NOTE]
-> Every script sources `script/setup.sh`. Its `swift` function runs `swiftly run swift` when
-> [swiftly](https://github.com/swiftlang/swiftly) is installed, and plain `swift` when it is not.
-> `AEROSPORK_SWIFT=xcrun` makes it run `xcrun swift` instead. `DEVELOPER_DIR` alone does not
-> change that choice.
+> Every script sources `script/setup.sh`. Its `swift` function runs `xcrun swift`, so the Xcode
+> that step 2 selected builds everything. `AEROSPORK_SWIFT=xcrun` asks for the same thing
+> explicitly: the commands in these documents keep it, and it is safe to drop.
+> `AEROSPORK_SWIFT=swiftly` is the only opt-in to `swiftly run swift`, the toolchain that
+> [swiftly](https://github.com/swiftlang/swiftly) and `.swift-version` pin. Having swiftly installed
+> does not change the choice.
 
 > [!WARNING]
 > If the toolchain does not match the macOS SDK, `swift build` can stop at 0 compiled files and use
 > 100% CPU with no error. The swiftly toolchain that `.swift-version` pins does this on a beta macOS,
-> on the TOMLKit manifest. If a build makes no progress for a minute, stop it and use the steps above.
+> on the TOMLKit manifest, which is why it is opt-in. If a build makes no progress for a minute, stop
+> it, unset `AEROSPORK_SWIFT=swiftly`, and check that step 2 selected the Xcode for your macOS.
 
 ## Dependencies
 
@@ -50,8 +53,8 @@ Some scripts need tools that `install-dep.sh` does not install:
 | Ruby 3 and bundler | `build-docs.sh` (asciidoctor for the site and the man pages) | `rbenv install "$(cat .ruby-version)"`, then `bundler install` |
 | Rust (`cargo`), bash, fish | `build-shell-completion.sh` | [rustup](https://www.rust-lang.org/tools/install), then `brew install bash fish` |
 | xcbeautify (optional) | `build-release.sh`, for a readable Xcode log | `brew install xcbeautify` |
-| swiftly (optional) | `script/setup.sh`, only when `AEROSPORK_SWIFT` is not set | `brew install swiftly` |
-| `gh`, `swa`, `az`, `node` | `script/publish-release.sh` | Homebrew or npm |
+| swiftly (optional) | `script/setup.sh`, only when `AEROSPORK_SWIFT=swiftly` | `brew install swiftly` |
+| `gh`, `gcloud`, `python3` | `script/publish-release.sh`, and `script/deploy-site.sh` (`gcloud`, `python3`) | `brew install gh`, `brew install --cask gcloud-cli`, then `gcloud auth login`. `python3` comes with Xcode |
 
 `script/setup.sh` replaces `PATH` with `.deps/bin:/bin:/usr/bin` so that a build cannot use whatever
 else is installed. It links each tool in this table into `.deps/bin` when it finds the tool.
@@ -216,7 +219,7 @@ syspolicy_check distribution .release/AeroSpork.app
 
 `script/publish-release.sh` builds, tags and publishes a release, signs the appcast, deploys the site
 and updates the Homebrew tap. It needs a Developer ID certificate, a notary profile, and the `gh`,
-`swa`, `az` and `node` tools.
+`gcloud` and `python3` tools.
 
 1. Write the release notes under `## Unreleased` in `CHANGELOG.md`, then rename that heading to
    `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. Put
