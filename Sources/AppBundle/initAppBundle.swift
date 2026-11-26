@@ -45,7 +45,7 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
 /// side by side as designed.
 @MainActor private func exitIfAnotherCopyIsRunning() {
     let others = NSRunningApplication.runningApplications(withBundleIdentifier: aeroSporkAppId)
-        .filter { !$0.isTerminated }
+        .filter { !$0.isGone } // a copy that exited mid-update can stay listed. See `isGone`.
         .map { (pid: $0.processIdentifier, launchDate: processStartDate($0.processIdentifier)) }
     guard let running = runningCopyToYieldTo(me: currentCopyIdentity(), others: others) else { return }
     let message = "\(aeroSporkAppName) is already running (pid \(running)), so this copy is exiting. Quit that one first to restart."

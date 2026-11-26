@@ -23,6 +23,21 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertTrue(isAxTimeout(elapsedSeconds: 1.002), "a call to a stopped app on macOS 27")
     }
 
+    // MARK: - A dead app is not a busy app
+
+    /// Both answer AX with `.cannotComplete`, and a busy app keeps its windows. An app that exits with a
+    /// launchd job still loaded never reports `isTerminated`, so the pid itself has to say it is gone, or
+    /// its windows keep empty tiles forever (Discord after a self-update).
+    func testAnExitedProcessIsGoneAndALiveOneIsNot() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try child.run()
+        child.waitUntilExit() // reaped, so the pid no longer exists
+        XCTAssertTrue(processIsGone(child.processIdentifier))
+        XCTAssertFalse(processIsGone(ProcessInfo.processInfo.processIdentifier))
+        XCTAssertFalse(processIsGone(1), "launchd is not ours to signal, which is EPERM, not gone")
+    }
+
     // MARK: - An unanswered native-state read moves nothing
 
     /// Read as "neither", a timeout pulled a minimized window out of the minimized container and tiled

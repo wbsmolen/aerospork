@@ -487,7 +487,8 @@ final class MacApp: AbstractApp {
     /// than whatever the notifications have said since, and one that turned back is merely asked for
     /// windows it doesn't have.
     @MainActor static func noteRegularApps(_ apps: [NSRunningApplication]) -> Bool {
-        let new = apps.filter { regularApps[$0.processIdentifier] == nil }
+        // LaunchServices keeps listing an app that exited with a job still loaded. See `isGone`.
+        let new = apps.filter { regularApps[$0.processIdentifier] == nil && !processIsGone($0.processIdentifier) }
         for app in new { regularApps[app.processIdentifier] = app }
         return !new.isEmpty
     }
@@ -499,7 +500,9 @@ final class MacApp: AbstractApp {
                 try await Task.sleep(for: .seconds(30))
                 let regular = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
                 await MainActor.run {
-                    if noteRegularApps(regular) { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
+                    // A gone app sends no events, so nothing else would refresh to collect its windows.
+                    let anyGone = allAppsMap.values.contains { $0.nsApp.isGone }
+                    if noteRegularApps(regular) || anyGone { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
                 }
             }
         }
@@ -512,9 +515,10 @@ final class MacApp: AbstractApp {
 
     @MainActor
     static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: [UInt32]] {
+        regularApps = regularApps.filter { !$0.value.isGone } // or the loop below registers it again
         for (_, app) in MacApp.allAppsMap { // gc dead apps
             try checkCancellation()
-            if app.nsApp.isTerminated {
+            if app.nsApp.isGone {
                 app.destroy()
             }
         }
@@ -548,7 +552,7 @@ final class MacApp: AbstractApp {
 
     @MainActor
     private func refreshAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [UInt32] {
-        if nsApp.isTerminated {
+        if nsApp.isGone {
             destroy()
             return []
         }
@@ -836,3 +840,17 @@ func disableAnimations<T>(app: some AxUiElementMock, _ body: () -> T) -> T {
     }
     return body()
 }
+
+extension NSRunningApplication {
+    /// `isTerminated`, or the process is gone while LaunchServices still holds its record.
+    ///
+    /// An app that exits with a launchd job still loaded stays in `lsappinfo` as
+    /// "exited-with-subordinates": Discord does this when its ShipIt updater relaunches it. No
+    /// termination notification arrives, `isTerminated` stays false for good, and every AX read of the
+    /// dead pid answers `.cannotComplete`, which is what a busy app answers. Since #39 a busy app keeps
+    /// its windows, so the dead app's windows kept empty tiles until logout.
+    var isGone: Bool { isTerminated || processIsGone(processIdentifier) }
+}
+
+/// `kill(pid, 0)` sends nothing; ESRCH means no such process. EPERM (not ours to signal) is alive.
+func processIsGone(_ pid: pid_t) -> Bool { kill(pid, 0) != 0 && errno == ESRCH }
