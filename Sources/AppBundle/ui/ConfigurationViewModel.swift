@@ -80,6 +80,23 @@ final class ConfigurationViewModel: ObservableObject {
     var rawTomlApplyRequested = false
 
     @Published var errorMessage: String?
+
+    /// Set by the menu's "Show config error…" before it opens Settings. Static, because the view
+    /// model does not exist until the window first opens. Taken by the next load, or through
+    /// `showConfigErrorNotification` when the window is already open and no load follows.
+    static var errorJumpRequested = false
+    static let showConfigErrorNotification = Notification.Name("aerosporkShowConfigError")
+    /// The line Raw TOML moves to next. `jumpToLine` is the pane's own `@State`, so the request
+    /// passes through here, and `RawTomlTab` clears it once it has jumped.
+    @Published var pendingJumpLine: Int?
+
+    /// A semantic error has no line: then the pane just opens.
+    func takeErrorJumpRequest() {
+        guard Self.errorJumpRequested else { return }
+        Self.errorJumpRequested = false
+        pendingJumpLine = ConfigurationWriter.diagnostic(rawToml)?.line
+    }
+
     /// The config file General and Raw TOML show. Looked up on reload and after "Open in…", never in a
     /// pane body: the lookup touches the disk, and a body can run on every keystroke.
     @Published private(set) var configPath = ""
@@ -197,11 +214,20 @@ final class ConfigurationViewModel: ObservableObject {
     // MARK: - Loading
 
     private var externalReloadObserver: NSObjectProtocol?
+    private var showConfigErrorObserver: NSObjectProtocol?
 
     func loadConfiguration() async {
         ConfigurationWriter.startBackupSession()
         reloadFromConfig()
+        takeErrorJumpRequest()
         guard externalReloadObserver == nil else { return }
+        showConfigErrorObserver = NotificationCenter.default.addObserver(
+            forName: Self.showConfigErrorNotification,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            Task { @MainActor in self?.takeErrorJumpRequest() }
+        }
         // Someone edited the config in an editor while this window is open. Our `loaded` snapshot is
         // now stale, and editing any section would write that stale text back over their change.
         externalReloadObserver = NotificationCenter.default.addObserver(

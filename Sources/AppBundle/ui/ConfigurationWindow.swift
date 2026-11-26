@@ -5,7 +5,9 @@ public struct ConfigurationWindow: View {
     @StateObject private var viewModel = ConfigurationViewModel()
     /// Apple recommends restoring the last pane in a multi-pane Settings window. A stable string
     /// rather than an enum-backed integer keeps the preference readable and survives reordering.
-    @AppStorage("settings.selectedPane") private var selectedPaneID = SettingsPane.general.rawValue
+    @AppStorage(Self.selectedPaneKey) private var selectedPaneID = SettingsPane.general.rawValue
+    /// The menu's "Show config error…" writes this default to land on Raw TOML; `@AppStorage` observes it.
+    static let selectedPaneKey = "settings.selectedPane"
 
     public init() {}
 

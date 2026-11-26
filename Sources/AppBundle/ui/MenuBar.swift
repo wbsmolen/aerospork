@@ -27,9 +27,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         // not only in a startup dialog they already dismissed.
         if isRunningFallbackDefaults {
             Label("Config not loaded — running defaults", systemImage: Banner.Kind.error.icon)
-            Button("Show config error…") {
-                showMessageInGui(filenameIfConsoleApp: nil, title: "AeroSpork config error", message: configLoadFailure ?? "")
-            }
+            Button("Show config error…") { showConfigErrorInSettings() }
             Divider()
         }
         // A binding mode swallows the whole keyboard, so someone who entered one by accident has no
@@ -151,6 +149,19 @@ func settingsBridged(_ content: some View) -> some View {
     if #available(macOS 14, *) { return false }
     // macOS 13 has no `\.openSettings`. The pre-Ventura selector is still the only route there.
     return NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+}
+
+/// Raw TOML holds the file that failed to load, with the parser's error highlighted and a "Go to
+/// line" button, so the menu opens Settings there instead of a modal with the bare parser text. The
+/// modal stays for when Settings cannot open (see `openSettingsWindow`).
+@MainActor func showConfigErrorInSettings() {
+    UserDefaults.standard.set(ConfigurationWindow.SettingsPane.rawToml.rawValue, forKey: ConfigurationWindow.selectedPaneKey)
+    ConfigurationViewModel.errorJumpRequested = true
+    NotificationCenter.default.post(name: ConfigurationViewModel.showConfigErrorNotification, object: nil)
+    if !openSettingsWindow() {
+        ConfigurationViewModel.errorJumpRequested = false
+        showMessageInGui(filenameIfConsoleApp: nil, title: "AeroSpork config error", message: configLoadFailure ?? "")
+    }
 }
 
 /// The settings window once it exists, recorded by the view inside it that already reaches it.

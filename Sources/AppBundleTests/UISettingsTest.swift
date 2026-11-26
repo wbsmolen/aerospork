@@ -232,6 +232,23 @@ final class UISettingsTest: XCTestCase {
         assertFalse(RawTomlTab.needsValidation(edited: false, fallback: false))
     }
 
+    /// "Show config error…" lands on Raw TOML at the line the pane's own diagnostic names. A request
+    /// is taken once; without one, a load moves nothing.
+    func testShowConfigErrorPublishesTheDiagnosticLine() {
+        let broken = "accordion-padding = 30\n[gaps\ninner.horizontal = 8\n"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: broken)
+        vm.takeErrorJumpRequest()
+        XCTAssertNil(vm.pendingJumpLine, "no request, no jump")
+
+        ConfigurationViewModel.errorJumpRequested = true
+        vm.takeErrorJumpRequest()
+        let expected = ConfigurationWriter.diagnostic(broken)?.line
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(vm.pendingJumpLine, expected)
+        XCTAssertFalse(ConfigurationViewModel.errorJumpRequested, "the request is spent")
+    }
+
     func testRawTomlSectionNavigationKeepsDocumentOrder() {
         let headers = RawTomlTab.sections(in: """
             title = '[not-a-header]'

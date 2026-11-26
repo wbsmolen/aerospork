@@ -68,6 +68,12 @@ struct RawTomlTab: View {
             validationDiagnostic = ConfigurationWriter.diagnostic(raw.text)
             validationPending = false
         }
+        // "Show config error…" in the menu. A `@Published` publisher replays its value on subscribe,
+        // so a line set before this pane appeared is taken when it does.
+        .onReceive(viewModel.$pendingJumpLine.compactMap { $0 }) { line in
+            viewModel.pendingJumpLine = nil
+            jump(to: line)
+        }
         .task {
             // Touches the file system. The pane re-renders on every keystroke, so leaving it in a
             // computed view property turned typing into repeated directory scans.
