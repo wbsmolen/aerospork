@@ -249,6 +249,14 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     `containingWindowId` intervals per refresh with no window opening; expect zero instead of one
     per listed window.
 
+23. **A drag names its window by the observer refcon.** `movedObs` and `resizedObs` asked
+    `_AXUIElementGetWindow` on every move or resize event while the button was down. A window's
+    notifications now carry its id as the refcon (`axRefcon`): the number, never a pointer to the
+    `AxWindow`, so a notification AX had queued before the subscription went away cannot reach a
+    freed object. Parked windows are still re-read on every layout; skipping clean ones (PERF-6
+    part 3) waits for a measurement that `kAXMoved` is reliable. Measure: `containingWindowId`
+    intervals during a one-second drag; expect zero instead of about 60.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and

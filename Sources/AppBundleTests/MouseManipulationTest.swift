@@ -9,6 +9,27 @@ final class MouseManipulationTest: XCTestCase {
         XCTAssertFalse(shouldResetMouseManipulation(flag: false, buttonDown: false))
         XCTAssertFalse(shouldResetMouseManipulation(flag: false, buttonDown: true))
     }
+
+    /// A window's notifications carry its id, the whole 32 bits of it, and the app's carry none.
+    func testTheRefconIsTheWindowId() {
+        for id: UInt32 in [1, 4242, UInt32.max] {
+            assertEquals(axRefconWindowId(axRefcon(windowId: id)), id)
+        }
+        assertEquals(axRefcon(windowId: nil), nil)
+        assertEquals(axRefconWindowId(nil), nil)
+    }
+
+    /// Each move or resize during a drag asked the app which window it was, one IPC per event. The
+    /// callbacks need a real `AXObserver`, so the wiring is pinned in the source.
+    func testDragEventsNameTheirWindowByTheRefcon() throws {
+        for (declaration, file) in [("func movedObs(", "moveWithMouse"), ("func resizedObs(", "resizeWithMouse")] {
+            let body = try sourceBody(declaration, in: "Sources/AppBundle/mouse/\(file).swift")
+            XCTAssertTrue(body.contains("axRefconWindowId(data)"), declaration)
+            XCTAssertFalse(body.contains("containingWindowId"), declaration)
+        }
+        let window = try sourceBody("static func new(windowId: UInt32", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(window.contains("windowId: windowId)"), "a window subscribes without its id as the refcon")
+    }
 }
 
 /// Each drag event asked the focused app for its focused window, about 60 times a second.

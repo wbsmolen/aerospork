@@ -797,7 +797,7 @@ private class AxWindow {
     static func new(windowId: UInt32, _ ax: AXUIElement, _ observer: AXObserver) -> AxWindow? {
         _ = AXUIElementSetMessagingTimeout(ax, axMessagingTimeout)
         let keys = [kAXUIElementDestroyedNotification, kAXWindowDeminiaturizedNotification, kAXWindowMiniaturizedNotification, kAXMovedNotification, kAXResizedNotification]
-        return AxSubscription.subscribe(observer, ax, keys).map { AxWindow(windowId: windowId, ax, $0) }
+        return AxSubscription.subscribe(observer, ax, keys, windowId: windowId).map { AxWindow(windowId: windowId, ax, $0) }
     }
 }
 

@@ -14,11 +14,12 @@ class AxSubscription {
         self.ax = ax
     }
 
-    /// All of `keys`, or nil. Partly subscribed, `deinit` takes back what did succeed.
-    static func subscribe(_ obs: AXObserver, _ ax: AXUIElement, _ keys: [String]) -> AxSubscription? {
+    /// All of `keys`, or nil. Partly subscribed, `deinit` takes back what did succeed. A window's
+    /// notifications carry its `windowId` as their refcon (`axRefcon`).
+    static func subscribe(_ obs: AXObserver, _ ax: AXUIElement, _ keys: [String], windowId: UInt32? = nil) -> AxSubscription? {
         let subscription = AxSubscription(obs: obs, ax: ax)
         for key in keys {
-            if AXObserverAddNotification(obs, ax, key as CFString, nil) != .success { return nil }
+            if AXObserverAddNotification(obs, ax, key as CFString, axRefcon(windowId: windowId)) != .success { return nil }
             subscription.notifKeys.insert(key)
         }
         return subscription
@@ -30,6 +31,18 @@ class AxSubscription {
             AXObserverRemoveNotification(obs, ax, notifKey as CFString)
         }
     }
+}
+
+/// A window's id as the refcon of its notifications, so a move or resize during a drag names its window
+/// without an `_AXUIElementGetWindow` IPC per event. The id itself, never a pointer to an object: a
+/// notification AX had already queued when the subscription went away then carries a number, not a freed
+/// object, and a crash here takes the window manager down. Window ids are never 0, so nil still means none.
+func axRefcon(windowId: UInt32?) -> UnsafeMutableRawPointer? {
+    windowId.flatMap { UnsafeMutableRawPointer(bitPattern: UInt($0)) }
+}
+
+func axRefconWindowId(_ refcon: UnsafeMutableRawPointer?) -> UInt32? {
+    refcon.map { UInt32(truncatingIfNeeded: UInt(bitPattern: $0)) }
 }
 
 /// The one callback of every app's one observer.
