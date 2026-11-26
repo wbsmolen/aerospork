@@ -129,11 +129,14 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         // must not hijack a bound name -- but that needs only the NAME SET.
         let persistent = config.persistentWorkspaces
         for name in persistent { _ = get(byName: name) }
+        // Once, before the filter: `focus` creates the focused workspace when it is missing, and inside the
+        // filter that write went into the dictionary being replaced, so the workspace was created and lost.
+        let focusedName = focus.workspace.name
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
             persistent.contains(workspace.name) ||
                 !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
-                workspace.name == focus.workspace.name
+                workspace.name == focusedName
         }
     }
 
@@ -292,6 +295,13 @@ extension CGPoint {
 
 /// The stable id of the panel at each screen point, as of the last rearrange. See `matchMonitors`.
 @MainActor private var screenPointToMonitorUuid: [CGPoint: String] = [:]
+
+/// Forgets which workspace each screen point showed before and which panel was at it, so a test's stub
+/// workspace is never a name an earlier test left behind. Production never calls it.
+@MainActor func resetWorkspaceScreensForTests() {
+    screenPointToPrevVisibleWorkspace = [:]
+    screenPointToMonitorUuid = [:]
+}
 
 /// Which old screen each new screen continues: the same panel by UUID, then the same position, then the
 /// nearest. Position alone sends every workspace to the wrong panel when two monitors trade places, and

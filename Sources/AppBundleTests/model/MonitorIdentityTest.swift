@@ -22,6 +22,25 @@ final class MonitorIdentityTest: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - Test isolation
+
+    /// `getStubWorkspace` takes the workspace a screen point showed before. Kept across tests, that was
+    /// whatever an earlier test left there, so a test's stub depended on which test ran before it.
+    func testSetUpForgetsWhatEarlierTestsShowed() {
+        setUpWorkspacesForTests()
+        let side = panel(id: 2, x: 1920, uuid: "BBBBBBBB-0000-0000-0000-000000000002")
+        testMonitors = [defaultTestMonitor, side]
+        gcMonitors()
+        check(side.setActiveWorkspace(Workspace.get(byName: "earlier-a")))
+        check(side.setActiveWorkspace(Workspace.get(byName: "earlier-b"))) // the side point last showed earlier-a
+        testMonitors = [defaultTestMonitor]
+        setUpWorkspacesForTests()
+
+        testMonitors = [side] // a later test whose main monitor sits at that point
+        setUpWorkspacesForTests()
+        assertNotEquals(getStubWorkspace(for: mainMonitor).name, "earlier-a")
+    }
+
     // MARK: - Fingerprint resolution against real monitors
 
     /// The headline DisplayLink case: two panels with identical name/size/(nil) EDID, side by side.

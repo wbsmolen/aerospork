@@ -20,7 +20,7 @@ struct MacosNativeFullscreenCommand: Command {
             let message = newState ? "Already fullscreen." : "Already not fullscreen."
             return handleNoop(message, failIfNoop: args.failIfNoop, io: io)
         }
-        window.asMacWindow().setNativeFullscreen(newState)
+        window.setNativeFullscreen(newState)
         guard let workspace = window.visualWorkspace else {
             return io.err(windowIsntPartOfTree(window))
         }

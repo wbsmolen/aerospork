@@ -59,22 +59,14 @@ final class InvoluntaryFocusTest: XCTestCase {
     /// `MacosNativeMinimizeCommand` binds straight into the global `macosMinimizedWindowsContainer`,
     /// so by the time `normalizeLayoutReason` sees the window its `nodeWorkspace` is already nil and
     /// the recorded name would be nil too -- leaving `macos-native-minimize` to teleport the window
-    /// on restore while cmd-M and the Dock send it home. A source check, for the same reason as the
-    /// one above: the command needs a real `MacApp` and cannot be driven headlessly.
-    func testTheMinimizeCommandRecordsTheWorkspaceBeforeLeavingIt() throws {
-        let source = try String(
-            contentsOf: projectRoot.appending(path: "Sources/AppBundle/command/impl/MacosNativeMinimizeCommand.swift"),
-            encoding: .utf8,
-        )
-        let record = try XCTUnwrap(
-            source.range(of: "prevWorkspaceName: window.nodeWorkspace?.name"),
-            "the minimize command stopped recording the workspace it is leaving",
-        )
-        let bind = try XCTUnwrap(source.range(of: "leaveTilesForMacos(macosMinimizedWindowsContainer"))
-        XCTAssertTrue(
-            record.upperBound < bind.lowerBound,
-            "the workspace must be recorded BEFORE the bind -- afterwards `nodeWorkspace` is already nil",
-        )
+    /// on restore while cmd-M and the Dock send it home. So it must record the workspace BEFORE the bind.
+    func testTheMinimizeCommandRecordsTheWorkspaceBeforeLeavingIt() async throws {
+        let window = TestWindow.new(id: 1, parent: Workspace.get(byName: "W").rootTilingContainer)
+        defer { window.unbindFromParent() } // the minimized container is global and outlives the test
+        let result = try await parseCommand("macos-native-minimize --window-id 1").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+        XCTAssertTrue(window.parent === macosMinimizedWindowsContainer, "the window did not leave the tiles for the minimized container")
+        assertEquals(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: "W"))
     }
 
     // MARK: - Focus only follows the window that actually had it

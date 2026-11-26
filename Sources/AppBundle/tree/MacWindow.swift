@@ -95,7 +95,7 @@ final class MacWindow: Window {
     }
 
     @MainActor
-    func getAxUiElementWindowType() async throws -> AxUiElementWindowType {
+    override func getAxUiElementWindowType() async throws -> AxUiElementWindowType {
         try await macApp.getAxUiElementWindowType(windowId)
     }
 
@@ -104,7 +104,7 @@ final class MacWindow: Window {
         try await macApp.dumpWindowAxInfo(windowId: windowId)
     }
 
-    func setNativeFullscreen(_ value: Bool) {
+    override func setNativeFullscreen(_ value: Bool) {
         macApp.setNativeFullscreen(windowId, value)
     }
 
@@ -264,7 +264,7 @@ extension Window {
     func relayoutWindow(on workspace: Workspace, forceTile: Bool = false) async throws {
         let data = forceTile
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
-            : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self)
+            : unbindAndGetBindingDataForNewWindow(try await getAxUiElementWindowType(), workspace, window: self)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
     }
 }
@@ -272,7 +272,13 @@ extension Window {
 // The function is private because it's unsafe. It leaves the window in unbound state
 @MainActor
 private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _ workspace: Workspace, window: Window?) async throws -> BindingData {
-    switch try await macApp.getAxUiElementWindowType(windowId) {
+    unbindAndGetBindingDataForNewWindow(try await macApp.getAxUiElementWindowType(windowId), workspace, window: window)
+}
+
+// The function is private because it's unsafe. It leaves the window in unbound state
+@MainActor
+private func unbindAndGetBindingDataForNewWindow(_ type: AxUiElementWindowType, _ workspace: Workspace, window: Window?) -> BindingData {
+    switch type {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .dialog: BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
