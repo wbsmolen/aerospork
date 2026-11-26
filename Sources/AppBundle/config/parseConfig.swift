@@ -239,7 +239,11 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
         return parseCommand(rawString).toEither().map { [$0] }
     } else if let rawArray = raw.array {
         let commands: Parsed<[any Command]> = (0 ..< rawArray.count).mapAllOrFailure { index in
-            let rawString: String = rawArray[index].string ?? expectedActualTypeError(expected: .string, actual: rawArray[index].type)
+            // The type error used to be handed to `parseCommand` as if it were a command, which reported
+            // "Unrecognized subcommand 'Expected'" and no index.
+            guard let rawString = rawArray[index].string else {
+                return .failure("[\(index)]: " + expectedActualTypeError(expected: .string, actual: rawArray[index].type))
+            }
             return parseCommand(rawString).toEither()
         }
         return commands.filter("macos-native-* commands are only allowed to be the last commands in the list") {

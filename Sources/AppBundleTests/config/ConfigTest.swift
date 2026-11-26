@@ -210,6 +210,17 @@ final class ConfigTest: XCTestCase {
         }
     }
 
+    /// The type error was parsed as a command: "Unrecognized subcommand 'Expected'", with no index.
+    func testNonStringItemInCommandArrayReportsTypeAndIndex() {
+        let (_, errors) = parseConfigForTest(
+            """
+            [mode.main.binding]
+                alt-x = ['focus left', 42]
+            """,
+        )
+        assertEquals(errors.descriptions, ["mode.main.binding.alt-x: [1]: Expected type is 'string'. But actual type is 'integer'"])
+    }
+
     /// A warning: it was fatal, so one `split` binding cost the user every binding they had, and the
     /// text said "disabled" where `SplitCommand` refuses when the flag is enabled.
     func testSplitCommandAndFlattenContainersNormalization() {
