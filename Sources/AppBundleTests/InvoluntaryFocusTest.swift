@@ -242,6 +242,22 @@ final class InvoluntaryFocusTest: XCTestCase {
         )
     }
 
+    /// A rule can run seconds after its window appeared, on a retry, when the user is typing in
+    /// another window. `fullscreen` promotes its window in the workspace's MRU, which is not focus.
+    func testFullscreenOnFromARuleDoesNotMoveFocus() async throws {
+        defer { config.onWindowDetected = [] }
+        let workspace = focus.workspace
+        let typingIn = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        XCTAssertTrue(typingIn.focusWindow())
+        config.onWindowDetected = [WindowDetectedCallback(rawRun: [parseCommand("fullscreen on").cmdOrDie])]
+
+        let arriving = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await tryOnWindowDetected(arriving)
+
+        XCTAssertTrue(arriving.isFullscreen, "the test needs the rule to have run")
+        assertEquals(focusedWindowId, typingIn.windowId, additionalMsg: "a rule's 'fullscreen on' took focus")
+    }
+
     /// The third bookkeeping rebind, cmd-H with `automatically-unhide-macos-hidden-apps` off. Its
     /// container also hangs off the workspace, so without the compensation hiding an app made its
     /// window the workspace's focus fallback. Unreachable headlessly until `isMacosAppHidden` became

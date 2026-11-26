@@ -1319,11 +1319,30 @@ A rule with no condition matches every new window.
 
 ==== What a rule can run
 
-`run` accepts exactly three commands: `layout floating`, `layout tiling` and
-xref:commands.adoc#move-node-to-workspace[move-node-to-workspace]. AeroSpork rejects other
-`layout` arguments here. `move-node-to-workspace` can appear only once, as the last command in the
-list. If you need another command, https://github.com/wbsmolen/aerospork/issues[open an issue] that
-describes your use case.
+`run` accepts these commands, and AeroSpork rejects a rule with any other:
+
+* `layout floating` and `layout tiling`. AeroSpork rejects other `layout` arguments here.
+* `fullscreen on`. A rule must say `on`: a bare `fullscreen` toggles, so the window would leave
+  fullscreen if the rule ran again. See xref:commands.adoc#fullscreen[fullscreen].
+* xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] and
+  xref:commands.adoc#move-node-to-monitor[move-node-to-monitor]. A rule moves its window at most
+  once, with one of the two, and the move is the last command in the list. A move takes the window
+  away from the workspace that the commands before it worked on.
+
+To open an app on another monitor, for example, move its window to that monitor. The window goes to
+the workspace that the monitor shows:
+
+[source,toml]
+----
+[on-window]
+'com.apple.Music' = 'move-node-to-monitor secondary'
+'com.apple.TV' = ['fullscreen on', 'move-node-to-monitor main']
+----
+
+A rule does not take focus unless a move says `--focus-follows-window`. A rule can run seconds after
+its window appears, when AeroSpork asks a slow app again, so the flag can pull you away from what
+you are typing in. If you need another command, https://github.com/wbsmolen/aerospork/issues[open an
+issue] that describes your use case.
 
 ==== When a rule runs
 

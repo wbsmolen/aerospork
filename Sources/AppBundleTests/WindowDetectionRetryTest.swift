@@ -70,6 +70,38 @@ final class WindowDetectionRetryTest: XCTestCase {
         }
     }
 
+    /// The move ends the rule and takes the window off the workspace the rest of it worked on, so a
+    /// cancellation that stopped short of it would leave the window fullscreen on the wrong monitor.
+    func testARuleEndingInMoveNodeToMonitorRunsToTheEndUnderCancellation() async throws {
+        setUpWorkspacesForTests()
+        let savedMonitors = testMonitors
+        defer {
+            testMonitors = savedMonitors
+            config.onWindowDetected = []
+        }
+        let left = Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080)
+        let right = Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080)
+        testMonitors = [
+            MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "Left", rect: left, visibleRect: left),
+            MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "Right", rect: right, visibleRect: right),
+        ]
+        config.onWindowDetected = [
+            WindowDetectedCallback(rawRun: ["fullscreen on", "move-node-to-monitor right"].map { parseCommand($0).cmdOrDie }),
+        ]
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer)
+        let target = testMonitors[1].activeWorkspace
+        XCTAssertFalse(window.nodeWorkspace === target, "the test needs the window to start on the other monitor")
+
+        let caller = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await shieldedFromCancellation { try await tryOnWindowDetected(window) }
+        }
+        _ = await caller.result
+
+        XCTAssertTrue(window.isFullscreen)
+        assertEquals(window.nodeWorkspace?.name, target.name, additionalMsg: "a cancelled refresh stopped the rule before its move")
+    }
+
     /// A rule runs once, when a window first appears. Running it again after a restart undid a move made
     /// by hand since, so a window AeroSpork remembers only runs the rules that ask for startup.
     func testARememberedWindowOnlyRunsRulesThatAskForStartup() async throws {
