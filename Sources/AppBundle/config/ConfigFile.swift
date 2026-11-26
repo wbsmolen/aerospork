@@ -61,7 +61,7 @@ func readConfigText(at url: URL) -> Result<String, String> {
     }
 }
 
-enum ConfigFile {
+enum ConfigFile: Equatable {
     case file(URL), ambiguousConfigError(_ candidates: [URL]), noCustomConfigExists
 
     var urlOrNil: URL? {

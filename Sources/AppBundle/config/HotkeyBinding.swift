@@ -63,10 +63,7 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
         let startTime = Date()
         debugLog("HOTKEY: \(entry.notation) pressed")
 
-        if let commands = config.modes[activeMode]?.bindings[entry.bindingId]?.commands {
-            let commandCount = commands.count
-            debugLog("HOTKEY: Will execute \(commandCount) command(s)")
-        }
+        debugLog("HOTKEY: Will execute \(config.modes[activeMode]?.bindings[entry.bindingId]?.commands.count ?? 0) command(s)")
 
         try await runSession(.hotkeyBinding, .checkServerIsEnabledOrDie) { () throws in
             _ = try await config.modes[activeMode]?.bindings[entry.bindingId]?.commands

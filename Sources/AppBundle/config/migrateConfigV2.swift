@@ -44,7 +44,6 @@ import TOMLKit
     // `[exec.env-vars]` can hold secrets. Both go through a link, which a write to `url` replaced.
     let real = url.resolvingSymlinksInPath()
     guard (try? FileManager.default.copyItem(at: real, to: backup)) != nil else { return }
-    ConfigFileWatcher.suppressNextSelfWrite()
     try? migrated.write(to: real, atomically: true, encoding: .utf8)
 }
 

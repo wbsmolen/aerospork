@@ -19,15 +19,7 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: 
     // config failed, and it `check`s the result. When the search itself was what failed (two
     // configs), the fallback failed the same way and the app died at startup.
     if let forceConfigUrl { return readConfig(at: forceConfigUrl, warnings: &warnings) }
-    let customConfig: ConfigFile
-    if let found {
-        customConfig = found
-    } else if isUnitTest {
-        guard let testConfigOverride else { return .failure("tests may not touch a real config") }
-        customConfig = .file(testConfigOverride)
-    } else {
-        customConfig = findCustomConfigUrl()
-    }
+    guard let customConfig = found ?? searchUserConfig() else { return .failure("tests may not touch a real config") }
     switch customConfig {
         case .file(let url):
             return readConfig(at: url, warnings: &warnings)
@@ -46,6 +38,13 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: 
                 """
             return .failure(msg)
     }
+}
+
+/// The search `readConfig` runs and the watcher compares. Under XCTest only `testConfigOverride`, and nil
+/// without one.
+@MainActor
+func searchUserConfig() -> ConfigFile? {
+    isUnitTest ? testConfigOverride.map { findCustomConfigUrl(among: [$0]) } : findCustomConfigUrl()
 }
 
 @MainActor
@@ -100,8 +99,6 @@ func recordConfigHealth(_ result: Result<(Config, URL), String>, warnings: [Stri
             configLoadFailure = msg
     }
 }
-
-
 
 extension ParserProtocol {
     func transformRawConfig(_ raw: S,
@@ -175,11 +172,11 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     // Config v2. All parsed manually, in `applyConfigV2`, because each of them desugars into a
     // field that a v1 key already writes -- letting the generic table walker set them would make
     // the winner depend on TOML iteration order.
-    "mod": Parser(\._deprecatedNoOp, skipParsing(())),
-    "workspaces": Parser(\._deprecatedNoOp, skipParsing(())),
-    "keys": Parser(\._deprecatedNoOp, skipParsing(())),
-    "monitors": Parser(\._deprecatedNoOp, skipParsing(())),
-    "on-window": Parser(\._deprecatedNoOp, skipParsing(())),
+    "mod": Parser(\._handledElsewhere, skipParsing(())),
+    "workspaces": Parser(\._handledElsewhere, skipParsing(())),
+    "keys": Parser(\._handledElsewhere, skipParsing(())),
+    "monitors": Parser(\._handledElsewhere, skipParsing(())),
+    "on-window": Parser(\._handledElsewhere, skipParsing(())),
 
     // Upstream's spelling of "these workspaces always exist". Read by the generic walker, NOT listed
     // in `configV2RootKeys`: that would reclassify an upstream `[mode.*]` config as v2 and skip its
@@ -214,12 +211,12 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     // Accepted so an old config still loads; they do nothing. Removing them outright would turn
     // them into "Unknown top-level key", which IS fatal -- the exact failure P1-1 exists to stop.
-    "after-login-command": Parser(\._deprecatedNoOp, deprecatedNoOp(
+    "after-login-command": Parser(\._handledElsewhere, deprecatedNoOp(
         "after-login-command is deprecated and does nothing. Use after-startup-command.")),
-    "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._deprecatedNoOp, deprecatedNoOp(
+    "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._handledElsewhere, deprecatedNoOp(
         "non-empty-workspaces-root-containers-layout-on-startup is deprecated and does nothing. " +
             "There is no startup-specific layout: every workspace root container uses default-root-container-layout.")),
-    "indent-for-nested-containers-with-the-same-orientation": Parser(\._deprecatedNoOp, deprecatedNoOp(
+    "indent-for-nested-containers-with-the-same-orientation": Parser(\._handledElsewhere, deprecatedNoOp(
         "indent-for-nested-containers-with-the-same-orientation is deprecated and does nothing. See https://github.com/wbsmolen/aerospork/issues/96")),
 ].merging(upstreamOnlyKeyParsers) { own, _ in own } // upstream-only keys: reported and ignored
 
@@ -243,7 +240,7 @@ private func deprecatedNoOp(_ msg: String) -> @Sendable (TOMLValueConvertible, T
 }
 
 extension ParsedCmd where T == any Command {
-    internal func toEither() -> Parsed<T> { // Changed to internal
+    internal func toEither() -> Parsed<T> {
         return switch self {
             case .cmd(let a):
                 a.info.allowInConfig
@@ -307,15 +304,16 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 
     let isV2 = isConfigV2(rawTable)
+    let mapping = config.keyMapping.resolve()
     if let modes = rawTable[modeConfigRootKey].flatMap({
         // In v2 the main mode is `[keys]` (plus whatever `mod` generated), so `[mode.*]` is a
         // supplement -- demanding `[mode.main]` as well would mean writing an empty section.
-        parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve(), requireMainMode: !isV2)
+        parseModes($0, .rootKey(modeConfigRootKey), &errors, mapping, requireMainMode: !isV2)
     }) {
         config.modes = modes
     }
 
-    if isV2 { applyConfigV2(rawTable, &config, &errors) }
+    if isV2 { applyConfigV2(rawTable, &config, &errors, mapping) }
 
     // Declared workspaces always exist -- see `Workspace.garbageCollectUnusedWorkspaces`. `workspaces`
     // was added in `applyConfigV2` and `persistent-workspaces` by the table walker; a force-assignment
@@ -442,14 +440,9 @@ private func parseDefaultContainerOrientation(_ raw: TOMLValueConvertible, _ bac
     parseString(raw, backtrace).flatMap { parseEnum($0, DefaultContainerOrientation.self).toParsedToml(backtrace) }
 }
 
-
-
-
 func parseBool(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Bool> {
     raw.bool.orFailure(expectedActualTypeError(expected: .bool, actual: raw.type, backtrace))
 }
-
-
 
 extension TOMLTable {
     func parseTable<T: ConvenienceCopyable>(

@@ -680,8 +680,8 @@ final class ConfigurationViewModel: ObservableObject {
             if rendered != base {
                 if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
                 try ConfigurationWriter.write(rendered)
-                // The file watcher refreshes after its reload; this save suppresses the watcher for its own
-                // write and did not, so a gap, layout or normalization change did nothing on screen until
+                // The file watcher refreshes after its reload; it skips this save's bytes, which this reload
+                // applies, and this did not, so a gap, layout or normalization change did nothing on screen until
                 // some unrelated window event. Not under XCTest, where a refresh enumerates the machine's apps.
                 if reloadConfig(), !isUnitTest {
                     runRefreshSession(.globalObserver("settingsSaved"), screenIsDefinitelyUnlocked: false)

@@ -119,11 +119,14 @@ through a `WritableKeyPath`. `parseConfigV2.swift` reads the v2 spelling (`mod`,
 `monitors`, `on-window`). When a config has only the v1 spelling, `migrateConfigV2.swift` rewrites it
 in the v2 spelling on first start.
 
-`ConfigFileWatcher` watches the config file with a `DispatchSource` and reloads it when it changes.
-It watches the file the user edits, not `configUrl`: when a broken config makes AeroSpork use the
-bundled default, `configUrl` points into the app bundle, which never changes. After the Settings
-window writes the file, `suppressNextSelfWrite` makes the watcher ignore events for 500 ms, so one
-save causes one reload.
+`ConfigFileWatcher` watches the config file and the folders it may appear in (`$HOME`, the XDG
+config folder, the `--config-path` folder) with `DispatchSource`s, so it sees a config that appears,
+an atomic replace, a delete and a swapped link. It watches the candidates the user edits, not
+`configUrl`: when a broken config makes AeroSpork use the bundled default, `configUrl` points into
+the app bundle, which never changes. Each event re-arms and compares the config's path and bytes with
+the last ones `reloadConfig` applied, and reloads only when they differ. A Settings save applies
+itself, so one save causes one reload. A config that is gone gets one second to come back before the
+defaults apply.
 
 The default config exists twice: `resources/default-config.toml` (bundled in the app) and
 `docs/config-examples/default-config.toml` (included in the guide). **Test.**

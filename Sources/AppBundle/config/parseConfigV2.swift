@@ -77,8 +77,7 @@ func workspaceKeyNotation(_ name: String) -> String? {
 /// Layering, weakest first: generated -> `[keys]` -> `[mode.*]`. "Anything in `[keys]` overrides a
 /// generated binding with the same key" is the rule that keeps the defaults from trapping anyone,
 /// and `[mode.*]` sits on top so an older file's explicit binding keeps winning.
-@MainActor func applyConfigV2(_ rawTable: TOMLTable, _ config: inout Config, _ errors: inout [TomlParseError]) {
-    let mapping = config.keyMapping.resolve()
+@MainActor func applyConfigV2(_ rawTable: TOMLTable, _ config: inout Config, _ errors: inout [TomlParseError], _ mapping: [String: Key]) {
     var modes: [String: Mode] = [:]
 
     // Parsed here, once, whether or not there is a `mod`. It used to be read only inside
@@ -91,10 +90,10 @@ func workspaceKeyNotation(_ name: String) -> String? {
         modes[mainModeId] = generated
     }
     for (name, mode) in rawTable["keys"].map({ parseKeysTable($0, .rootKey("keys"), &errors, mapping) }) ?? [:] {
-        modes[name] = Mode(bindings: (modes[name]?.bindings ?? [:]) + mode.bindings)
+        modes[name] = merging(modes[name], mode.bindings)
     }
     for (name, mode) in config.modes {
-        modes[name] = Mode(bindings: (modes[name]?.bindings ?? [:]) + mode.bindings)
+        modes[name] = merging(modes[name], mode.bindings)
     }
     // v2 always HAS a main mode -- it is `[keys]`, plus whatever `mod` generated. Requiring the user
     // to declare it (as v1 does) would mean writing an empty section to say nothing.
@@ -156,8 +155,13 @@ func workspaceKeyNotation(_ name: String) -> String? {
             flat[key] = value
         }
     }
-    result[mainModeId] = Mode(bindings: (result[mainModeId]?.bindings ?? [:]) + parseBindings(flat, backtrace, &errors, mapping))
+    result[mainModeId] = merging(result[mainModeId], parseBindings(flat, backtrace, &errors, mapping))
     return result
+}
+
+/// `bindings` laid over `mode`: on a key both have, `bindings` wins.
+private func merging(_ mode: Mode?, _ bindings: [String: HotkeyBinding]) -> Mode {
+    Mode(bindings: (mode?.bindings ?? [:]) + bindings)
 }
 
 /// `[on-window]` is `[[on-window-detected]]` for its common case: one app id, one command.

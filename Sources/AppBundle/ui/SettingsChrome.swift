@@ -488,11 +488,6 @@ struct Banner: View {
         } catch {
             return "Could not create \(url.path(percentEncoded: false)): \(error.localizedDescription) Check that its folder exists and that you can write to it."
         }
-        // `ConfigFileWatcher.start()` bails when there is no user config to watch, and it ran at
-        // launch. Without re-arming here, the file just created is not watched, so the edit the user
-        // is about to make in that editor would never be picked up. Not under XCTest, where it would
-        // watch the developer's own config.
-        if !isUnitTest { ConfigFileWatcher.start() }
     }
     open(url)
     return nil

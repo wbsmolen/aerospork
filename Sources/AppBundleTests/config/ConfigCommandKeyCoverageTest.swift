@@ -23,7 +23,7 @@ final class ConfigCommandKeyCoverageTest: XCTestCase {
         //
         //   * the config v2 surface (`mod`, `workspaces`, `keys`, `monitors`, `on-window`) is input
         //     *sugar*: `parseConfigV2` desugars it into `mode` / `workspace-to-monitor-force-
-        //     assignment`, and the v1 parser binds it to `_deprecatedNoOp`. `config --get` reports
+        //     assignment`, and the v1 parser binds it to `_handledElsewhere`. `config --get` reports
         //     effective state, and the effective state IS those other keys.
         //   * the rest are deprecated no-ops that parse only so an old config still loads.
         //
