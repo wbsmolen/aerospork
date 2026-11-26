@@ -157,7 +157,7 @@ final class ConfigV2MigrationTest: XCTestCase {
             "showDockIcon": { $0.showDockIcon.toggle() },
         ]
         let exempt: [String: String] = [
-            "_deprecatedNoOp": "a Void sink for keys the table walker must not write; it holds nothing",
+            "_handledElsewhere": "a Void sink for keys the table walker must not write; it holds nothing",
             "persistentWorkspaces": "folding alt-1..9 into `workspaces` makes them persistent, deliberately",
         ]
         let fields = Mirror(reflecting: Config()).children.compactMap(\.label)

@@ -67,6 +67,22 @@ final class MonitorFingerprintTest: XCTestCase {
         assertEquals(pattern.heightPixels, 2160)
     }
 
+    /// Two spellings of one field used to let whichever came last win, silently. An error would reject
+    /// a config that loads today and cost every binding, so it warns.
+    func testDuplicateAliasWarnsAndStillLoads() {
+        var warnings: [TomlParseError] = []
+        guard case .success(let parsed) = parseConfig("[monitors]\n1 = { vendor = 1, vendor_id = '0x1', model = 2 }\n", warnings: &warnings),
+              case .fingerprint(let pattern)? = parsed.workspaceToMonitorForceAssignment["1"]?.first
+        else {
+            return XCTFail("a duplicated alias stopped the config from loading")
+        }
+        assertEquals(pattern.vendorID, 1)
+        assertEquals(pattern.modelID, 2)
+        assertEquals(warnings.count, 1)
+        let message = warnings.first?.description ?? ""
+        XCTAssertTrue(message.contains("vendor and vendor_id") || message.contains("vendor_id and vendor"), message)
+    }
+
     func testNameExactAndSubstringMatch() {
         let fp = MonitorFingerprint(displayName: "Built-in Retina Display")
         assertTrue(fp.matches(patternData: pattern(name: "Built-in Retina Display"))) // exact, case-insensitive

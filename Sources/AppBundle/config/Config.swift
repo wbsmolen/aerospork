@@ -88,7 +88,7 @@ struct Config: ConvenienceCopyable {
     var afterStartupCommand: [any Command] = []
     /// Sink for keys the generic table walker must not write: deprecated no-ops, and the v2 keys
     /// that are desugared by hand in `applyConfigV2`.
-    var _deprecatedNoOp: Void = ()
+    var _handledElsewhere: Void = ()
     var enableNormalizationFlattenContainers: Bool = true
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
