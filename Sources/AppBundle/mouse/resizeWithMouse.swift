@@ -24,6 +24,11 @@ func resizedObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: Unsaf
     }
 }
 
+/// Only the global mouse-up monitor cleared the flag, and a global monitor never sees a mouse-up that
+/// went to AeroSpork's own windows or was lost to a lock mid-drag. The window then stayed out of
+/// layout until the next click anywhere. A real drag keeps the button down, so it is never cut short.
+func shouldResetMouseManipulation(flag: Bool, buttonDown: Bool) -> Bool { flag && !buttonDown }
+
 @MainActor
 func resetManipulatedWithMouseIfPossible() async throws {
     if currentlyManipulatedWithMouseWindowId != nil {

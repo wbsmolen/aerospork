@@ -202,7 +202,8 @@ extension CGPoint {
     var monitorApproximation: Monitor {
         let monitors = monitors
         return monitors.first(where: { $0.rect.contains(self) })
-            ?? monitors.minByOrDie { distanceToRectFrame(to: $0.rect) }
+            ?? monitors.minBy { distanceToRectFrame(to: $0.rect) }
+            ?? mainMonitor // no screens at all (displays asleep, a DisplayLink dock mid-reconnect)
     }
 }
 

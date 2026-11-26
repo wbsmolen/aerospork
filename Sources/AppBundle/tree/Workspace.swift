@@ -320,6 +320,11 @@ func matchMonitors(
 @MainActor
 func rearrangeWorkspacesOnMonitors() {
     let monitors = monitors
+    // No screens is transient (displays asleep, a DisplayLink dock mid-reconnect). Rearranging onto
+    // nothing would make every workspace invisible and erase the UUID map, so the reconnect could
+    // only match by position. Here, not in a caller: `gcMonitors`, the monitor-change observer and
+    // `Monitor.activeWorkspace` all come through this function.
+    guard !monitors.isEmpty else { return }
     let newScreens = monitors.map(\.rect.topLeftCorner)
     let newUuids = monitors.map { $0.fingerprint?.displayUUID }
     let newScreenToOldScreenMapping = matchMonitors(
