@@ -48,8 +48,9 @@ public struct ConfigurationWindow: View {
             // running the bundled default keymap looks exactly like one running the user's config.
             if isRunningFallbackDefaults {
                 Banner(
-                    "Your config was not loaded — AeroSpork is running built-in defaults. Fix the errors below and save; the config reloads by itself.\n\(configLoadFailure ?? "")",
+                    "Your config was not loaded, so AeroSpork is running built-in defaults. Fix the error in Raw TOML or your editor; the config reloads by itself.\n\(configLoadFailure ?? "")",
                     kind: .error,
+                    action: showInRawToml,
                 )
             } else if !configWarnings.isEmpty {
                 Banner(configWarnings.joined(separator: "\n"), kind: .warning)
@@ -103,17 +104,7 @@ public struct ConfigurationWindow: View {
             // On every pane, Raw TOML included. Its inline status shows only the parse diagnostic of
             // the buffer; a failed Apply or Restore, or the changed-on-disk conflict, shows only here.
             if let error = viewModel.errorMessage {
-                VStack(spacing: 0) {
-                    Divider()
-                    StatusLabel(error, kind: .error)
-                        .textSelection(.enabled)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                }
-                .background(Banner.Kind.error.tint.opacity(0.13))
+                Banner(error, kind: .error, action: recovery(for: error), dividerEdge: .top)
             }
         }
         .task { await viewModel.loadConfiguration() }
@@ -123,6 +114,18 @@ public struct ConfigurationWindow: View {
         }
         // Flushed, not cancelled: closing the window inside the 600ms debounce used to drop the last edit.
         .onDisappear { Task { await viewModel.flushPendingAutoSave() } }
+    }
+
+    /// Raw TOML holds the file that failed to load, with the parser's error on it. None on that pane.
+    private var showInRawToml: (title: String, run: () -> Void)? {
+        guard selectedPane != .rawToml else { return nil }
+        return ("Show in Raw TOML", { selectedPaneID = SettingsPane.rawToml.rawValue })
+    }
+
+    /// The conflict's recovery works on every pane. It discards the edits, so its title says so.
+    private func recovery(for error: String) -> (title: String, run: () -> Void)? {
+        guard error == ConfigurationViewModel.diskConflictMessage else { return nil }
+        return ("Discard edits and load from disk", { viewModel.revertChanges() })
     }
 
     private func paneLabel(_ pane: SettingsPane) -> some View {

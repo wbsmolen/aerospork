@@ -423,10 +423,18 @@ struct Banner: View {
 
     let text: String
     let kind: Kind
+    /// The recovery, on the pane where the banner shows: name the state, then the way out. The title
+    /// says what the button does, including what it throws away.
+    let action: (title: String, run: () -> Void)?
+    /// The edge that meets the content: `.bottom` under the window's top edge, `.top` in the bottom
+    /// inset.
+    let dividerEdge: VerticalEdge
 
-    init(_ text: String, kind: Kind) {
+    init(_ text: String, kind: Kind, action: (title: String, run: () -> Void)? = nil, dividerEdge: VerticalEdge = .bottom) {
         self.text = text
         self.kind = kind
+        self.action = action
+        self.dividerEdge = dividerEdge
     }
 
     var body: some View {
@@ -441,11 +449,15 @@ struct Banner: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let action {
+                Button(action.title, action: action.run)
+                    .fixedSize()
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(kind.tint.opacity(0.13))
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: dividerEdge == .top ? .top : .bottom) { Divider() }
     }
 }
 

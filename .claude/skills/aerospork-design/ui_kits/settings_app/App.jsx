@@ -35,7 +35,7 @@ function SettingsApp({ framed = true, initialTab = 'general', banner = null, wid
     <React.Fragment>
       <TabBar tabs={TABS} value={tab} onChange={setTab} />
       <div className="tab-body">
-        {banner === 'error' && <Banner kind="error">{'Your config was not loaded — AeroSpork is running built-in defaults. Fix the errors below and save; the config reloads by itself.\nline 12: unknown key ‘mods’'}</Banner>}
+        {banner === 'error' && <Banner kind="error">{'Your config was not loaded, so AeroSpork is running built-in defaults. Fix the error in Raw TOML or your editor; the config reloads by itself.\nline 12: unknown key ‘mods’'}</Banner>}
         {tab === 'general' && <GeneralTab s={settings} set={set} />}
         {tab === 'gaps' && <GapsTab s={settings} set={set} />}
         {tab === 'keys' && <KeysTab bindings={bindings} setBindings={setBindings} />}

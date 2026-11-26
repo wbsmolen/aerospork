@@ -213,13 +213,17 @@ final class ConfigurationViewModel: ObservableObject {
                 guard let self else { return }
                 if self.hasUnsavedChanges || self.rawTomlEdited {
                     // Don't clobber what the user is in the middle of typing -- tell them instead.
-                    self.errorMessage = "The config file changed on disk. Revert to load it, or apply your changes to overwrite it."
+                    self.errorMessage = Self.diskConflictMessage
                 } else {
                     self.reloadFromConfig()
                 }
             }
         }
     }
+
+    /// Shown with "Discard edits and load from disk", which works on every pane. It used to name Revert
+    /// and Apply, which exist only on Raw TOML.
+    static let diskConflictMessage = "The config file changed on disk while you had unsaved edits."
 
     func revertChanges() {
         reloadFromConfig()

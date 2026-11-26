@@ -105,6 +105,24 @@ final class UIRenderSmokeTest: XCTestCase {
         render(RawTomlTab(viewModel: ConfigurationViewModel()), "Raw TOML (empty)")
     }
 
+    /// A banner with its recovery button, in both places it sits: under the window's top edge and in
+    /// the bottom inset.
+    func testBannerRendersWithAnAction() {
+        render(
+            Banner("Your config was not loaded.\nline 12: unknown key", kind: .error, action: ("Show in Raw TOML", {})),
+            "Banner with an action",
+        )
+        render(
+            Banner(
+                ConfigurationViewModel.diskConflictMessage,
+                kind: .error,
+                action: ("Discard edits and load from disk", {}),
+                dividerEdge: .top,
+            ),
+            "Bottom banner with an action",
+        )
+    }
+
     /// The connected-monitor list is empty on a headless runner, so render the geometry primitive
     /// directly with an asymmetric arrangement. That exercises scaling, negative origins, unequal
     /// panel sizes, ordering labels, and the highlighted main-display branch.
