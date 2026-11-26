@@ -81,9 +81,10 @@ func runSession<T>(
         let elapsed = Date().timeIntervalSince(startTime) * 1000
         debugLog("SESSION: Completed in \(String(format: "%.1f", elapsed))ms")
     }
-    refreshScheduler.sessionWillStart() // Give priority to runSession
-    defer { refreshScheduler.sessionDidEnd() }
+    let session = refreshScheduler.sessionWillStart() // Give priority to runSession
+    defer { refreshScheduler.sessionDidEnd(session) }
     let ticket = await sessionGate.enter()
+    refreshScheduler.sessionDidAcquireGate(session)
     defer { sessionGate.leave(ticket) }
     try checkCancellation() // superseded while queued, e.g. by the next step of a mouse drag
     return try await $refreshSessionEvent.withValue(event) {

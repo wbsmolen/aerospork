@@ -34,7 +34,12 @@ final class RefreshScheduler {
     private var timer: Task<Void, Never>?
     private var running: (id: Int, task: Task<Void, Never>, since: ContinuousClock.Instant)?
     private var nextRunId = 0
-    private var sessionsInFlight = 0
+    /// Sessions that have started and not ended, by id. Held ones carry when they got `sessionGate`; queued ones
+    /// are waiting for it. Keyed rather than counted: a session `abandonAfter` past its stamp is dropped, so one
+    /// body that awaits forever cannot stop refreshes for good, and its late `sessionDidEnd` removes nothing.
+    private var queuedSessions: Set<Int> = []
+    private var heldSessions: [Int: ContinuousClock.Instant] = [:]
+    private var nextSessionId = 0
 
     init(delay: Duration = .milliseconds(50), abandonAfter: Duration = .seconds(10), run: @escaping @MainActor (RefreshRequest) async -> Void) {
         self.delay = delay
@@ -50,22 +55,55 @@ final class RefreshScheduler {
     /// For quitting: what is already running must not write another frame.
     func cancelRunningRefresh() { running?.task.cancel() }
 
-    func sessionWillStart() {
-        sessionsInFlight += 1
+    /// Returns the session's id, for `sessionDidAcquireGate` and `sessionDidEnd`.
+    @discardableResult func sessionWillStart() -> Int {
+        let id = nextSessionId
+        nextSessionId &+= 1
+        queuedSessions.insert(id)
         timer?.cancel()
         timer = nil
         running?.task.cancel()
+        return id
     }
 
-    func sessionDidEnd() {
-        sessionsInFlight -= 1
+    /// Stamped here, not at `sessionWillStart`: a session queued behind a wedged one for about `abandonAfter`
+    /// would otherwise expire just as it got the gate, and a refresh could start under its body.
+    func sessionDidAcquireGate(_ id: Int) {
+        guard queuedSessions.remove(id) != nil else { return }
+        heldSessions[id] = .now
+        if pending != nil { restartTimer() } // so that this one never ending is noticed
+    }
+
+    func sessionDidEnd(_ id: Int) {
+        guard queuedSessions.remove(id) != nil || heldSessions.removeValue(forKey: id) != nil else { return } // dropped already
         if pending != nil { restartTimer() }
+    }
+
+    private var sessionsInFlight: Bool { !queuedSessions.isEmpty || !heldSessions.isEmpty }
+
+    private func dropAbandonedSessions() {
+        let now = ContinuousClock.now
+        for (id, since) in heldSessions where now - since > abandonAfter {
+            heldSessions.removeValue(forKey: id)
+            AppLog.session.error("a session did not end in time; refreshing without it")
+        }
     }
 
     private func restartTimer() {
         timer?.cancel()
         timer = nil
-        if sessionsInFlight > 0 { return } // `sessionDidEnd` restarts it
+        dropAbandonedSessions()
+        if sessionsInFlight {
+            // `sessionDidEnd` restarts it. Unless a held session never ends: look again once the oldest expires.
+            guard let oldest = heldSessions.values.min() else { return }
+            timer = Task { [abandonAfter] in
+                try? await Task.sleep(until: oldest + abandonAfter + .milliseconds(1), clock: .continuous)
+                if Task.isCancelled { return }
+                timer = nil
+                restartTimer()
+            }
+            return
+        }
         timer = Task { [delay] in
             try? await Task.sleep(for: delay)
             if Task.isCancelled { return }
@@ -83,7 +121,8 @@ final class RefreshScheduler {
             stale.task.cancel()
             running = nil
         }
-        guard sessionsInFlight == 0, running == nil, let request = pending else { return }
+        dropAbandonedSessions()
+        guard !sessionsInFlight, running == nil, let request = pending else { return }
         pending = nil
         let id = nextRunId
         nextRunId &+= 1
