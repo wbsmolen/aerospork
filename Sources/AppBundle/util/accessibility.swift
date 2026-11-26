@@ -148,14 +148,10 @@ enum Ax {
             return ($0.windowId, casted)
         } ?? [] },
     )
-    /// An app's windows going by its children, for an app whose `windowsAttr` says nothing. Its other
-    /// children are a menu bar and, for Finder, the desktop.
-    static let childWindowsAttr = ReadableAttrImpl<[WindowIdAndAxUiElement]>(
-        key: kAXChildrenAttribute,
-        getter: { ($0 as? NSArray)?.compactMap(windowOrNil).compactMap {
-            guard let casted = $0.ax.cast, casted.get(Ax.roleAttr) == kAXWindowRole else { return nil }
-            return ($0.windowId, casted)
-        } ?? [] },
+    /// The raw `kAXWindowsAttribute` list, with no window id read per element. `identifyWindows` names them.
+    static let windowElementsAttr = ReadableAttrImpl<[AXUIElement]>(
+        key: kAXWindowsAttribute,
+        getter: { ($0 as? NSArray)?.compactMap { castToAxUiElementMock($0 as AnyObject)?.cast } ?? [] },
     )
     static let childrenAttr = ReadableAttrImpl<[any AxUiElementMock]>(
         key: kAXChildrenAttribute,
@@ -225,6 +221,27 @@ private func windowOrNil(_ any: Any?) -> WindowIdAndAxUiElementMock? {
         return (windowId, potentialWindow)
     } else {
         return nil
+    }
+}
+
+/// Each element's window id, keeping only the elements that are windows. An element AeroSpork already tracks
+/// answers from `known`, a local `CFHash`/`CFEqual` lookup of tens of nanoseconds. Only a miss pays
+/// `containingWindowId()`, an `_AXUIElementGetWindow` IPC (about 71 µs, the whole `axMessagingTimeout` for a busy
+/// app), and only a miss is asked `isWindow`.
+///
+/// Safe because an element's window id never changes, and AppKit never hands a new window a dead window's element
+/// (dev-docs/performance.md item 22). It says which window an element is, never whether a window is alive: that
+/// stays with `isDestroyed()` and the `.cannotComplete` rule (#39).
+func identifyWindows<E: AxUiElementMock & Hashable>(
+    _ elements: [E],
+    known: [E: UInt32],
+    isWindow: (E) -> Bool = { _ in true },
+) -> [(windowId: UInt32, ax: E)] {
+    elements.compactMap { element in
+        if let id = known[element] { return (id, element) }
+        // Filters out non-window objects (e.g. Finder's desktop)
+        guard let id = element.containingWindowId(), isWindow(element) else { return nil }
+        return (id, element)
     }
 }
 

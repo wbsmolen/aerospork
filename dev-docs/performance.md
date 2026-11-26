@@ -234,6 +234,21 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     physical press. Not on the id alone: after a missed mouse-up it is stale. Measure: `get(_:)`
     intervals tagged `AXFocusedWindow` during a one-second drag; expect one instead of about 60.
 
+22. **A listed window AeroSpork already knows costs no window id read.** Reading an app's
+    `AXWindows` asked `_AXUIElementGetWindow` (about 71 µs, the whole `axMessagingTimeout` for a busy
+    app) for every element, for every app, on every refresh, and the session focus read asked it
+    again. `identifyWindows` looks each element up in the app's own windows first, by `CFHash` and
+    `CFEqual`, and asks only on a miss; Finder's child walk asks a role only on a miss too. The
+    record behind it is two read-only probes (`probeA.swift`, `probeB.swift` in the 2026-11
+    validation scratchpad): equality and hashing of `AXUIElement` cost about 47 ns and 27 ns, with no
+    IPC, and were stable across reads in Finder, Discord, Messages, Edge and T3 Code; over 300
+    create-and-close cycles AppKit never handed a new window a dead window's element, and no
+    element's window id changed. Residual risk: an AX server that is not AppKit and recycles element
+    tokens would show a new window as an old one until that app's windows change. Liveness is
+    untouched: a window off the list still goes through `isDestroyed()` (#39). Measure:
+    `containingWindowId` intervals per refresh with no window opening; expect zero instead of one
+    per listed window.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and
