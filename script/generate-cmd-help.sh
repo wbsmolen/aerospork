@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 source ./script/setup.sh
 
-out_file='./Sources/Common/cmdHelpGenerated.swift'
+# Prints Sources/Common/cmdHelpGenerated.swift. generate.sh writes it, only when it changed.
 
 cmd_prefix="aerospork"
 ____usage_prefix="   USAGE:"
@@ -11,7 +11,7 @@ ____strip_prefix="   "
 
 triple_quote='"""'
 
-cat << EOF > $out_file
+cat << EOF
 // FILE IS GENERATED FROM docs/aerospork-*.adoc files
 // TO REGENERATE THE FILE RUN generate.sh --all
 
@@ -29,5 +29,5 @@ for file in docs/aerospork-*.adoc; do
         sed     "s/^$____strip_prefix//" | \
         sed "1 s/^/let ${subcommand}_help_generated = $triple_quote\n/" | \
         sed "\$ s/$/\n\nSee: man $manpage\n${triple_quote}/" | \
-        sed '2,$ s/^./    &/' >> $out_file
+        sed '2,$ s/^./    &/'
 done
