@@ -13,6 +13,7 @@ final class WindowRuleCommandsTest: XCTestCase {
             "['move-node-to-monitor next']",
             "['layout floating', 'fullscreen on', 'move-node-to-monitor main']",
             "['layout tiling', 'move-node-to-workspace W']",
+            "['sticky on']",
         ] {
             assertEquals(errors(run), [], additionalMsg: run)
         }
@@ -50,7 +51,7 @@ final class WindowRuleCommandsTest: XCTestCase {
 
     /// A rule that toggles undoes itself when it runs a second time, so only the explicit `on`.
     func testFullscreenNeedsAnExplicitOn() {
-        for run in ["['fullscreen']", "['fullscreen off']"] {
+        for run in ["['fullscreen']", "['fullscreen off']", "['sticky']", "['sticky off']"] {
             XCTAssertTrue(errors(run).contains { $0.contains("are the only commands that are supported") }, run)
         }
     }

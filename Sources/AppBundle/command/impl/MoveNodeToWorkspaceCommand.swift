@@ -33,6 +33,8 @@ func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io:
         io.err(noopMessage("Window '\(window.windowId)' already belongs to workspace '\(targetWorkspace.name)'.", failIfNoop: failIfNoop))
         return !failIfNoop
     }
+    // Sent somewhere on purpose: following the screen would take it straight back.
+    window.isSticky = false
     let targetContainer: NonLeafTreeNodeObject = window.isFloating ? targetWorkspace : targetWorkspace.rootTilingContainer
     window.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: index)
     // A completed move is a success whether or not focus was asked to follow it. This used to

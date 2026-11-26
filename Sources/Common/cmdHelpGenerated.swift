@@ -193,6 +193,13 @@ let split_help_generated = """
 
     See: man aerospork-split
     """
+let sticky_help_generated = """
+    USAGE: sticky [-h|--help]     [--window-id <window-id>]
+       OR: sticky [-h|--help] on  [--window-id <window-id>] [--fail-if-noop]
+       OR: sticky [-h|--help] off [--window-id <window-id>] [--fail-if-noop]
+
+    See: man aerospork-sticky
+    """
 let summon_workspace_help_generated = """
     USAGE: summon-workspace [-h|--help] [--fail-if-noop] <workspace>
 

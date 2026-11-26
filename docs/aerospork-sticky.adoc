@@ -1,0 +1,86 @@
+= aerospork-sticky(1)
+include::util/man-attributes.adoc[]
+:manname: aerospork-sticky
+// tag::purpose[]
+:manpurpose: Keep a floating window on screen when its monitor switches workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospork sticky [-h|--help]     [--window-id <window-id>]
+aerospork sticky [-h|--help] on  [--window-id <window-id>] [--fail-if-noop]
+aerospork sticky [-h|--help] off [--window-id <window-id>] [--fail-if-noop]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+`sticky` makes a window follow the workspace that its monitor shows.
+When the monitor switches to another workspace, the window moves to that workspace and stays where it is on the screen, at its size.
+Use it for a video call, a picture-in-picture video or a music player that you want to see on every workspace.
+
+A sticky window is a floating window. `sticky on` floats a tiled window first.
+The window stops being sticky when you move it with `move-node-to-workspace` or `move-node-to-monitor`, or when you tile it.
+
+A minimized sticky window, or one of a hidden app, stays on the workspace where it was until it comes back.
+AeroSpork remembers which windows are sticky when it restarts.
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+
+--fail-if-noop::
+include::util/fail-if-noop-flag-desc.adoc[]
+Requires `on` or `off`.
+
+--window-id <window-id>::
+include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+on:: Make the window sticky.
+off:: Make the window stop being sticky. It stays floating on the workspace where it is.
+
+With neither argument, `sticky` toggles.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`sticky` exits 1 when no window is focused, and when `on` names a minimized window, a window in macOS fullscreen or a window of a hidden app.
+With `--fail-if-noop`, it also exits 1 when the window is already in the requested state.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Toggle sticky with a binding:
++
+[source,toml]
+----
+[keys]
+alt-shift-s = 'sticky'
+----
+
+* Make every picture-in-picture window sticky when it opens:
++
+[source,toml]
+----
+[[on-window-detected]]
+    if.window-title-regex-substring = '^picture.in.picture$'
+    run = 'sticky on'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-layout(1), aerospork-move-node-to-workspace(1), aerospork-move-node-to-monitor(1)
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

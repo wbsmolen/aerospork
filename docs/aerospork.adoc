@@ -40,7 +40,7 @@ Workspaces::
 aerospork-workspace(1), aerospork-workspace-back-and-forth(1), aerospork-summon-workspace(1)
 
 Windows::
-aerospork-close(1), aerospork-close-all-windows-but-current(1), aerospork-macos-native-fullscreen(1), aerospork-macos-native-minimize(1)
+aerospork-close(1), aerospork-close-all-windows-but-current(1), aerospork-macos-native-fullscreen(1), aerospork-macos-native-minimize(1), aerospork-sticky(1)
 
 Binding modes::
 aerospork-mode(1), aerospork-trigger-binding(1)

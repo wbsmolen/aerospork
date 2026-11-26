@@ -467,6 +467,26 @@ final class InvoluntaryFocusTest: XCTestCase {
         )
     }
 
+    /// A sticky window macOS still has focused follows the switch in the same refresh, so macOS naming it
+    /// afterwards is a window on the workspace the user went to: no adopt across workspaces, and nothing
+    /// recorded that could later explain a window death as macOS moving the user.
+    func testASwitchAwayFromAFocusedStickyWindowIsNotUndone() {
+        let here = Workspace.get(byName: "here")
+        let there = Workspace.get(byName: "there")
+        let sticky = TestWindow.new(id: 1, parent: here)
+        sticky.isSticky = true
+        TestWindow.new(id: 2, parent: there.rootTilingContainer)
+
+        updateFocusCache(sticky) // macOS and the model agree
+        XCTAssertTrue(there.focusWorkspace()) // the user switches workspace
+        refreshModel()
+        XCTAssertTrue(sticky.parent === there, "the test needs the sticky window to have followed")
+        updateFocusCache(sticky) // macOS still names the sticky window
+
+        assertEquals(focus.workspace.name, there.name, additionalMsg: "the sticky window dragged the user back")
+        XCTAssertNil(focusAdoptedAwayFrom, "following the screen was recorded as macOS moving the user")
+    }
+
     /// `closedWindowsCache` reapplies every monitor's visible workspace when a cached window is
     /// re-detected, so a cache that outlives a workspace switch silently undoes it later. Commands
     /// and clicks reset it; a switch that came from macOS -- adopted inside a refresh, where none of

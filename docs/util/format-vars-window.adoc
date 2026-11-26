@@ -1,3 +1,4 @@
 %{window-id}:: Number. The unique ID of the window.
 %{window-title}:: String. The window title.
 %{window-is-fullscreen}:: Boolean. True if `aerospork fullscreen` made the window fullscreen.
+%{window-is-sticky}:: Boolean. True if `aerospork sticky` made the window follow the workspace that its monitor shows.

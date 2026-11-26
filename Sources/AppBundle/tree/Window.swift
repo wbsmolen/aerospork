@@ -130,10 +130,15 @@ enum LayoutReason: Equatable {
 
 extension Window {
     /// "Floating" is not stored state -- it's just "bound directly to the workspace instead of to a
-    /// tiling container". That holds for every parent kind we have today. `sticky` (a window pinned
-    /// across all workspaces) would break it, but sticky is not implemented and not planned, so
-    /// there is nothing to design around yet.
+    /// tiling container". That holds for every parent kind we have today, sticky windows included: a
+    /// sticky window is a floating window that `followVisibleWorkspaces` rebinds.
     var isFloating: Bool { parent is Workspace }
+
+    /// Follows the workspace its monitor shows. See `followVisibleWorkspaces`.
+    @MainActor var isSticky: Bool {
+        get { stickyWindowIds.contains(windowId) }
+        set { if newValue { stickyWindowIds.insert(windowId) } else { stickyWindowIds.remove(windowId) } }
+    }
 
     @discardableResult
     @MainActor

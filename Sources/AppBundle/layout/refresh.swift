@@ -46,6 +46,9 @@ func runRefreshSessionBlocking(
         try await $_isStartup.withValue(event.isStartup) {
             MacApp.timedOutThisPass = []
             try await syncFocusFromMacOs()
+            // Before anything parks a sticky window. After cmd-tab to another workspace, the pre-layout below would
+            // park it and the full layout bring it back.
+            followVisibleWorkspaces()
 
             // Shows the workspace that became visible and parks what left the screen. Windows parked already wait for
             // the full layout below: their jobs would queue on each app's thread ahead of the enumeration `refresh()`.
@@ -151,6 +154,9 @@ struct RunSessionGuard: Sendable {
 
 @MainActor
 func refreshModel() {
+    // First: the collection below then releases a workspace whose only window was sticky, and the focus
+    // callbacks see the move together with the switch that caused it, not as a focus change of its own.
+    followVisibleWorkspaces()
     Workspace.garbageCollectUnusedWorkspaces()
     // Deliberately BEFORE layoutWorkspaces(), despite the temptation to move it after.
     //
@@ -166,6 +172,36 @@ func refreshModel() {
     // rejects a rect that is not on the target workspace's monitor (MoveMouseCommand.swift).
     checkOnFocusChangedCallbacks()
     normalizeContainers()
+}
+
+/// The windows `sticky` pinned, by id. Not cleared when a window is collected: the lock screen collects live
+/// windows, and they come back with the same id. Ids are never reused within a WindowServer session.
+/// ponytail: a closed sticky window costs one lookup per refresh until AeroSpork restarts; prune if that adds up.
+@MainActor var stickyWindowIds: Set<UInt32> = []
+
+/// Moves each sticky window off a workspace that left the screen, onto the one its monitor shows now, where it
+/// keeps its frame. Here rather than in `setActiveWorkspace`, which focus, monitor rearranges and the restores all
+/// call, sometimes halfway through rebuilding the tree: one pass per refresh covers every way the visible workspace
+/// changes. An empty set is the whole cost for anyone without a sticky window.
+@MainActor
+func followVisibleWorkspaces() {
+    for id in stickyWindowIds {
+        guard let window = Window.get(byId: id) else { continue }
+        switch window.parent {
+            case let workspace as Workspace:
+                if workspace.isVisible { continue }
+                let target = workspace.workspaceMonitor.activeWorkspace
+                if target == workspace { continue }
+                // Not the target's focus fallback, unless it has nothing else: the switch goes where it went before.
+                let mru = target.mostRecentWindowRecursive
+                window.bindAsFloatingWindow(to: target)
+                mru?.markAsMostRecentChild()
+            case is TilingContainer:
+                window.isSticky = false // tiled since: a sticky window is a floating one
+            default:
+                continue // minimized, hidden or native fullscreen: macOS has it, and `takeAwaySlot` brings it back
+        }
+    }
 }
 
 @MainActor
