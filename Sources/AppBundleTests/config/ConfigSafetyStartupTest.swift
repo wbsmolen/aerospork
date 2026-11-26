@@ -65,6 +65,24 @@ final class ConfigSafetyStartupTest: XCTestCase {
         assertEquals(url, defaultConfigUrl)
     }
 
+    /// With two configs, the search for the user's config fails. The forced read of the bundled default
+    /// ran that search first and failed the same way, and `initAppBundle` `check`s it: the app died at
+    /// startup. Now the defaults run, and the banner says why.
+    func testTheForcedDefaultReadSurvivesTwoConfigs() throws {
+        let first = try useTemporaryConfig("accordion-padding = 1\n", for: self)
+        let second = try useTemporaryConfig("accordion-padding = 2\n", for: self)
+        let twoConfigs = findCustomConfigUrl(among: [first, second])
+        guard case .ambiguousConfigError = twoConfigs else { return XCTFail("two configs were not ambiguous") }
+        configLoadFailure = nil
+
+        guard case .failure = readConfig(found: twoConfigs) else { return XCTFail("an ambiguous config loaded") }
+        guard case .success((_, let url)) = readConfig(forceConfigUrl: defaultConfigUrl, found: twoConfigs) else {
+            return XCTFail("the startup fallback failed, and initAppBundle would die")
+        }
+        configUrl = url
+        XCTAssertTrue(isRunningFallbackDefaults)
+    }
+
     /// A config that existed and could not be read loaded as "the defaults, successfully": no banner,
     /// and the log said the user's file had loaded. A Latin-1 file is the likely case.
     func testUnreadableConfigIsAFailureNotTheDefaults() throws {

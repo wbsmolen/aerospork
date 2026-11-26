@@ -2,37 +2,42 @@ import AppKit
 import Common
 import TOMLKit
 
+/// `found` stands in for the search for the user's config, so a test can hand it files of its own.
 @MainActor
-func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
-    if isUnitTest {
-        guard let url = forceConfigUrl ?? testConfigOverride else { return .failure("tests may not touch a real config") }
-        return readConfig(at: url)
+func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil) -> Result<(Config, URL), String> {
+    // Before the search, not after it. The forced read is `initAppBundle`'s fallback once the user's
+    // config failed, and it `check`s the result. When the search itself was what failed (two
+    // configs), the fallback failed the same way and the app died at startup.
+    if let forceConfigUrl { return readConfig(at: forceConfigUrl) }
+    let customConfig: ConfigFile
+    if let found {
+        customConfig = found
+    } else if isUnitTest {
+        guard let testConfigOverride else { return .failure("tests may not touch a real config") }
+        customConfig = .file(testConfigOverride)
+    } else {
+        customConfig = findCustomConfigUrl()
     }
-    let customConfigUrl: URL
-    let isUserConfig: Bool
-    switch findCustomConfigUrl() {
+    switch customConfig {
         case .file(let url):
-            customConfigUrl = url
-            isUserConfig = true
+            return readConfig(at: url)
         case .noCustomConfigExists:
-            customConfigUrl = defaultConfigUrl
-            isUserConfig = false
             // A migrating user's first launch: the config they brought is right there and not read,
             // so they get the default keymap and no hint why.
             if let hint = upstreamConfigLeftBehindHint() {
                 AppLog.config.notice("\(hint, privacy: .public)")
                 printStderr(hint)
             }
+            return readConfig(at: defaultConfigUrl, isUserConfig: false)
         case .ambiguousConfigError(let candidates):
             let msg = """
                 Ambiguous config error. Several configs found:
                 \(candidates.map(\.path).joined(separator: "\n"))
                 """
+            // Recorded like any other failure, so the defaults that run instead show the banner.
+            configLoadFailure = msg
             return .failure(msg)
     }
-    let configUrl: URL = forceConfigUrl ?? customConfigUrl
-    let finalIsUserConfig = forceConfigUrl != nil ? true : isUserConfig
-    return readConfig(at: configUrl, isUserConfig: finalIsUserConfig)
 }
 
 @MainActor
