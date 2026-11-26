@@ -34,6 +34,7 @@ let subcommandDescriptions = [
     ["  resize", "Resize the focused window"],
     ["  split", "Split the focused window, as i3 does"],
     ["  summon-workspace", "Bring a workspace to the focused monitor"],
+    ["  swap", "Swap the focused window with another window and keep the layout"],
     ["  trigger-binding", "Run a binding as if you pressed its keys"],
     ["  volume", "Change or mute the system output volume"],
     ["  workspace-back-and-forth", "Focus the workspace that had focus before"],

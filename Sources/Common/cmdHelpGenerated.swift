@@ -198,6 +198,12 @@ let summon_workspace_help_generated = """
 
     See: man aerospork-summon-workspace
     """
+let swap_help_generated = """
+    USAGE: swap [-h|--help] [--window-id <window-id>] [--swap-focus] [--wrap-around]
+                (left|down|up|right|dfs-next|dfs-prev)
+
+    See: man aerospork-swap
+    """
 let trigger_binding_help_generated = """
     USAGE: trigger-binding [-h|--help] <binding> --mode <binding-mode>
 

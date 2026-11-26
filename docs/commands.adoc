@@ -56,6 +56,16 @@ include::aerospork-move.adoc[tags=purpose]
 
 include::aerospork-move.adoc[tags=body]
 
+[#swap]
+=== swap
+----
+include::aerospork-swap.adoc[tags=synopsis]
+----
+include::aerospork-swap.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-swap.adoc[tags=body]
+
 [#move-node-to-workspace]
 === move-node-to-workspace
 ----

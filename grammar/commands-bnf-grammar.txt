@@ -68,6 +68,8 @@ aerospork -h;
 
     | summon-workspace [--fail-if-noop] <workspace> [--fail-if-noop]
 
+    | swap [--window-id <window_id>|--swap-focus|--wrap-around]... (left|down|up|right|dfs-next|dfs-prev) [--window-id <window_id>|--swap-focus|--wrap-around]...
+
     | trigger-binding <binding> --mode <binding_mode>
     | trigger-binding --mode <binding_mode> <binding>
 

@@ -31,7 +31,7 @@ Focus::
 aerospork-focus(1), aerospork-focus-back-and-forth(1), aerospork-focus-monitor(1)
 
 Move windows and workspaces::
-aerospork-move(1), aerospork-move-node-to-workspace(1), aerospork-move-node-to-monitor(1), aerospork-move-workspace-to-monitor(1), aerospork-move-mouse(1)
+aerospork-move(1), aerospork-swap(1), aerospork-move-node-to-workspace(1), aerospork-move-node-to-monitor(1), aerospork-move-workspace-to-monitor(1), aerospork-move-mouse(1)
 
 Layout::
 aerospork-layout(1), aerospork-join-with(1), aerospork-split(1), aerospork-resize(1), aerospork-balance-sizes(1), aerospork-flatten-workspace-tree(1), aerospork-fullscreen(1)
