@@ -7,10 +7,13 @@ public struct DebugWindowsCmdArgs: CmdArgs {
         help: debug_windows_help_generated,
         options: [
             "--window-id": ArgParser(\.windowId, upcastArgParserFun(parseArgWithUInt32)),
+            "--tree": trueBoolFlag(\.tree),
         ],
         arguments: [],
+        conflictingOptions: [["--tree", "--window-id"]],
     )
 
     /*conforms*/ public var windowId: UInt32?
     /*conforms*/ public var workspaceName: WorkspaceName?
+    public var tree: Bool = false
 }

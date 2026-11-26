@@ -10,6 +10,7 @@ include::util/man-attributes.adoc[]
 [verse]
 // tag::synopsis[]
 aerospork debug-windows [-h|--help] [--window-id <window-id>]
+aerospork debug-windows [-h|--help] --tree
 
 // end::synopsis[]
 
@@ -26,6 +27,9 @@ To record a session:
 . Focus the problem window, or make the window appear.
 . Run `aerospork debug-windows` again. The recording stops and the command prints what it recorded.
 
+`debug-windows --tree` prints, as JSON, what AeroSpork holds: each monitor and the workspace it shows, the tree of each workspace with its windows and the windows that macOS took out of the tiles, each app, and a list of the inconsistencies it found.
+It asks no app anything, so an app that does not answer cannot stop it.
+
 `debug-windows` is not a stable API.
 Do not rely on the command, or on its output format, in a script.
 
@@ -39,6 +43,9 @@ include::util/conditional-options-header.adoc[]
 --window-id <window-id>::
 Print the information for this window at once, with no recording session.
 
+--tree::
+Print the state of AeroSpork as JSON, with no recording session.
+
 // =========================================================== Exit status
 include::util/exit-status.adoc[]
 
@@ -49,6 +56,8 @@ include::util/conditional-examples-header.adoc[]
 
 * Save the information for one window to a file: +
 `aerospork debug-windows --window-id 1234 > window.txt`
+* Save the state of AeroSpork to a file: +
+`aerospork debug-windows --tree > tree.json`
 
 // =========================================================== See also
 include::util/conditional-see-also-header.adoc[]
