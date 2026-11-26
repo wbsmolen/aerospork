@@ -66,6 +66,36 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertTrue(perApp.contains("if nsApp.isGone {"), "an app that dies mid-pass is enumerated anyway")
     }
 
+    // MARK: - Accessibility revoked at runtime
+
+    /// Untrusted, a refresh could collect every window and save a memory file without them. A session
+    /// collects and saves nothing, and gating it would make every CLI query fail.
+    func testOnlyTheBackgroundRefreshWaitsForTrust() throws {
+        let refresh = try sourceBody("func runRefreshSessionBlocking(", in: "Sources/AppBundle/layout/refresh.swift")
+        let gate = try XCTUnwrap(refresh.range(of: "guard AXIsProcessTrusted() else { noteTrustLost(); return }"))
+        for later in ["try await syncFocusFromMacOs()", "try await refresh()", "WorkspaceMemory.save()"] {
+            let call = try XCTUnwrap(refresh.range(of: later), later)
+            XCTAssertLessThan(gate.lowerBound, call.lowerBound, "\(later) runs before the trust gate")
+        }
+        let session = try sourceBody("func runSession<T>(", in: "Sources/AppBundle/layout/refresh.swift")
+        XCTAssertFalse(session.contains("AXIsProcessTrusted"), "a session waits for trust, so the CLI stops answering")
+
+        let sweep = try sourceBody("static func startRegularAppSweep()", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(sweep.contains("|| trustBack {"), "nothing refreshes once trust is granted again")
+    }
+
+    func testARevokedTrustLogsOncePerEpisode() {
+        _ = noteTrustRegained(isTrusted: true) // whatever an earlier test left
+        XCTAssertFalse(noteTrustRegained(isTrusted: true), "no episode, nothing to refresh for")
+        XCTAssertTrue(noteTrustLost(), "the start of an episode is recorded")
+        XCTAssertFalse(noteTrustLost(), "a record per skipped refresh")
+        XCTAssertFalse(noteTrustRegained(isTrusted: false), "still revoked")
+        XCTAssertTrue(noteTrustRegained(isTrusted: true))
+        XCTAssertFalse(noteTrustRegained(isTrusted: true), "one refresh per episode")
+        XCTAssertTrue(noteTrustLost(), "a second revocation is a new episode")
+        _ = noteTrustRegained(isTrusted: true)
+    }
+
     // MARK: - An unanswered native-state read moves nothing
 
     /// Read as "neither", a timeout pulled a minimized window out of the minimized container and tiled

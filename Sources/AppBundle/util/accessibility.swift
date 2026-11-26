@@ -11,6 +11,27 @@ func checkAccessibilityPermissions() {
     }
 }
 
+/// Accessibility can be revoked while AeroSpork runs, and trust is checked only at startup. Untrusted, AX
+/// answers may read as "destroyed", and a refresh would collect every window and save a memory file
+/// without them. So the background refresh is skipped until trust returns. Sessions are not: they collect
+/// nothing and save nothing, and the CLI and status bars keep answering.
+@MainActor private var trustLost = false
+
+/// The background refresh found trust revoked. True, and one record, only at the start of an episode.
+@MainActor @discardableResult func noteTrustLost() -> Bool {
+    if trustLost { return false }
+    trustLost = true
+    AppLog.session.fault("Accessibility permission is revoked: windows are not refreshed until it is granted again")
+    return true
+}
+
+/// The 30 s sweep's half: true once, when trust is back after an episode, so the sweep refreshes.
+@MainActor func noteTrustRegained(isTrusted: Bool) -> Bool {
+    guard trustLost, isTrusted else { return false }
+    trustLost = false
+    return true
+}
+
 private func resetAccessibility() {
     _ = try? Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", aeroSporkAppId])
 }

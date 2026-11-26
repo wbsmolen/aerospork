@@ -505,7 +505,9 @@ final class MacApp: AbstractApp {
                 await MainActor.run {
                     // A gone app sends no events, so nothing else would refresh to collect its windows.
                     let anyGone = allAppsMap.values.contains { $0.nsApp.isGone }
-                    if noteRegularApps(regular) || anyGone { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
+                    // Nothing else says Accessibility was granted again, and refreshes skipped until then.
+                    let trustBack = noteTrustRegained(isTrusted: AXIsProcessTrusted())
+                    if noteRegularApps(regular) || anyGone || trustBack { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
                 }
             }
         }

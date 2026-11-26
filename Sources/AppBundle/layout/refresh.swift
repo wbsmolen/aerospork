@@ -40,6 +40,8 @@ func runRefreshSessionBlocking(
         debugLog("REFRESH: Completed blocking refresh in \(String(format: "%.1f", elapsed))ms")
     }
     if !TrayMenuModel.shared.isEnabled { return }
+    // Before anything collects windows or saves the memory file. See `noteTrustLost`.
+    guard AXIsProcessTrusted() else { noteTrustLost(); return }
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             MacApp.timedOutThisPass = []
