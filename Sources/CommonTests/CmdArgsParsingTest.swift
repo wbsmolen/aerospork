@@ -101,6 +101,13 @@ final class CmdArgsParsingTest: XCTestCase {
         assertNotNil(parse(["resize", "smart", "-50"], as: ResizeCmdArgs.self))
     }
 
+    /// The deprecated alias is registered through `parseMoveCmdArgs`, not a type of its own.
+    func testTheMoveThroughAliasStillParsesAsMove() {
+        let alias = parse(["move-through", "left"], as: MoveCmdArgs.self)
+        assertNotNil(alias)
+        assertEquals(alias, parse(["move", "left"], as: MoveCmdArgs.self))
+    }
+
     func testSingleValueOptionReportsAMissingValue() {
         assertFailure(parseCmdArgs(["list-workspaces", "--monitor", "all", "--format"]), "ERROR: <output-format> is mandatory")
     }

@@ -80,7 +80,6 @@ extension CmdArgs {
             case .workspaceBackAndForth:
                 command = WorkspaceBackAndForthCommand(args: self as! WorkspaceBackAndForthCmdArgs)
         }
-        check(command.info == Self.info)
         return command
     }
 }
