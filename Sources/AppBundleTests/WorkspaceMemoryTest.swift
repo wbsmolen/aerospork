@@ -962,6 +962,55 @@ final class WorkspaceMemoryTest: XCTestCase {
         assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1]), [:]) // closed, so gone for good
     }
 
+    /// A window minimized across a restart is unclaimed, and can be the only window on its workspace.
+    /// Its workspace must keep its monitor in the file, or the next restart restores the workspace onto
+    /// the main monitor: half a restore.
+    func testAnUnclaimedWindowKeepsItsWorkspaceMonitor() {
+        write(state(
+            session: WorkspaceMemory.session(),
+            windows: ["1": .init(workspace: "A", bundleId: "b"), "2": .init(workspace: "B", bundleId: "b")],
+            monitors: ["A": fingerprint(uuid: leftUuid), "B": fingerprint(uuid: rightUuid)],
+        ))
+        WorkspaceMemory.load()
+        _ = WorkspaceMemory.restoredWorkspace(forWindowId: 1, bundleId: "b")
+
+        let kept = WorkspaceMemory.keptWindowsAndMonitors(
+            live: ["1": .init(workspace: "A", bundleId: "b")],
+            unclaimed: WorkspaceMemory.unclaimedWindows(alive: [1, 2]),
+            liveMonitors: [:], // neither workspace is visible or holds a registered window
+            remembered: [
+                "A": fingerprint(uuid: leftUuid),
+                "B": fingerprint(uuid: rightUuid),
+                "C": fingerprint(uuid: leftUuid), // no window names it any more
+            ],
+        )
+
+        assertEquals(kept.windows["2"]?.workspace, "B")
+        assertEquals(kept.monitors["B"]?.displayUUID, rightUuid)
+        assertEquals(kept.monitors["A"]?.displayUUID, leftUuid)
+        assertEquals(kept.monitors["C"], nil)
+    }
+
+    /// A failed WindowServer read is not proof that every window died: away places and unclaimed entries stay.
+    func testAFailedWindowServerReadForgetsNothing() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: ["7": .init(workspace: "B", bundleId: "b")]))
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let away = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        away.leaveTilesForMacos(workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER)
+
+        WorkspaceMemory.forgetGoneAwayWindows(alive: nil)
+        assertEquals(workspace.rootTilingContainer.awayWindows.map(\.id), [2])
+        assertEquals(WorkspaceMemory.unclaimedWindows(alive: nil), ["7": .init(workspace: "B", bundleId: "b")])
+
+        // A read that worked and does not list them: gone for good.
+        WorkspaceMemory.forgetGoneAwayWindows(alive: [1])
+        assertEquals(workspace.rootTilingContainer.awayWindows.map(\.id), [])
+        assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1]), [:])
+    }
+
     /// The other half of the quit fix: a dragged floating window, on a monitor that isn't the first.
     func testDraggingAFloatingWindowToAnotherMonitorTakesItThere() async throws {
         setUpWorkspacesOnTheseMonitors()

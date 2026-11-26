@@ -380,41 +380,67 @@ enum WorkspaceMemory {
     /// says something actually changed.
     private static func fullState(_ key: CheapKey) -> State {
         let alive = windowServerWindowIds()
-        if !isUnitTest { for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { !alive.contains($0) } } }
-        var monitors = workspaceMonitors(for: Set(key.workspaceScreens.keys))
-        // Keep the remembered monitor for any workspace this snapshot cannot see yet. Dropping it
-        // would leave a restored window with its workspace and no monitor, which is precisely the
-        // half-restore that made the first version of this worse than no restore at all.
-        if let remembered = restored {
-            for (name, fingerprint) in remembered.workspaceMonitors where monitors[name] == nil {
-                if key.windows.values.contains(where: { $0.workspace == name }) {
-                    monitors[name] = fingerprint
-                }
-            }
-        }
+        if !isUnitTest { forgetGoneAwayWindows(alive: alive) }
+        let kept = keptWindowsAndMonitors(
+            live: key.windows,
+            unclaimed: unclaimedWindows(alive: alive),
+            liveMonitors: workspaceMonitors(for: Set(key.workspaceScreens.keys)),
+            remembered: restored?.workspaceMonitors ?? [:],
+        )
         return State(
             session: session(),
-            windows: key.windows.merging(unclaimedWindows(alive: alive)) { live, _ in live },
-            workspaceMonitors: monitors,
+            windows: kept.windows,
+            workspaceMonitors: kept.monitors,
             visibleWorkspaces: key.visibleWorkspaces,
             trees: key.trees,
         )
+    }
+
+    /// The windows to write, and the monitor of each workspace they name.
+    ///
+    /// Keeps the remembered monitor for any workspace this snapshot cannot see yet. Dropping it would
+    /// leave a restored window with its workspace and no monitor, which is precisely the half-restore
+    /// that made the first version of this worse than no restore at all. Unclaimed windows count: a
+    /// window that stays minimized across a restart is the only thing on its workspace, and checking
+    /// only the live windows wrote its workspace without that workspace's monitor.
+    static func keptWindowsAndMonitors(
+        live: [String: WindowEntry],
+        unclaimed: [String: WindowEntry],
+        liveMonitors: [String: MonitorFingerprint],
+        remembered: [String: MonitorFingerprint],
+    ) -> (windows: [String: WindowEntry], monitors: [String: MonitorFingerprint]) {
+        let windows = live.merging(unclaimed) { live, _ in live }
+        let named = Set(windows.values.map(\.workspace))
+        return (windows, liveMonitors.merging(remembered.filter { named.contains($0.key) }) { live, _ in live })
+    }
+
+    /// Drops the place of every away window that no longer exists. `nil` means WindowServer could not
+    /// be read, and a failure to look is not proof that anything died -- the same mistake `load()`
+    /// guards against for the session token -- so nothing is dropped.
+    static func forgetGoneAwayWindows(alive: Set<UInt32>?) {
+        guard let alive else { return }
+        for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { !alive.contains($0) } }
     }
 
     /// Remembered windows that haven't come back but still exist.
     ///
     /// A minimized window isn't in its app's window list, so after a restart nothing registers it until it
     /// is unminimized. It gets its place back then, but leaving it out of the file lost that place at the
-    /// next restart. Ids are never reused within a session, so one that is gone is gone for good.
-    static func unclaimedWindows(alive: Set<UInt32>) -> [String: WindowEntry] {
-        restored?.windows.filter { UInt32($0.key).map(alive.contains) == true } ?? [:]
+    /// next restart. Ids are never reused within a session, so one that is gone is gone for good. With no
+    /// answer from WindowServer (`nil`), every one is kept: an unread list is not an empty one.
+    static func unclaimedWindows(alive: Set<UInt32>?) -> [String: WindowEntry] {
+        guard let alive else { return restored?.windows ?? [:] }
+        return restored?.windows.filter { UInt32($0.key).map(alive.contains) == true } ?? [:]
     }
 
-    /// Only when something changed, like the rest of `fullState`. Not under test, where a real window's id
-    /// could match a made-up one.
-    private static func windowServerWindowIds() -> Set<UInt32> {
-        guard !isUnitTest, let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] else { return [] }
-        return Set(list.compactMap { ($0[kCGWindowNumber] as? Int).map(UInt32.init) })
+    /// Only when something changed, like the rest of `fullState`. Empty under test, where a real window's
+    /// id could match a made-up one. `nil` when the read fails: WindowServer always lists some window (the
+    /// menu bar, the Dock), so an empty list is a failed read too.
+    private static func windowServerWindowIds() -> Set<UInt32>? {
+        if isUnitTest { return [] }
+        guard let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] else { return nil }
+        let ids = Set(list.compactMap { ($0[kCGWindowNumber] as? Int).map(UInt32.init) })
+        return ids.isEmpty ? nil : ids
     }
 
     /// The fingerprint of each named workspace's monitor.
