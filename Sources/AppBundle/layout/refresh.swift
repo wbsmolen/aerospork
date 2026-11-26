@@ -165,6 +165,9 @@ func refreshModel() {
 
 @MainActor
 private func refresh() async throws {
+    if shouldResetMouseManipulation(flag: currentlyManipulatedWithMouseWindowId != nil, buttonDown: isLeftMouseButtonDown) {
+        try await resetManipulatedWithMouseIfPossible()
+    }
     let mapping = try await MacApp.refreshAllAndGetAliveWindowIds(frontmostAppBundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
     // Set, not Array: this is membership-tested once per window below, so an Array made it O(W^2).
     let aliveWindowIds = Set(mapping.values.flatMap { $0 })
