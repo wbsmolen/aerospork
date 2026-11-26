@@ -40,6 +40,8 @@ func runRefreshSessionBlocking(
         debugLog("REFRESH: Completed blocking refresh in \(String(format: "%.1f", elapsed))ms")
     }
     if !TrayMenuModel.shared.isEnabled { return }
+    // Before anything collects windows or saves the memory file. See `noteTrustLost`.
+    guard AXIsProcessTrusted() else { noteTrustLost(); return }
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             MacApp.timedOutThisPass = []
@@ -172,10 +174,17 @@ private func refresh() async throws {
     // Set, not Array: this is membership-tested once per window below, so an Array made it O(W^2).
     let aliveWindowIds = Set(mapping.values.flatMap { $0 })
 
+    var collected = 0
     for window in MacWindow.allWindows {
         if !aliveWindowIds.contains(window.windowId) {
             window.garbageCollect(skipClosedWindowsCache: false)
+            collected += 1
         }
+    }
+    // Whether lock-aware GC is needed at all: one record if windows die while the screen is locked. A query,
+    // not a flag kept from notifications, which one missed unlock would leave stuck. About 0.3 ms, so only here.
+    if collected > 0, (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] != nil {
+        AppLog.session.notice("collected \(collected, privacy: .public) windows while the screen is locked")
     }
     for (app, windowIds) in mapping {
         for windowId in windowIds {

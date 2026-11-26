@@ -79,6 +79,26 @@ final class FocusCommandTest: XCTestCase {
         assertEquals(focus.windowOrNil?.windowId, 1)
     }
 
+    /// Minimizing the last window of an undeclared workspace lets GC collect it. Bringing the window back
+    /// re-created it with no monitor, so it reported `mainMonitor` and focus jumped displays.
+    func testAMinimizedWindowWhoseWorkspaceWasCollectedComesBackOnTheFocusedMonitor() async throws {
+        let left = MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "left", rect: Rect(topLeftX: 0, topLeftY: 0, width: 1000, height: 1000), visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1000, height: 1000))
+        let right = MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "right", rect: Rect(topLeftX: 1000, topLeftY: 0, width: 1000, height: 1000), visibleRect: Rect(topLeftX: 1000, topLeftY: 0, width: 1000, height: 1000))
+        testMonitors = [left, right]
+        defer { testMonitors = [defaultTestMonitor] }
+        let onRight = Workspace.get(byName: "right")
+        check(right.setActiveWorkspace(onRight))
+        check(onRight.focusWorkspace())
+        let window = TestWindow.new(id: 1, parent: macosMinimizedWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: "gone")
+
+        try await window.exitMacosMinimizedOrHidden()
+
+        XCTAssertNil(Workspace.existing(byName: "gone"), "bringing a window back re-created a collected workspace")
+        XCTAssertTrue(window.nodeWorkspace === focus.workspace)
+        XCTAssertEqual(window.nodeMonitor?.rect.topLeftX, right.rect.topLeftX, "the window came back on another monitor")
+    }
+
     /// Through the command, because resolving a target fails on a minimized window, and it has to be
     /// brought back before that. Found live: the method alone passed and the command still failed.
     func testTheCommandBringsAMinimizedWindowBackBeforeResolvingIt() throws {

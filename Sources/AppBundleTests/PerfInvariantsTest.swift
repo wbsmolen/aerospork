@@ -163,6 +163,25 @@ final class PerfInvariantsTest: XCTestCase {
         }
     }
 
+    /// `AppLog` is unconditional and kept by the unified log, so a monitor record belongs where the monitor
+    /// set really changed, and never in `gcMonitors`, which every refresh runs.
+    func testTheMonitorNoticeIsWrittenOnlyWhenTheSetChanges() throws {
+        let apply = try sourceBody("private static func applyMonitorConfigurationChange()", in: "Sources/AppBundle/GlobalObserver.swift")
+        let branch = try XCTUnwrap(declarationBody("if signature != lastMonitorSignature {", in: apply), "the change branch is gone or no longer a block")
+        XCTAssertTrue(branch.contains("AppLog.session.notice(\"monitor set changed: "))
+        XCTAssertEqual(apply.components(separatedBy: "AppLog.").count - 1, 1, "a monitor record outside the change branch")
+        let gc = try sourceBody("func gcMonitors()", in: "Sources/AppBundle/tree/Workspace.swift")
+        XCTAssertFalse(gc.contains("AppLog"), "a record on every refresh")
+    }
+
+    /// The session query costs about 0.3 ms, so it runs only when a refresh did collect a window.
+    func testTheLockedQueryRunsOnlyWhenWindowsWereCollected() throws {
+        let refresh = try sourceBody("private func refresh() async throws", in: "Sources/AppBundle/layout/refresh.swift")
+        XCTAssertEqual(refresh.components(separatedBy: "CGSessionCopyCurrentDictionary()").count - 1, 1)
+        let line = try XCTUnwrap(refresh.split(separator: "\n").first { $0.contains("CGSessionCopyCurrentDictionary()") })
+        XCTAssertTrue(line.contains("if collected > 0, (CGSessionCopyCurrentDictionary()"), "the query no longer waits for a collection: \(line)")
+    }
+
     /// In a debug build on macOS 27 a fresh system font was now and then a broken object, and CoreText raised
     /// an uncatchable exception on it. Asking once per row per redraw took the app down within a few pane
     /// switches. What draws by hand keeps its fonts.
