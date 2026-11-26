@@ -2115,6 +2115,14 @@ const {
   MenuPanel,
   Icon
 } = window.AeroSporkDesignSystem_078bd7;
+const HINT_LINK = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--brand-focused)',
+  cursor: 'pointer',
+  fontSize: 11,
+  fontFamily: 'var(--font-system)'
+};
 const WORKSPACES = {
   '1': [{
     title: 'Ghostty',
@@ -2185,17 +2193,38 @@ function MenuBarKit() {
   const [open, setOpen] = React.useState(false);
   const [enabled, setEnabled] = React.useState(true);
   const [mode, setMode] = React.useState(null);
+  const [configFailed, setConfigFailed] = React.useState(false);
+  // A debug build has no update feed, so the Swift hides the row there (`Updater.shared.isEnabled`).
+  const canCheckForUpdates = true;
   const gap = 8;
   const wins = WORKSPACES[workspace];
-  const chips = [...Object.keys(WORKSPACES).map(n => ({
-    name: n,
-    active: n === workspace
-  })), ...(mode ? [{
+  // The mode chip comes first, as in TrayMenuModel.
+  const chips = [...(mode ? [{
     name: mode,
     type: 'mode',
     active: true
-  }] : [])];
-  const items = [...(mode ? [{
+  }] : []), ...Object.keys(WORKSPACES).map(n => ({
+    name: n,
+    active: n === workspace
+  }))];
+  const items = [...(configFailed ? [{
+    label: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Icon, {
+      sf: "exclamationmark.octagon.fill",
+      size: 12,
+      style: {
+        marginRight: 6
+      }
+    }), "Config not loaded \u2014 running defaults"),
+    disabled: true
+  }, {
+    label: 'Show config error…',
+    onClick: () => {
+      setOpen(false);
+      window.alert('AeroSpork config error\n\n~/.aerospork.toml: line 12: unknown key "gapz"');
+    }
+  }, {
+    divider: true
+  }] : []), ...(mode ? [{
     label: 'Leave “' + mode + '” mode',
     onClick: () => {
       setMode(null);
@@ -2229,7 +2258,10 @@ function MenuBarKit() {
       window.open('../settings_app/index.html', '_blank');
       setOpen(false);
     }
-  }, {
+  }, ...(canCheckForUpdates ? [{
+    label: 'Check for updates…',
+    onClick: () => setOpen(false)
+  }] : []), {
     label: 'Quit AeroSpork',
     shortcut: '⌘Q',
     onClick: () => setOpen(false)
@@ -2332,15 +2364,14 @@ function MenuBarKit() {
       e.stopPropagation();
       setMode('service');
     },
-    style: {
-      background: 'none',
-      border: 'none',
-      color: 'var(--brand-focused)',
-      cursor: 'pointer',
-      fontSize: 11,
-      fontFamily: 'var(--font-system)'
-    }
-  }, "Enter \u201Cservice\u201D mode")));
+    style: HINT_LINK
+  }, "Enter \u201Cservice\u201D mode"), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setConfigFailed(!configFailed);
+    },
+    style: HINT_LINK
+  }, configFailed ? 'Fix the config' : 'Break the config')));
 }
 Object.assign(window, {
   MenuBarKit
