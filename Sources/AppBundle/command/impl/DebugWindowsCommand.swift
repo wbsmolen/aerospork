@@ -96,7 +96,7 @@ private func dumpWindowDebugInfo(_ window: Window) async throws -> String {
     result["Aero.AxUiElementWindowType_isDialogHeuristic"] = .newOrDie(isDialog)
 
     var matchingCallbacks: [Json] = []
-    for callback in config.onWindowDetected where try await callback.matches(window) {
+    for callback in config.onWindowDetected where try await callback.matches(window, title: { try await window.title }) {
         matchingCallbacks.append(callback.debugJson)
     }
     result["Aero.on-window-detected"] = .array(matchingCallbacks)

@@ -194,6 +194,46 @@ These are mechanically verified work eliminations, not end-to-end timing claims:
     menu. Syntax diagnostics feed the ruler's existing visible-line draw, so the error marker adds no
     second document scan while scrolling.
 
+### 2026-11 runtime pass
+
+Work eliminations counted through the mocks and pinned by tests, not timed. Each names what to measure.
+
+17. **Parking a tiled window reads nothing.** `hideInCorner` used to await a frame read for every window
+    leaving the screen, one window at a time, before `runSession` pushed focus, only to record a
+    position that matters once a window turns floating. A tiled window that layout has placed, of an
+    app that has answered this pass, now takes that position from `lastAppliedLayoutPhysicalRect`
+    (`parkNeedsFrameRead`). Floating and never-laid-out windows still read, and a timed-out app's
+    window is still left alone. Measure: `runSession` interval, and `get(_:)` intervals, per workspace
+    switch away from a workspace of N tiled windows; expect N fewer awaited round trips before focus.
+
+18. **The pre-layout parks only what is not parked yet.** App activation and mouse-up lay out twice
+    (`optimisticallyPreLayoutWorkspaces`). The first pass re-queued a hide job for every parked window
+    of every hidden workspace, ahead of the enumeration job `refresh()` sends next to the same app
+    threads. It now passes `parkOnlyUnparked: true`; the second, full layout is unchanged and still
+    re-checks every parked window. Measure: `runRefreshSessionBlocking` interval for a refresh caused
+    by a cmd-tab, with several windows on hidden workspaces.
+
+19. **Layout resolves the workspace's monitor once per pass.** `LayoutContext.monitor`, the same local
+    hoist as `updateTrayText`, not the reverted global cache under "Known remaining items". Each
+    `workspaceMonitor` of a visible workspace rebuilt `monitors` from `NSScreen.screens`, and a pass
+    asked it per tiled window. Measure: Time Profiler samples under `layoutWorkspace` with many
+    windows and two or more monitors; expected to be microseconds per window.
+
+20. **Registration reads a new window's subrole once, and its title once per rule pass.**
+    `getWindowType` hands one lazily read subrole to both heuristics, which each read it before. A
+    window's title is read at most once per `onWindowDetected`, however many title rules there are.
+    The parallel registration prefetch the same report proposed is deferred until a measurement of
+    the first `REFRESH: Completed` after a restart, warm against cold, shows per-window registration
+    reads dominate: it reorders AX reads against the commands rules run. Measure: `get(_:)` intervals
+    tagged `AXSubrole` and `AXTitle` per new window.
+
+21. **An established drag does not re-read the focused window.** `isManipulatedWithMouse` read it
+    on every moved or resized event, about 60 a second. It now skips the read while the drag id
+    names the window and the system's left mouse-down counter
+    (`CGEventSource.counterForEventType`) is the one the check last passed with, so the same
+    physical press. Not on the id alone: after a missed mouse-up it is stale. Measure: `get(_:)`
+    intervals tagged `AXFocusedWindow` during a one-second drag; expect one instead of about 60.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and
@@ -233,12 +273,21 @@ many alternating trials from a warm process, or Instruments.
 - **`util/RefreshScheduler.swift`.** A session still discards in-flight refresh work when it starts,
   on purpose. Events no longer do, so the reason the max-wait ceiling above could not be re-added is
   gone. Add it only with a measurement showing starvation actually happens.
-- **Batching AX attribute reads.** `AXUIElementCopyMultipleAttributeValues` is the right primitive
-  and is not used. A previous attempt (`AxBatchFetcher`) was deleted rather than wired in: it was
-  broken (`as? CGPoint` on an `AXValue` is always nil) and its `.stopOnError` mode would have been a
-  pessimization: one absent attribute such as `AXFullScreen` falls back to eight individual reads,
-  slower than not batching at all. `normalizeLayoutReason` now takes one round trip per window
-  rather than two, which captured most of the available win without the batching API.
+- **Batching AX attribute reads.** `AXUIElementCopyMultipleAttributeValues` is the right primitive.
+  A previous attempt (`AxBatchFetcher`) was deleted rather than wired in: it was broken (`as? CGPoint`
+  on an `AXValue` is always nil) and its `.stopOnError` mode would have been a pessimization: one
+  absent attribute such as `AXFullScreen` falls back to eight individual reads, slower than not
+  batching at all. `normalizeLayoutReason` now takes one round trip per window rather than two,
+  which captured most of the available win without the batching API.
+
+  It is now used for position plus size only: `AxUiElementMock.getFrame()` with options `[]`, never
+  `.stopOnError`, behind the two-sided `isFrameSatisfied`, the parking guard (`parkAxWindow`) and
+  `axRect`. A probe measured one batched read at the cost of one single read (41-131 µs against
+  35-135 µs). A failed slot decodes to nil through the existing getters. `getFrame` must stay a
+  protocol requirement, or the generic guards dispatch statically to the two-read default
+  (`AxWriteTest.testGuardReadsTheFrameOnceThroughTheElementsOwnBatch`). The batch is signposted as
+  `get(_:)`, so to measure it, count `get(_:)` intervals per workspace switch before and after: a
+  parked window should go from two to one per layout. **Not measured end to end.**
 - **Regression coverage is structural, not timing-based.** `PerfInvariantsTest` pins the algorithmic
   properties (workspace GC, the tray publish guard, `aliveWindowIds` being a `Set`, the `debugLog`
   autoclosure) and `AxWriteTest` counts AX operations through the mock. Neither measures wall clock,

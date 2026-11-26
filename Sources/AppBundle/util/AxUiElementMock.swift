@@ -31,6 +31,21 @@ protocol AxUiElementMock {
     /// failures mean opposite things. Answering it needs the `AXError` itself, which only a real
     /// `AXUIElement` has.
     func isDestroyed() -> Bool
+
+    /// Position and size, in one round trip on a real `AXUIElement`. Either is nil when unreadable.
+    ///
+    /// A requirement, not only an extension method, and that is load-bearing: inside a
+    /// `some AxUiElementMock` generic such as `isFrameSatisfied`, an extension-only method dispatches
+    /// statically to the default below, so `AXUIElement`'s batch would never run and every test would
+    /// still pass. `AxWriteTest.testGuardReadsTheFrameOnceThroughTheElementsOwnBatch` fails if it slips back.
+    func getFrame() -> (topLeft: CGPoint?, size: CGSize?)
+}
+
+extension AxUiElementMock {
+    /// Two reads. What every test double gets unless it implements the batch itself.
+    func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
+        (get(Ax.topLeftCornerAttr), get(Ax.sizeAttr))
+    }
 }
 
 extension AxUiElementMock {

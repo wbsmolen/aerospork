@@ -5,7 +5,8 @@ extension Workspace {
     @MainActor
     func layoutWorkspace() async throws {
         if isEffectivelyEmpty { return }
-        let rect = workspaceMonitor.visibleRectPaddedByOuterGaps
+        let context = LayoutContext(self)
+        let rect = context.monitor.visibleRectPaddedByOuterGaps
         // Use the whole rect. This was `rect.height - 1` from the initial import -- a 1px dead row at
         // the bottom of every workspace, meant to stop a frame exactly filling the monitor, which
         // upstream believed macOS sometimes refused ("monitors aligned vertically and the monitor
@@ -19,7 +20,7 @@ extension Workspace {
         // 3840x2160 panels "refuse the top 30pt" was a measurement artifact: NSScreen.visibleFrame
         // only reports the menu-bar inset once NSApp exists, so a probe that skipped that read
         // visibleFrame == frame and mistook the menu bar for a clamp.
-        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: rect, LayoutContext(self))
+        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: rect, context)
     }
 }
 
@@ -51,8 +52,7 @@ extension TreeNode {
                         lastAppliedLayoutPhysicalRect = physicalRect
                         let tile = CGSize(width: width, height: height)
                         let size = window.observedMinSize.map { CGSize(width: max(width, $0.width), height: max(height, $0.height)) } ?? tile
-                        let monitor = context.workspace.workspaceMonitor.visibleRect
-                        window.setAxFrame(size == tile ? point : keptInside(monitor, point, size), size)
+                        window.setAxFrame(size == tile ? point : keptInside(context.monitor.visibleRect, point, size), size)
                     }
                 }
             case .tilingContainer(let container):
@@ -73,12 +73,17 @@ extension TreeNode {
 
 private struct LayoutContext {
     let workspace: Workspace
+    /// Resolved once per pass: each `workspaceMonitor` walks `NSScreen.screens`, and a pass asked it per window.
+    /// A local hoist, not the reverted global monitor cache (dev-docs/performance.md). A monitor change in the
+    /// middle of a pass finishes on the old geometry; the monitor-change debounce lays out again anyway.
+    let monitor: Monitor
     let resolvedGaps: ResolvedGaps
 
     @MainActor
     init(_ workspace: Workspace) {
         self.workspace = workspace
-        self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: workspace.workspaceMonitor)
+        self.monitor = workspace.workspaceMonitor
+        self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: monitor)
     }
 }
 
@@ -92,7 +97,7 @@ extension Window {
             let xProportion = (windowTopLeftCorner.x - currentMonitor.visibleRect.topLeftX) / currentMonitor.visibleRect.width
             let yProportion = (windowTopLeftCorner.y - currentMonitor.visibleRect.topLeftY) / currentMonitor.visibleRect.height
 
-            let moveTo = workspace.workspaceMonitor
+            let moveTo = context.monitor
             setAxTopLeftCorner(CGPoint(
                 x: moveTo.visibleRect.topLeftX + xProportion * moveTo.visibleRect.width,
                 y: moveTo.visibleRect.topLeftY + yProportion * moveTo.visibleRect.height,
@@ -108,8 +113,8 @@ extension Window {
     @MainActor
     fileprivate func layoutFullscreen(_ context: LayoutContext) {
         let monitorRect = noOuterGapsInFullscreen
-            ? context.workspace.workspaceMonitor.visibleRect
-            : context.workspace.workspaceMonitor.visibleRectPaddedByOuterGaps
+            ? context.monitor.visibleRect
+            : context.monitor.visibleRectPaddedByOuterGaps
         setAxFrame(monitorRect.topLeftCorner, CGSize(width: monitorRect.width, height: monitorRect.height))
     }
 }

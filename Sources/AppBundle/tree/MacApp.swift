@@ -38,6 +38,26 @@ final class MacApp: AbstractApp {
     /// the rest of the pass skips the app. Cleared when a pass starts, so an app that recovers is asked
     /// again at once.
     @MainActor static var timedOutThisPass: Set<pid_t> = []
+    /// Since when each app's window list has gone unanswered, and whether that episode has its record yet.
+    /// `timedOutThisPass` forgets every pass, so a stopped app left no trace in the logs.
+    @MainActor private(set) static var unansweredSince: [pid_t: (since: Date, logged: Bool)] = [:]
+    private static let unansweredLogAfter: TimeInterval = 60
+
+    /// Notes whether an app answered its window-list read. True once per episode, when it has gone unanswered
+    /// for a minute; an answer ends the episode. Never per refresh, since `AppLog` is kept (#logging).
+    @MainActor static func noteAnswer(pid: pid_t, answered: Bool, now: Date) -> Bool {
+        if answered {
+            unansweredSince.removeValue(forKey: pid)
+            return false
+        }
+        guard let episode = unansweredSince[pid] else {
+            unansweredSince[pid] = (now, false)
+            return false
+        }
+        if episode.logged || now.timeIntervalSince(episode.since) < unansweredLogAfter { return false }
+        unansweredSince[pid]?.logged = true
+        return true
+    }
 
     /*conforms*/ let name: String? // Kept: reading `localizedName` asks LaunchServices, and the menu bar lists every window's app per refresh.
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
@@ -70,7 +90,15 @@ final class MacApp: AbstractApp {
     /// app is tiled before the user notices), doubling to a 30s ceiling for apps that simply have
     /// no usable AX interface. At the ceiling that is ~1 probe/30s instead of ~20/s under the 50ms
     /// refresh debounce.
-    @MainActor private static var failedPids: [pid_t: (nextAttempt: Date, backoff: TimeInterval, launchDate: Date?)] = [:]
+    ///
+    /// Not private: the tests plant an entry for a dead pid, to check `forgetFailedRegistrationsOfGoneProcesses`.
+    @MainActor static var failedPids: [pid_t: (nextAttempt: Date, backoff: TimeInterval, launchDate: Date?)] = [:]
+
+    /// An entry leaves `failedPids` on a success or a pid reuse, so one for a process that exited stayed forever.
+    /// A `kill(pid, 0)` per entry: not only the pass's `gone` set, which misses a process LaunchServices dropped.
+    @MainActor static func forgetFailedRegistrationsOfGoneProcesses() {
+        failedPids = failedPids.filter { !processIsGone($0.key) }
+    }
     private static let registrationRetryMinDelay: TimeInterval = 1
     private static let registrationRetryMaxDelay: TimeInterval = 30
 
@@ -218,6 +246,15 @@ final class MacApp: AbstractApp {
         return allAppsMap[pid]
     }
 
+    /// A collected window's pending jobs, each with a lock of its own, which stayed until the app quit. Every
+    /// native tab is a window id, so a long-lived Finder or Terminal grew these for weeks. Cancelling is harmless:
+    /// the window is dead, or if it is detected again, registration writes its frame again.
+    @MainActor
+    func forget(_ windowId: UInt32) {
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        nativeStateJobs.removeValue(forKey: windowId)?.cancel()
+    }
+
     @MainActor
     func closeAndUnregisterAxWindow(_ windowId: UInt32) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
@@ -345,14 +382,7 @@ final class MacApp: AbstractApp {
     func hideAxWindow(_ windowId: UInt32, at spot: @escaping @Sendable (CGSize) -> CGPoint) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
-            guard let size = window.get(Ax.sizeAttr) else { return }
-            let point = spot(size)
-            // This runs for every window of every invisible workspace on every refresh; without the
-            // guard that was an unconditional AX position write per hidden window, forever.
-            if isFrameSatisfied(window, point, nil) { return }
-            disableAnimations(app: axApp.threadGuarded) {
-                _ = window.set(Ax.topLeftCornerAttr, point)
-            }
+            parkAxWindow(window, app: axApp.threadGuarded, at: spot)
         }
     }
 
@@ -524,6 +554,7 @@ final class MacApp: AbstractApp {
         // `await`, for an app that dies in the middle of the pass.
         let gone = Set((Array(regularApps.values) + allAppsMap.values.map(\.nsApp)).filter(\.isGone).map(\.processIdentifier))
         regularApps = regularApps.filter { !gone.contains($0.key) } // or the loop below registers it again
+        forgetFailedRegistrationsOfGoneProcesses()
         for (pid, app) in MacApp.allAppsMap where gone.contains(pid) { // gc dead apps
             try checkCancellation()
             app.destroy()
@@ -605,6 +636,10 @@ final class MacApp: AbstractApp {
             return (Array(result.keys), tabs, timedOut)
         }
         if outcome.timedOut { MacApp.timedOutThisPass.insert(pid) }
+        if MacApp.noteAnswer(pid: pid, answered: !outcome.timedOut, now: .now) {
+            let windowCount = MacWindow.allWindowsMap.values.count(where: { $0.macApp === self })
+            AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) has not answered Accessibility for a minute; keeping its \(windowCount, privacy: .public) windows; process gone: \(processIsGone(self.pid), privacy: .public)")
+        }
         backgroundTabsSeen = outcome.tabs
         return outcome.ids
     }
@@ -617,6 +652,7 @@ final class MacApp: AbstractApp {
             AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) is gone but LaunchServices still lists it; removing \(windowCount, privacy: .public) windows")
         }
         MacApp.allAppsMap.removeValue(forKey: pid)
+        MacApp.unansweredSince.removeValue(forKey: pid)
         for (_, job) in setFrameJobs {
             job.cancel()
         }
@@ -683,7 +719,8 @@ private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?) -> [Window
 }
 
 private func axRect(_ window: AXUIElement) -> Rect? {
-    guard let topLeftCorner = window.get(Ax.topLeftCornerAttr), let size = window.get(Ax.sizeAttr) else { return nil }
+    let frame = window.getFrame()
+    guard let topLeftCorner = frame.topLeft, let size = frame.size else { return nil }
     return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
 }
 
@@ -789,22 +826,41 @@ extension [UInt32: AxWindow] {
 /// an app that ignores, clamps or times out its writes. Every caller passes a concrete
 /// `AXUIElement`, so the generic specializes to exactly the previous code.
 func isFrameSatisfied(_ window: some AxUiElementMock, _ topLeft: CGPoint?, _ size: CGSize?) -> Bool {
-    let tolerance = 1.0
-    // Bail on the first disagreement. Each `get` is a cross-thread AX round trip, and the two used
-    // to be evaluated unconditionally before being `&&`ed -- so every window that actually needed
-    // moving (i.e. every window on the workspace you just switched to) paid a position read whose
-    // answer could not change the outcome. See AxWriteTest.testGuardStopsReadingAtFirstDisagreement.
-    if let size {
-        guard let actual = window.get(Ax.sizeAttr),
-              abs(actual.width - size.width) < tolerance, abs(actual.height - size.height) < tolerance
-        else { return false }
+    // Each read is a cross-thread AX round trip. Both values come in one batched read, which costs what one
+    // single read does; a one-sided guard reads only the value it was asked about. See AxWriteTest.
+    switch (topLeft, size) {
+        case (nil, nil): return true
+        case (let topLeft?, nil): return isAt(window.get(Ax.topLeftCornerAttr), topLeft)
+        case (nil, let size?): return isSized(window.get(Ax.sizeAttr), size)
+        case (let topLeft?, let size?):
+            let actual = window.getFrame()
+            return isSized(actual.size, size) && isAt(actual.topLeft, topLeft)
     }
-    if let topLeft {
-        guard let actual = window.get(Ax.topLeftCornerAttr),
-              abs(actual.x - topLeft.x) < tolerance, abs(actual.y - topLeft.y) < tolerance
-        else { return false }
+}
+
+/// AX rounds, so within a point is at the target. Unreadable is never satisfied: "unknown" means "write it".
+private func isAt(_ actual: CGPoint?, _ target: CGPoint) -> Bool {
+    guard let actual else { return false }
+    return abs(actual.x - target.x) < 1 && abs(actual.y - target.y) < 1
+}
+
+private func isSized(_ actual: CGSize?, _ target: CGSize) -> Bool {
+    guard let actual else { return false }
+    return abs(actual.width - target.width) < 1 && abs(actual.height - target.height) < 1
+}
+
+/// The `hideAxWindow` body, generic so the tests can drive it. The spot depends on the size, and both come
+/// from one batched read.
+func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at spot: (CGSize) -> CGPoint) {
+    let actual = window.getFrame()
+    guard let size = actual.size else { return }
+    let point = spot(size)
+    // This runs for every window of every invisible workspace on every refresh; without the
+    // guard that was an unconditional AX position write per hidden window, forever.
+    if isAt(actual.topLeft, point) { return }
+    disableAnimations(app: app) {
+        _ = window.set(Ax.topLeftCornerAttr, point)
     }
-    return true
 }
 
 /// The AX writes that hand focus to a window. Extracted from `MacApp.nativeFocus` so the sequence is

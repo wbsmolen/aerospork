@@ -4,6 +4,10 @@ import AppKit
 extension AxUiElementMock {
     // 'isDialogHeuristic' function name is referenced in the guide
     func isDialogHeuristic(appBundleId id: String?) -> Bool {
+        isDialogHeuristic(appBundleId: id, subrole: get(Ax.subroleAttr))
+    }
+
+    private func isDialogHeuristic(appBundleId id: String?, subrole: String?) -> Bool {
         // Note: a lot of windows don't have title on startup. So please don't rely on the title
 
         lazy var isQutebrowser = id == "org.qutebrowser.qutebrowser"
@@ -16,7 +20,7 @@ extension AxUiElementMock {
         // - macOS native file picker (IntelliJ -> "Open...") (kAXDialogSubrole value)
         //
         // Minimized windows or windows of a hidden app have subrole "AXDialog"
-        if get(Ax.subroleAttr) != kAXStandardWindowSubrole &&
+        if subrole != kAXStandardWindowSubrole &&
             !isQutebrowser // qutebrowser regular window has AXDialog subrole when decorations are disabled
         {
             return true
@@ -72,6 +76,10 @@ extension AxUiElementMock {
     /// - "floating by default" workflow
     /// - It's annoying that the focus command treats these popups as floating windows
     func isWindowHeuristic(axApp: AxUiElementMock, appBundleId: String?) -> Bool {
+        isWindowHeuristic(axApp: axApp, appBundleId: appBundleId, subrole: { get(Ax.subroleAttr) })
+    }
+
+    private func isWindowHeuristic(axApp: AxUiElementMock, appBundleId: String?, subrole: () -> String?) -> Bool {
         // Just don't do anything with "Ghostty Quick Terminal" windows.
         // Its position and size are managed by the Ghostty itself
         // https://github.com/wbsmolen/aerospork/issues/103
@@ -81,7 +89,7 @@ extension AxUiElementMock {
         }
 
         if appBundleId?.isFirefoxId() != true {
-            return isWindowHeuristicOld(axApp: axApp, appBundleId: appBundleId)
+            return isWindowHeuristicOld(axApp: axApp, appBundleId: appBundleId, subrole: subrole)
         }
 
         // Try to filter out incredibly weird popup like AXWindows without any buttons.
@@ -106,11 +114,11 @@ extension AxUiElementMock {
             get(Ax.isMainAttr) == true ||
             axApp.get(Ax.focusedWindowAttr)?.windowId == self.containingWindowId() ||
 
-            get(Ax.subroleAttr) == kAXStandardWindowSubrole
+            subrole() == kAXStandardWindowSubrole
     }
 
-    private func isWindowHeuristicOld(axApp: AxUiElementMock, appBundleId: String?) -> Bool { // 0.18.3 hotfix
-        lazy var subrole = get(Ax.subroleAttr)
+    private func isWindowHeuristicOld(axApp: AxUiElementMock, appBundleId: String?, subrole readSubrole: () -> String?) -> Bool { // 0.18.3 hotfix
+        lazy var subrole = readSubrole()
         lazy var title = get(Ax.titleAttr) ?? ""
 
         // Try to filter out incredibly weird popup like AXWindows without any buttons.
@@ -147,9 +155,12 @@ extension AxUiElementMock {
     }
 
     func getWindowType(axApp: AxUiElementMock, appBundleId: String?) -> AxUiElementWindowType {
-        .new(
-            isWindow: isWindowHeuristic(axApp: axApp, appBundleId: appBundleId),
-            isDialog: { isDialogHeuristic(appBundleId: appBundleId) },
+        // One subrole read for both heuristics, each an AX round trip at registration. Lazy: a Firefox window can
+        // be told apart without it.
+        lazy var subrole = get(Ax.subroleAttr)
+        return .new(
+            isWindow: isWindowHeuristic(axApp: axApp, appBundleId: appBundleId, subrole: { subrole }),
+            isDialog: { isDialogHeuristic(appBundleId: appBundleId, subrole: subrole) },
         )
     }
 }

@@ -123,6 +123,7 @@ final class MacWindow: Window {
         if MacWindow.allWindowsMap.removeValue(forKey: windowId) == nil {
             return
         }
+        macApp.forget(windowId)
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded(window: self) }
         for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { $0 == windowId } }
         passTabPlaceOn()
@@ -181,12 +182,17 @@ final class MacWindow: Window {
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent
         // `hideEmulation` calls
         if !isHiddenInCorner {
-            guard let windowRect = try await getAxRect() else { return }
-            let topLeftCorner = windowRect.topLeftCorner
-            let monitorRect = windowRect.center.monitorApproximation.rect // Similar to layoutFloatingWindow. Non idempotent
-            let absolutePoint = topLeftCorner - monitorRect.topLeftCorner
-            prevUnhiddenProportionalPositionInsideWorkspaceRect =
-                CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
+            // A tiled window's position is only ever used if it turns floating while parked, and layout put it
+            // where it last applied, so that answers without an awaited round trip per departing window.
+            let needsRead = parkNeedsFrameRead(
+                parentIsTiling: parent is TilingContainer,
+                lastApplied: lastAppliedLayoutPhysicalRect,
+                appTimedOut: MacApp.timedOutThisPass.contains(macApp.pid),
+            )
+            // An unreadable frame leaves the window alone, as does an app that timed out this pass: parking it
+            // would queue a job that waits out the timeout on that app's thread.
+            guard let windowRect = needsRead ? try await getAxRect() : lastAppliedLayoutPhysicalRect else { return }
+            prevUnhiddenProportionalPositionInsideWorkspaceRect = proportionalPosition(of: windowRect)
         }
         // Zoom will jump off if you do one pixel offset https://github.com/wbsmolen/aerospork/issues/527
         let sliver: CGFloat = macApp.isZoom ? 0 : 1
@@ -259,6 +265,19 @@ final class MacWindow: Window {
     }
 }
 
+/// Does parking a window need its frame read from the app? Not for a tiled window that layout has placed, of an
+/// app that has answered this pass.
+func parkNeedsFrameRead(parentIsTiling: Bool, lastApplied: Rect?, appTimedOut: Bool) -> Bool {
+    !parentIsTiling || lastApplied == nil || appTimedOut
+}
+
+/// Where `rect` sits on its monitor, as a share of the monitor's size. Similar to layoutFloatingWindow. Non idempotent.
+func proportionalPosition(of rect: Rect) -> CGPoint {
+    let monitorRect = rect.center.monitorApproximation.rect
+    let absolutePoint = rect.topLeftCorner - monitorRect.topLeftCorner
+    return CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
+}
+
 extension Window {
     @MainActor
     func relayoutWindow(on workspace: Workspace, forceTile: Bool = false) async throws {
@@ -320,7 +339,15 @@ func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async
 @MainActor
 private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async throws {
     let rules = config.onWindowDetected.filter { !onlyStartupRules || $0.matcher.duringAeroSporkStartup == true }
-    for callback in rules where try await callback.matches(window) {
+    // An AX round trip, so read once for every title rule, and only if one asks.
+    var title: String?
+    func readTitle() async throws -> String {
+        if let title { return title }
+        let read = try await window.title
+        title = read
+        return read
+    }
+    for callback in rules where try await callback.matches(window, title: readTitle) {
         _ = try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
         if !callback.checkFurtherCallbacks {
             return
@@ -330,11 +357,11 @@ private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async th
 
 extension WindowDetectedCallback {
     @MainActor
-    func matches(_ window: Window) async throws -> Bool {
+    func matches(_ window: Window, title: () async throws -> String) async throws -> Bool {
         if let startupMatcher = matcher.duringAeroSporkStartup, startupMatcher != isStartup {
             return false
         }
-        if let regex = matcher.windowTitleRegexSubstring, !(try await window.title).contains(regex) {
+        if let regex = matcher.windowTitleRegexSubstring, !(try await title()).contains(regex) {
             return false
         }
         if let appId = matcher.appId, appId != window.app.bundleId {

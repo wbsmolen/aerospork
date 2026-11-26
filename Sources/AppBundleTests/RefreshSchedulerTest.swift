@@ -79,14 +79,14 @@ final class RefreshSchedulerTest: XCTestCase {
         scheduler.request(request())
         await until { recorder.started.count == 1 }
 
-        scheduler.sessionWillStart()
+        let session = scheduler.sessionWillStart()
         await until { recorder.cancelled == 1 }
         scheduler.request(request())
         try? await Task.sleep(for: .milliseconds(30))
         assertEquals(recorder.started.count, 1) // nothing starts underneath a session
 
         recorder.hold = false
-        scheduler.sessionDidEnd()
+        scheduler.sessionDidEnd(session)
         await until { recorder.started.count == 2 && recorder.finished == 1 }
     }
 
@@ -95,12 +95,56 @@ final class RefreshSchedulerTest: XCTestCase {
         let recorder = Recorder()
         let scheduler = scheduler(recorder)
         scheduler.request(request(unlocked: true))
-        scheduler.sessionWillStart()
+        let session = scheduler.sessionWillStart()
         try? await Task.sleep(for: .milliseconds(30))
         assertEquals(recorder.started.count, 0)
-        scheduler.sessionDidEnd()
+        scheduler.sessionDidEnd(session)
         await until { recorder.finished == 1 }
         assertEquals(recorder.started[0].screenIsDefinitelyUnlocked, true)
+    }
+
+    /// A session body that awaits something that never returns: the gate lets the next session in, and the
+    /// scheduler must stop waiting for it too, or no refresh runs again while hotkeys keep working.
+    func testASessionThatNeverEndsStopsHoldingBackRefreshes() async {
+        let recorder = Recorder()
+        let scheduler = scheduler(recorder, abandonAfter: .milliseconds(20))
+        let start = ContinuousClock.now
+        scheduler.sessionDidAcquireGate(scheduler.sessionWillStart()) // and never ends
+        scheduler.request(request())
+        await until { recorder.finished == 1 }
+        XCTAssertGreaterThanOrEqual(ContinuousClock.now - start, .milliseconds(20))
+    }
+
+    /// Only a session holding the gate can be wedged; one still waiting for it is waiting on that one.
+    func testAQueuedSessionDoesNotExpire() async {
+        let recorder = Recorder()
+        let scheduler = scheduler(recorder, abandonAfter: .milliseconds(20))
+        let queued = scheduler.sessionWillStart()
+        scheduler.request(request())
+        try? await Task.sleep(for: .milliseconds(60))
+        assertEquals(recorder.started.count, 0)
+        scheduler.sessionDidEnd(queued)
+        await until { recorder.finished == 1 }
+    }
+
+    /// An abandoned session's `defer` still runs, late. It must not end the session that holds the gate now.
+    func testALateEndOfAnAbandonedSessionDoesNotFreeALiveOne() async {
+        let recorder = Recorder()
+        let scheduler = scheduler(recorder, abandonAfter: .milliseconds(200))
+        let wedged = scheduler.sessionWillStart()
+        scheduler.sessionDidAcquireGate(wedged)
+        scheduler.request(request())
+        await until { recorder.finished == 1 } // dropped
+
+        let live = scheduler.sessionWillStart()
+        scheduler.sessionDidAcquireGate(live)
+        scheduler.sessionDidEnd(wedged)
+        scheduler.request(request())
+        try? await Task.sleep(for: .milliseconds(20))
+        assertEquals(recorder.started.count, 1) // nothing starts underneath the live session
+
+        scheduler.sessionDidEnd(live)
+        await until { recorder.finished == 2 }
     }
 
     func testAWedgedRefreshDoesNotEndRefreshesForGood() async {
@@ -154,6 +198,15 @@ final class RefreshSchedulerTest: XCTestCase {
     }
 
     // MARK: - Wiring (needs real apps, so pinned in the source)
+
+    /// App activation and mouse-up lay out twice. The first pass parks only what left the screen, or its hide jobs
+    /// for windows parked already queue ahead of the enumeration on each app's thread; the second re-checks all.
+    func testOnlyThePreLayoutSkipsWindowsParkedAlready() throws {
+        let body = try sourceBody("func runRefreshSessionBlocking(", in: "Sources/AppBundle/layout/refresh.swift")
+        let pre = try XCTUnwrap(body.range(of: "optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces(parkOnlyUnparked: true) }"))
+        let full = try XCTUnwrap(body.range(of: "if shouldLayoutWorkspaces { try await layoutWorkspaces() }"))
+        XCTAssertLessThan(pre.lowerBound, full.lowerBound)
+    }
 
     func testARefreshDoesNotAskLaunchServicesAboutEveryProcess() throws {
         let body = try sourceBody("static func refreshAllAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")

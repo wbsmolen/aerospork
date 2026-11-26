@@ -57,6 +57,63 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertNil(body[..<guardLine.lowerBound].range(of: "AppLog"), "a log line in destroy() that every quit writes")
     }
 
+    // MARK: - A stopped app shows in the log, once per episode
+
+    func testAnAppUnansweredForAMinuteIsLoggedOnceAndAnAnswerRearmsIt() {
+        let pid: pid_t = -113 // no real process
+        let start = Date()
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start), "the episode starts")
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start + 59))
+        XCTAssertTrue(MacApp.noteAnswer(pid: pid, answered: false, now: start + 60))
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start + 61), "a record on every refresh")
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: true, now: start + 62))
+        XCTAssertNil(MacApp.unansweredSince[pid], "an answer ends the episode")
+        XCTAssertFalse(MacApp.noteAnswer(pid: pid, answered: false, now: start + 63))
+        XCTAssertTrue(MacApp.noteAnswer(pid: pid, answered: false, now: start + 123), "the next episode gets its own record")
+        _ = MacApp.noteAnswer(pid: pid, answered: true, now: start + 124)
+    }
+
+    /// Or the map keeps every pid that ever stopped answering. `destroy()` needs a real app.
+    func testADestroyedAppsEpisodeIsForgotten() throws {
+        let body = try sourceBody("private func destroy()", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(body.contains("MacApp.unansweredSince.removeValue(forKey: pid)"))
+        let perApp = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(perApp.contains("MacApp.noteAnswer(pid: pid, answered: !outcome.timedOut"), "the window-list read no longer notes answers")
+    }
+
+    // MARK: - State of the dead is let go
+
+    /// A pass prunes failed registrations of processes that exited. The pass itself registers every running app,
+    /// so it is not run here; the call into the prune is pinned in the source.
+    func testAFailedRegistrationOfADeadPidIsForgottenByThePass() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try child.run()
+        child.waitUntilExit()
+        let dead = child.processIdentifier
+        let alive = ProcessInfo.processInfo.processIdentifier
+        let saved = MacApp.failedPids
+        defer { MacApp.failedPids = saved }
+        MacApp.failedPids[dead] = (nextAttempt: .now + 30, backoff: 30, launchDate: nil)
+        MacApp.failedPids[alive] = (nextAttempt: .now + 30, backoff: 30, launchDate: nil)
+
+        MacApp.forgetFailedRegistrationsOfGoneProcesses()
+
+        XCTAssertNil(MacApp.failedPids[dead])
+        XCTAssertNotNil(MacApp.failedPids[alive])
+        let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(pass.contains("forgetFailedRegistrationsOfGoneProcesses()"))
+    }
+
+    /// Each collected window's jobs stayed until its app quit.
+    func testACollectedWindowsJobsAreForgotten() throws {
+        let body = try sourceBody("func garbageCollect(skipClosedWindowsCache: Bool)", in: "Sources/AppBundle/tree/MacWindow.swift")
+        XCTAssertTrue(body.contains("macApp.forget(windowId)"))
+        let forget = try sourceBody("func forget(_ windowId: UInt32)", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(forget.contains("setFrameJobs.removeValue(forKey: windowId)?.cancel()"))
+        XCTAssertTrue(forget.contains("nativeStateJobs.removeValue(forKey: windowId)?.cancel()"))
+    }
+
     func testEachPassChecksLivenessOnceAndAgainAfterItsAwait() throws {
         let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
         let gone = try XCTUnwrap(pass.range(of: "let gone = Set("))

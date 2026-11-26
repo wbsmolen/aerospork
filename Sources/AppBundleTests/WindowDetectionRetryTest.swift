@@ -125,6 +125,24 @@ final class WindowDetectionRetryTest: XCTestCase {
         config.onWindowDetected = []
     }
 
+    /// Each title read is an AX round trip, so every title rule shares one.
+    func testTitleRulesReadTheTitleOnce() async throws {
+        setUpWorkspacesForTests()
+        var byTitle = WindowDetectedCallbackMatcher()
+        byTitle.windowTitleRegexSubstring = try Regex("TestWindow")
+        config.onWindowDetected = [
+            WindowDetectedCallback(matcher: byTitle, checkFurtherCallbacks: true, rawRun: [parseCommand("move-node-to-workspace first").cmdOrDie]),
+            WindowDetectedCallback(matcher: byTitle, rawRun: [parseCommand("move-node-to-workspace second").cmdOrDie]),
+        ]
+        defer { config.onWindowDetected = [] }
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer)
+
+        try await tryOnWindowDetected(window)
+
+        assertEquals(window.nodeWorkspace?.name, "second") // both rules matched
+        assertEquals(window.titleReads, 1)
+    }
+
     /// A status bar asks what is on screen all the time, and that isn't anyone changing a layout.
     func testOnlyQueriesLeaveARestoreRunning() {
         for query in ["list-windows --all", "list-workspaces --all", "list-monitors", "list-apps", "config --major-keys"] {
