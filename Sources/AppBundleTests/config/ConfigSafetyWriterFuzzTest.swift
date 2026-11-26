@@ -53,6 +53,25 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
         testRuleEditPreservesEverythingElse()
     }
 
+    /// The generator drops a config that does not load, so a rule the parser rejected would vanish
+    /// from the draws without a word. Each one loads, survives a save with no edit, and survives an
+    /// edit to the rules, which rewrites the section.
+    func testEveryRuleCommandLoadsAndSurvivesASave() {
+        for text in Self.ruleCommandFragments {
+            guard case .success = parseConfig(text) else { return XCTFail("the corpus rule does not load:\n\(text)") }
+            let vm = ConfigurationViewModel()
+            vm.load(fromText: text)
+            assertEquals(ConfigurationWriter.render(baseText: text, from: vm), text)
+            assertNil(ConfigurationWriter.refusal(rendered: text, base: text, from: vm))
+
+            vm.settings.windowRules.append(.init(appId: "com.example.app", run: "fullscreen on"))
+            let out = ConfigurationWriter.render(baseText: text, from: vm)
+            XCTAssertNil(ConfigurationWriter.refusal(rendered: out, base: text, from: vm), text)
+            guard case .success(let config) = parseConfig(out) else { return XCTFail("the rule edit broke the config:\n\(out)") }
+            assertEquals(config.onWindowDetected.count, 2, additionalMsg: out)
+        }
+    }
+
     func testScalarEditPreservesEverythingElse() {
         forEachEdit(["accordion-padding"], isEdited: { section, line in section.isEmpty && line.hasPrefix("accordion-padding") }) {
             $0.settings.general.accordionPadding = 4242
@@ -317,6 +336,13 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
         "[[on-window-detected]]\nif.app-id = 'com.apple.finder'\nrun = ['layout floating']",
         "[[on-window-detected]]\nif.app-name-regex-substring = 'term'\nif.during-aerospork-startup = true\nrun = 'move-node-to-workspace 2'",
         "# documentation for the next section\n[gaps]\ninner.horizontal = 9",
+    ] + ruleCommandFragments
+
+    /// A rule for each command a rule may run besides the first three, so the pane's whole-section
+    /// rewrite meets every one of them.
+    private static let ruleCommandFragments: [String] = [
+        "[[on-window-detected]]\nif.app-id = 'com.example.tv'\nrun = ['fullscreen on --no-outer-gaps', 'move-node-to-monitor --focus-follows-window next']",
+        "[on-window]\n'com.example.chat' = 'move-node-to-monitor main'",
     ]
 
     /// Values that span lines, and lines inside them that look like a header or a key. Several
