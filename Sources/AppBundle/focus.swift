@@ -124,12 +124,15 @@ extension Window {
         // A background tab: focusing it is what selects it, and the group has one tile either way.
         if let selected = backgroundTabs[windowId].flatMap({ Window.get(byId: $0) }) { return takePlace(of: selected) }
         guard let parent, case .macos(let prevParentKind, let prevWorkspaceName) = layoutReason else { return }
+        // The same lookup as normalizeLayoutReason, for the same reasons: a hidden app's container hangs off
+        // its workspace, and the recorded workspace may have been collected. `get(byName:)` would mint one
+        // with no monitor, which reports `mainMonitor`, and focus would jump displays.
+        let workspace = nodeWorkspace ?? prevWorkspaceName.flatMap { Workspace.existing(byName: $0) } ?? focus.workspace
         switch parent.cases {
             case .macosMinimizedWindowsContainer: setNativeMinimized(false)
             case .macosHiddenAppsWindowsContainer: unhideApp()
             default: return
         }
-        let workspace = prevWorkspaceName.map { Workspace.get(byName: $0) } ?? focus.workspace
         try await exitMacOsNativeUnconventionalState(window: self, prevParentKind: prevParentKind, workspace: workspace)
     }
 
