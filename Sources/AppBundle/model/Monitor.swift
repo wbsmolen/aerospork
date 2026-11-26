@@ -49,11 +49,11 @@ class LazyMonitor: Monitor {
     }
 
     var rect: Rect {
-        _rect ?? screen.rect.also { _rect = $0 }
+        _rect ?? screen.rect.apply { _rect = $0 }
     }
 
     var visibleRect: Rect {
-        _visibleRect ?? screen.visibleRect.also { _visibleRect = $0 }
+        _visibleRect ?? screen.visibleRect.apply { _visibleRect = $0 }
     }
 
     var fingerprint: MonitorFingerprint? {

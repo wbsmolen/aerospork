@@ -17,6 +17,11 @@ final class ParseEnvVariablesTest: XCTestCase {
         testFailInterpolation("echo ${foo}")
     }
 
+    /// `interpolate` used to drop `interpolationChar` and always parse `$`.
+    func testInterpolationHonoursItsChar() {
+        assertEquals("echo %{foo} ${foo}".interpolate(with: ["foo": "bar"], interpolationChar: "%").getOrNil(), "echo bar ${foo}")
+    }
+
     func parseConfigForTest(_ rawToml: String) -> (Config, [TomlParseError]) {
         switch parseConfig(rawToml) {
             case .success(let config):

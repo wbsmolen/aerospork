@@ -227,10 +227,6 @@ extension Double {
     public var squared: Double { self * self }
 }
 
-extension Slice {
-    public func toArray() -> [Base.Element] { Array(self) }
-}
-
 extension URL {
     public func open(with url: URL) {
         NSWorkspace.shared.open([self], withApplicationAt: url, configuration: NSWorkspace.OpenConfiguration())
@@ -242,10 +238,6 @@ public func printStderr(_ msg: String) {
 }
 
 public func cliError(_ message: String = "") -> Never {
-    cliErrorT(message)
-}
-
-public func cliErrorT<T>(_ message: String = "") -> T {
     printStderr(message)
     exit(1)
 }
