@@ -47,7 +47,9 @@ func runRefreshSessionBlocking(
             MacApp.timedOutThisPass = []
             try await syncFocusFromMacOs()
 
-            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
+            // Shows the workspace that became visible and parks what left the screen. Windows parked already wait for
+            // the full layout below: their jobs would queue on each app's thread ahead of the enumeration `refresh()`.
+            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces(parkOnlyUnparked: true) }
 
             refreshModel()
             try await refresh()
@@ -279,8 +281,16 @@ func hideSpot(for size: CGSize, on v: Rect, otherMonitors: [Rect], sliver: CGFlo
     return (candidates.first { overlap($0) == 0 } ?? candidates.min { overlap($0) < overlap($1) }!).spot
 }
 
+/// Which windows of an invisible workspace a layout parks. Not a native fullscreen window: macOS ignores the move,
+/// so its frame never matches and it would be rewritten on every refresh, for as long as it stays fullscreen. Nor
+/// a background tab, which gets the group's frame back when it's selected, wherever it was put in the meantime.
+/// With `onlyUnparked`, not a window parked already, which only needs the re-check that a full layout gives it.
+func shouldPark(inNativeFullscreen: Bool, isBackgroundTab: Bool, isParked: Bool, onlyUnparked: Bool) -> Bool {
+    !inNativeFullscreen && !isBackgroundTab && !(onlyUnparked && isParked)
+}
+
 @MainActor
-func layoutWorkspaces() async throws {
+func layoutWorkspaces(parkOnlyUnparked: Bool = false) async throws {
     // No screens: every frame would be computed against a placeholder rect. The reconnect lays out again.
     let monitors = monitors
     if monitors.isEmpty { return }
@@ -301,11 +311,13 @@ func layoutWorkspaces() async throws {
     for workspace in Workspace.all where !workspace.isVisible {
         let monitor = workspace.workspaceMonitor
         let others = monitors.map(\.rect).filter { $0.topLeftCorner != monitor.rect.topLeftCorner }
-        // Not a native fullscreen window: macOS ignores the move, so its frame never matches and it
-        // would be rewritten on every refresh, for as long as it stays fullscreen. Nor a background tab,
-        // which gets the group's frame back when it's selected, wherever it was put in the meantime.
-        for window in workspace.allLeafWindowsRecursive where !(window.parent is MacosFullscreenWindowsContainer) && !window.isBackgroundTab {
-            try await (window as? MacWindow)?.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
+        for window in workspace.allLeafWindowsRecursive.compactMap({ $0 as? MacWindow }) where shouldPark(
+            inNativeFullscreen: window.parent is MacosFullscreenWindowsContainer,
+            isBackgroundTab: window.isBackgroundTab,
+            isParked: window.isHiddenInCorner,
+            onlyUnparked: parkOnlyUnparked,
+        ) {
+            try await window.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
         }
     }
 }

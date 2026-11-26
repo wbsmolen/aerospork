@@ -194,6 +194,25 @@ These are mechanically verified work eliminations, not end-to-end timing claims:
     menu. Syntax diagnostics feed the ruler's existing visible-line draw, so the error marker adds no
     second document scan while scrolling.
 
+### 2026-11 runtime pass
+
+Work eliminations counted through the mocks and pinned by tests, not timed. Each names what to measure.
+
+17. **Parking a tiled window reads nothing.** `hideInCorner` used to await a frame read for every window
+    leaving the screen, one window at a time, before `runSession` pushed focus, only to record a
+    position that matters once a window turns floating. A tiled window that layout has placed, of an
+    app that has answered this pass, now takes that position from `lastAppliedLayoutPhysicalRect`
+    (`parkNeedsFrameRead`). Floating and never-laid-out windows still read, and a timed-out app's
+    window is still left alone. Measure: `runSession` interval, and `get(_:)` intervals, per workspace
+    switch away from a workspace of N tiled windows; expect N fewer awaited round trips before focus.
+
+18. **The pre-layout parks only what is not parked yet.** App activation and mouse-up lay out twice
+    (`optimisticallyPreLayoutWorkspaces`). The first pass re-queued a hide job for every parked window
+    of every hidden workspace, ahead of the enumeration job `refresh()` sends next to the same app
+    threads. It now passes `parkOnlyUnparked: true`; the second, full layout is unchanged and still
+    re-checks every parked window. Measure: `runRefreshSessionBlocking` interval for a refresh caused
+    by a cmd-tab, with several windows on hidden workspaces.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and

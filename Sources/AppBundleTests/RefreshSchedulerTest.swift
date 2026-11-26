@@ -155,6 +155,15 @@ final class RefreshSchedulerTest: XCTestCase {
 
     // MARK: - Wiring (needs real apps, so pinned in the source)
 
+    /// App activation and mouse-up lay out twice. The first pass parks only what left the screen, or its hide jobs
+    /// for windows parked already queue ahead of the enumeration on each app's thread; the second re-checks all.
+    func testOnlyThePreLayoutSkipsWindowsParkedAlready() throws {
+        let body = try sourceBody("func runRefreshSessionBlocking(", in: "Sources/AppBundle/layout/refresh.swift")
+        let pre = try XCTUnwrap(body.range(of: "optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces(parkOnlyUnparked: true) }"))
+        let full = try XCTUnwrap(body.range(of: "if shouldLayoutWorkspaces { try await layoutWorkspaces() }"))
+        XCTAssertLessThan(pre.lowerBound, full.lowerBound)
+    }
+
     func testARefreshDoesNotAskLaunchServicesAboutEveryProcess() throws {
         let body = try sourceBody("static func refreshAllAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertFalse(body.contains("activationPolicy"))

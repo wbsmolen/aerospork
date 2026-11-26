@@ -181,12 +181,17 @@ final class MacWindow: Window {
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent
         // `hideEmulation` calls
         if !isHiddenInCorner {
-            guard let windowRect = try await getAxRect() else { return }
-            let topLeftCorner = windowRect.topLeftCorner
-            let monitorRect = windowRect.center.monitorApproximation.rect // Similar to layoutFloatingWindow. Non idempotent
-            let absolutePoint = topLeftCorner - monitorRect.topLeftCorner
-            prevUnhiddenProportionalPositionInsideWorkspaceRect =
-                CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
+            // A tiled window's position is only ever used if it turns floating while parked, and layout put it
+            // where it last applied, so that answers without an awaited round trip per departing window.
+            let needsRead = parkNeedsFrameRead(
+                parentIsTiling: parent is TilingContainer,
+                lastApplied: lastAppliedLayoutPhysicalRect,
+                appTimedOut: MacApp.timedOutThisPass.contains(macApp.pid),
+            )
+            // An unreadable frame leaves the window alone, as does an app that timed out this pass: parking it
+            // would queue a job that waits out the timeout on that app's thread.
+            guard let windowRect = needsRead ? try await getAxRect() : lastAppliedLayoutPhysicalRect else { return }
+            prevUnhiddenProportionalPositionInsideWorkspaceRect = proportionalPosition(of: windowRect)
         }
         // Zoom will jump off if you do one pixel offset https://github.com/wbsmolen/aerospork/issues/527
         let sliver: CGFloat = macApp.isZoom ? 0 : 1
@@ -257,6 +262,19 @@ final class MacWindow: Window {
     override func getAxRect() async throws -> Rect? {
         try await macApp.getAxRect(windowId)
     }
+}
+
+/// Does parking a window need its frame read from the app? Not for a tiled window that layout has placed, of an
+/// app that has answered this pass.
+func parkNeedsFrameRead(parentIsTiling: Bool, lastApplied: Rect?, appTimedOut: Bool) -> Bool {
+    !parentIsTiling || lastApplied == nil || appTimedOut
+}
+
+/// Where `rect` sits on its monitor, as a share of the monitor's size. Similar to layoutFloatingWindow. Non idempotent.
+func proportionalPosition(of rect: Rect) -> CGPoint {
+    let monitorRect = rect.center.monitorApproximation.rect
+    let absolutePoint = rect.topLeftCorner - monitorRect.topLeftCorner
+    return CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
 }
 
 extension Window {
