@@ -167,9 +167,11 @@ final class RefreshSchedulerTest: XCTestCase {
         XCTAssertFalse(body.contains("NSApp.activationPolicy()"))
     }
 
+    /// Reading `localizedName` asks LaunchServices, and the menu bar lists every window's app per refresh.
+    /// Any computed `name` brings that back, not only the one spelling that used to be there.
     func testAnAppsNameIsKeptNotAskedFor() throws {
         let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/tree/MacApp.swift"), encoding: .utf8)
-        XCTAssertFalse(source.contains("var name: String? { nsApp.localizedName }"))
+        XCTAssertTrue(source.contains("let name: String?"), "MacApp.name must be stored once, not computed on every read")
     }
 
     /// An app that turns regular without launching or activating. The sweep is how it gets noticed.
@@ -185,9 +187,10 @@ final class RefreshSchedulerTest: XCTestCase {
 
     func testOneWindowListAnswersForEveryWindowItNames() throws {
         let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
-        let shortcut = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key) { return true }"))
+        let listed = try XCTUnwrap(body.range(of: ".contains($0.key)"), "a listed window is asked about one by one")
+        let alive = try XCTUnwrap(body.range(of: "return true", range: listed.upperBound ..< body.endIndex))
         let perWindow = try XCTUnwrap(body.range(of: "isDestroyed()"))
-        XCTAssertLessThan(shortcut.lowerBound, perWindow.lowerBound)
+        XCTAssertLessThan(alive.lowerBound, perWindow.lowerBound)
     }
 
     func testAPopupIsOnlyRecheckedSoonAfterItAppeared() {

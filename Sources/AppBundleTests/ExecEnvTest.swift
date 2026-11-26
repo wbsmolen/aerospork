@@ -37,6 +37,10 @@ final class ExecEnvTest: XCTestCase {
     /// line that hands the switch to the right callback is checked in the source.
     func testOnlyOnFocusedWorkspaceChangedIsHandedTheSwitch() throws {
         let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/focus.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains("if case .onFocusedWorkspaceChanged = event { env.workspaceChange = workspaceChange }"))
+        let handOvers = withoutComments(source).split(separator: "\n").filter { $0.contains(".workspaceChange = ") }
+        XCTAssertFalse(handOvers.isEmpty, "no callback is handed the workspace switch")
+        for line in handOvers {
+            XCTAssertTrue(line.contains("case .onFocusedWorkspaceChanged"), "a callback other than on-focused-workspace-changed gets the switch: \(line)")
+        }
     }
 }
