@@ -2605,7 +2605,6 @@ const {
   FormSection,
   SectionLabel,
   NumberField,
-  SettingsFooter,
   GapsPreview,
   Toggle,
   StatusLabel
@@ -2630,7 +2629,7 @@ function GapsTab({
     }),
     footer: D.gapsHavePerMonitorOverrides ? /*#__PURE__*/React.createElement(StatusLabel, {
       kind: "neutral"
-    }, "Some of these gaps have per-monitor rules set in Raw TOML \u2014 editing any value below replaces the whole section with flat numbers.") : null
+    }, "Some gaps have per-monitor rules in Raw TOML. Editing any value below replaces the whole section with flat numbers.") : null
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -2678,7 +2677,7 @@ function GapsTab({
       title: "Around the screen",
       sf: "rectangle.inset.filled"
     }),
-    footer: "The top gap is measured below the menu bar, so 0 is flush with the usable area."
+    footer: D.gapsHavePerMonitorOverrides ? 'The top gap is measured below the menu bar, so 0 is flush with the usable area.' : 'The top gap is measured below the menu bar, so 0 is flush with the usable area. Per-monitor gaps are set in Raw TOML.'
   }, /*#__PURE__*/React.createElement(Toggle, {
     label: "Same on all sides",
     checked: outerLinked,
@@ -2715,7 +2714,7 @@ function GapsTab({
     title: "Right",
     value: s.outerRight,
     onChange: v => set('outerRight', v)
-  }))), /*#__PURE__*/React.createElement(SettingsFooter, null, "Raw TOML can set a different value per monitor for any of these six gaps. Editing a gap here always writes one flat number for every monitor. Use Raw TOML for per-monitor rules."));
+  }))));
 }
 Object.assign(window, {
   GapsTab
