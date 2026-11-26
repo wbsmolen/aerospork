@@ -245,6 +245,33 @@ final class SettingsApplyTest: XCTestCase {
         XCTAssertFalse(vm.hasUnsavedChanges)
     }
 
+    /// A save applies the config `refusal` parsed instead of parsing its own bytes again, but only when
+    /// the file reads back as those bytes. An edit that landed after the write gets a full reload, so
+    /// the running config is always the file.
+    func testSaveAppliesValidatedConfigOnlyWhenDiskMatches() async throws {
+        let written = "accordion-padding = 31\n"
+        let url = try useTemporaryConfig(written, for: self)
+        configLoadFailure = "an earlier failure"
+        // 77 is in no file, so seeing it proves the validated config went in as it was.
+        var validated = Config()
+        validated.accordionPadding = 77
+
+        XCTAssertTrue(applySavedConfig(.init(text: written, config: validated, warnings: ["a warning"])))
+        assertEquals(config.accordionPadding, 77)
+        assertEquals(configUrl, url)
+        XCTAssertNil(configLoadFailure)
+        assertEquals(configWarnings, ["a warning"])
+        var reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "the watcher reloaded the save a second time")
+
+        try "accordion-padding = 32\n".write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertTrue(applySavedConfig(.init(text: written, config: validated, warnings: [])))
+        assertEquals(config.accordionPadding, 32)
+        assertEquals(configWarnings, [])
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "the full reload records what it applied too")
+    }
+
     /// The save reloads without a refresh session, so a gap or layout change did nothing on screen
     /// until an unrelated window event. Tests skip that refresh (it enumerates the machine's apps), so
     /// only its place after the write is checked in the source.

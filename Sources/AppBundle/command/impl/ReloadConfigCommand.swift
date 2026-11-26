@@ -35,19 +35,8 @@ struct ReloadConfigCommand: Command {
     if let applied { ConfigFileWatcher.recordApplied(applied) }
     switch result {
         case .success(let (parsedConfig, url)):
-            if !args.dryRun {
-                config = parsedConfig
-                configUrl = url
-                activateMode(activeMode)
-                syncStartAtLogin()
-            }
-            // The single most useful line in a bug report: which file the running app is actually
-            // on. `readConfig` already prints warnings, but only to stderr -- and a .app launched by
-            // launchd has nowhere for stderr to go, so that record did not survive the session.
-            AppLog.config.notice("Config loaded: \(url.path, privacy: .public)")
-            for warning in warnings {
-                AppLog.config.notice("Config warning: \(warning, privacy: .public)")
-            }
+            if !args.dryRun { apply(parsedConfig, url: url) }
+            logConfigLoaded(url, warnings)
             return true
         case .failure(let msg):
             AppLog.config.error("Config not loaded: \(msg, privacy: .public)")
@@ -60,5 +49,37 @@ struct ReloadConfigCommand: Command {
                 )
             }
             return false
+    }
+}
+
+/// A Settings save's apply, right after the write. `refusal` (or `validate`) already parsed what was
+/// written, so a file that reads back as exactly those bytes gets that config without a second parse.
+/// Anything else, such as an edit that landed after the write, gets the full reload: the running
+/// config is always what is on disk. Either way the bytes applied are recorded, so the watcher, which
+/// sees the write, does not reload them again.
+@MainActor func applySavedConfig(_ validated: ConfigurationWriter.Validated?) -> Bool {
+    let onDisk = ConfigSnapshot.now()
+    guard let validated, let url = onDisk.file.urlOrNil, onDisk.bytes == Data(validated.text.utf8) else { return reloadConfig() }
+    recordConfigHealth(.success((validated.config, url)), warnings: validated.warnings)
+    ConfigFileWatcher.recordApplied(onDisk)
+    apply(validated.config, url: url)
+    logConfigLoaded(url, validated.warnings)
+    return true
+}
+
+@MainActor private func apply(_ parsedConfig: Config, url: URL) {
+    config = parsedConfig
+    configUrl = url
+    activateMode(activeMode)
+    syncStartAtLogin()
+}
+
+/// The single most useful line in a bug report: which file the running app is actually on.
+/// `readConfig` already prints warnings, but only to stderr -- and a .app launched by launchd has
+/// nowhere for stderr to go, so that record did not survive the session.
+@MainActor private func logConfigLoaded(_ url: URL, _ warnings: [String]) {
+    AppLog.config.notice("Config loaded: \(url.path, privacy: .public)")
+    for warning in warnings {
+        AppLog.config.notice("Config warning: \(warning, privacy: .public)")
     }
 }
