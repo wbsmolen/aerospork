@@ -332,6 +332,26 @@ final class UISettingsTest: XCTestCase {
         )
     }
 
+    /// A flag on the move used to show as the workspace (`--focus-follows-window W`), and a second
+    /// move would have been dropped by the next guided edit. Both are custom, kept verbatim.
+    func testGuidedWindowRuleActionsTreatFlagsAndRepeatedMovesAsCustom() {
+        for command in [
+            "move-node-to-workspace --focus-follows-window W",
+            "layout floating ; move-node-to-workspace --focus-follows-window W",
+            "move-node-to-workspace 1 ; move-node-to-workspace 2",
+        ] {
+            let action = parseGuidedWindowAction(command)
+            XCTAssertTrue(action.isCustom, command)
+            XCTAssertFalse(action.workspace.hasPrefix("-"), "a flag is not a workspace name: \(command)")
+            XCTAssertEqual(
+                Set(composeGuidedWindowAction(action).components(separatedBy: " ; ")),
+                Set(command.components(separatedBy: " ; ")),
+                "every command must survive composition: \(command)",
+            )
+        }
+        XCTAssertEqual(parseGuidedWindowAction("move-node-to-workspace W").workspace, "W")
+    }
+
     func testLinkedGapSettersUpdateEveryEdgeAndAvoidNoOpSaves() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }

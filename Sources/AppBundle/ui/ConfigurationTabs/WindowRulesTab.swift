@@ -20,7 +20,10 @@ func parseGuidedWindowAction(_ command: String) -> GuidedWindowAction {
         switch part {
             case "layout floating": result.layout = .floating
             case "layout tiling": result.layout = .tiling
-            case _ where part.hasPrefix("move-node-to-workspace "):
+            // One bare workspace name, once. A flag (`--focus-follows-window W`) used to show as the
+            // workspace name, and a second move would be dropped by the next compose: both are custom.
+            case _ where part.hasPrefix("move-node-to-workspace ") && result.workspace.isEmpty &&
+            isBareWorkspaceName(part.dropFirst("move-node-to-workspace ".count)):
                 result.workspace = String(part.dropFirst("move-node-to-workspace ".count)).trimmingCharacters(in: .whitespaces)
             default:
                 result.isCustom = true
@@ -28,6 +31,11 @@ func parseGuidedWindowAction(_ command: String) -> GuidedWindowAction {
         }
     }
     return result
+}
+
+private func isBareWorkspaceName(_ argument: Substring) -> Bool {
+    let name = argument.trimmingCharacters(in: .whitespaces)
+    return !name.isEmpty && !name.hasPrefix("-") && !name.contains(where: \.isWhitespace)
 }
 
 @MainActor func composeGuidedWindowAction(_ action: GuidedWindowAction) -> String {
