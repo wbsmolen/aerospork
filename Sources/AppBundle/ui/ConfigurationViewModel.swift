@@ -70,6 +70,9 @@ final class ConfigurationViewModel: ObservableObject {
     }
 
     private var loadedRawToml = ""
+    /// False while the buffer is not the file: a config Settings can't read never reaches it, so Raw
+    /// TOML must not call it "Matches the file on disk".
+    @Published private(set) var rawTomlIsTheFile = false
     var rawTomlEdited: Bool { rawToml != loadedRawToml }
 
     /// Set ONLY by the Raw TOML pane's Apply button.
@@ -97,7 +100,7 @@ final class ConfigurationViewModel: ObservableObject {
         pendingJumpLine = ConfigurationWriter.diagnostic(rawToml)?.line
     }
 
-    /// The config file General and Raw TOML show. Looked up on reload and after "Open in…", never in a
+    /// The config file General and Raw TOML show. Looked up on reload, after a save and after "Open in…", never in a
     /// pane body: the lookup touches the disk, and a body can run on every keystroke.
     @Published private(set) var configPath = ""
     private var isSaving = false
@@ -335,7 +338,7 @@ final class ConfigurationViewModel: ObservableObject {
     }
 
     private func refreshConfigPath() {
-        configPath = (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+        configPath = (searchUserConfig()?.urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
     }
 
     private func reloadFromConfig() {
@@ -344,7 +347,9 @@ final class ConfigurationViewModel: ObservableObject {
         switch configBaseText() {
             case .success(let text): adopt(text, config)
             // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.
-            case .failure(let reason): errorMessage = reason
+            case .failure(let reason):
+                errorMessage = reason
+                rawTomlIsTheFile = false
         }
     }
 
@@ -370,6 +375,7 @@ final class ConfigurationViewModel: ObservableObject {
             if case .perMonitor = value { true } else { false }
         }
         rawToml = text
+        rawTomlIsTheFile = true
         // Both spellings declare workspaces the runtime keeps alive; see `Config.persistentWorkspaces`.
         definedWorkspaces = workspaceNames(table, "workspaces") + workspaceNames(table, "persistent-workspaces")
         inheritedBindings = loadInheritedBindings(table)
@@ -706,6 +712,9 @@ final class ConfigurationViewModel: ObservableObject {
     /// source of that write; re-reading it gains nothing. Raw TOML is the opposite: it replaced what
     /// every other pane is showing, and panes left on the old values would write them back.
     func didWrite(_ rendered: String) {
+        // The first save creates the config, and the watcher stays quiet for the app's own write, so
+        // nothing else would move General and Raw TOML off the bundled default's path.
+        refreshConfigPath()
         if rawTomlApplyRequested { return load(fromText: rendered) }
         rawToml = rendered
         let rulesOnDisk = loaded.windowRules

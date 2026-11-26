@@ -34,9 +34,17 @@ import TOMLKit
 ///
 /// A user config that exists and can't be read is a failure, never "". An empty base has no keys for
 /// `refusal` to protect, so a save replaced the whole file with the one edited key.
-@MainActor func configBaseText() -> Result<String, String> {
-    if isUnitTest { return testConfigOverride.map(readConfigText(at:)) ?? .failure("tests may not touch a real config") }
-    guard let url = findCustomConfigUrl().urlOrNil else {
+@MainActor func configBaseText(found: ConfigFile? = nil) -> Result<String, String> {
+    // Through the same search as `readConfig`, so under XCTest a missing `testConfigOverride` is "no
+    // config yet", as a missing `~/.aerospork.toml` is outside it.
+    guard let found = found ?? searchUserConfig() else { return .failure("tests may not touch a real config") }
+    // Not the bundled default: Raw TOML showed it under the failed config's banner as "Matches the
+    // file on disk".
+    if case .ambiguousConfigError(let candidates) = found {
+        return .failure("Several config files exist, so Settings can't tell which one to edit:\n" +
+            candidates.map(\.path).joined(separator: "\n"))
+    }
+    guard let url = found.urlOrNil else {
         // No user file, so nothing to protect.
         return .success((try? readConfigText(at: defaultConfigUrl).get()) ?? "")
     }

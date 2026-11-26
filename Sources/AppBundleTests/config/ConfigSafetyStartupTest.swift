@@ -312,6 +312,37 @@ final class ConfigSafetyStartupTest: XCTestCase {
         XCTAssertFalse(reloaded)
     }
 
+    /// Deleting a broken config to start over left "Config not loaded" on the banner and in the menu,
+    /// for a file that no longer existed: the read that found no config returned the bundled default's
+    /// URL, which `recordConfigHealth` skipped as the startup fallback.
+    func testDeletingABrokenConfigClearsItsBanner() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 'thirty'\n", for: self)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.noGui = true
+        var stdout = ""
+        XCTAssertFalse(reloadConfig(args: args, stdout: &stdout))
+        // `initAppBundle`'s fallback still leaves the failure showing.
+        XCTAssertTrue(reloadConfig(forceConfigUrl: defaultConfigUrl))
+        XCTAssertTrue(isRunningFallbackDefaults)
+
+        try FileManager.default.removeItem(at: url)
+        let reloaded = await ConfigFileWatcher.check(grace: .milliseconds(10))
+        XCTAssertTrue(reloaded)
+        XCTAssertNil(configLoadFailure)
+        XCTAssertFalse(isRunningFallbackDefaults)
+    }
+
+    func testDeletingAConfigClearsItsWarnings() throws {
+        let url = try useTemporaryConfig("config-version = 2\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        XCTAssertFalse(configWarnings.isEmpty, "the fixture no longer warns")
+
+        try FileManager.default.removeItem(at: url)
+        XCTAssertTrue(reloadConfig())
+        assertEquals(configUrl, defaultConfigUrl)
+        assertEquals(configWarnings, [])
+    }
+
     // MARK: - What the watcher arms
 
     func testWatchPlanArmsDirectoriesWhenNoFileExists() {

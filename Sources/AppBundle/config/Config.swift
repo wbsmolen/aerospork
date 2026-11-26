@@ -84,6 +84,10 @@ var defaultConfigUrl: URL {
 /// succeed, which points `configUrl` back at the user's file and clears `configLoadFailure`.
 @MainActor var isRunningFallbackDefaults: Bool { configUrl == defaultConfigUrl && configLoadFailure != nil }
 
+/// The failure is in the file's TOML, which Raw TOML loads with the parser's error on it. Two configs,
+/// or one that can't be read, are in no text Settings has, so Raw TOML can neither show nor fix them.
+@MainActor var configFailureIsInTheText: Bool { configLoadFailure?.hasPrefix(configParseFailurePrefix) == true }
+
 struct Config: ConvenienceCopyable {
     var afterStartupCommand: [any Command] = []
     /// Sink for keys the generic table walker must not write: deprecated no-ops, and the v2 keys
