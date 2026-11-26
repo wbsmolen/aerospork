@@ -1517,6 +1517,12 @@ The first time the Settings window saves after you open it, and each time you ap
 AeroSpork writes a backup next to your config: `<config>.toml.<yyyyMMdd-HHmmss>.backup`. AeroSpork
 keeps the five most recent backups. The Restore menu of the Raw TOML pane lists them.
 
+When your config is a symbolic link, for example from a dotfiles repository, a save writes the file
+that the link points to and keeps the link. The backups go next to the link, and each one holds the
+contents of the file. When the file is in a folder that AeroSpork cannot write, such as the Nix
+store, AeroSpork refuses the save, so edit the file where it is managed. A save replaces the file,
+so a hard link to your config keeps the old contents.
+
 ==== What the Settings window does not change
 
 AeroSpork reads each save back before it writes it. AeroSpork refuses an edit that would not come
