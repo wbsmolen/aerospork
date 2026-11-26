@@ -279,7 +279,11 @@ final class ConfigurationViewModel: ObservableObject {
 
     private func reloadFromConfig() {
         liveMonitors = loadMonitors()
-        adopt(configBaseText(), config)
+        switch configBaseText() {
+            case .success(let text): adopt(text, config)
+            // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.
+            case .failure(let reason): errorMessage = reason
+        }
     }
 
     /// Load from config text instead of the real config file. A Raw TOML apply goes through here,
@@ -580,7 +584,15 @@ final class ConfigurationViewModel: ObservableObject {
         }
         errorMessage = nil
 
-        let base = configBaseText()
+        // Before the Raw TOML branch as well: Apply replaces the whole file, and the file it would
+        // replace is one nobody could read, so nobody has seen what it holds.
+        let base: String
+        switch configBaseText() {
+            case .success(let text): base = text
+            case .failure(let reason):
+                errorMessage = "\(reason). Nothing was saved, and the file is unchanged."
+                return
+        }
 
         // An unapplied raw buffer must not be silently committed by an unrelated structured edit,
         // and the structured edit must not silently overwrite what the user typed in the raw tab.

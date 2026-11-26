@@ -37,14 +37,23 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
 
 @MainActor
 func readConfig(at configUrl: URL, isUserConfig: Bool = true) -> Result<(Config, URL), String> {
-    let configContent = try? String(contentsOf: configUrl)
-    var warnings: [TomlParseError] = []
-    let parseResult = configContent.map { parseConfig($0, isUserConfig: isUserConfig, warnings: &warnings) } ?? .success(defaultConfig)
-
     // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
     // Recording health here would erase the only surviving record that the user's config failed --
     // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
     let recordHealth = configUrl != defaultConfigUrl
+
+    let configContent: String
+    switch readConfigText(at: configUrl) {
+        case .success(let text):
+            configContent = text
+        case .failure(let reason):
+            // The bundled default has `Config()` behind it, and the startup fallback must not fail.
+            guard recordHealth else { return .success((defaultConfig, configUrl)) }
+            configLoadFailure = reason
+            return .failure(reason)
+    }
+    var warnings: [TomlParseError] = []
+    let parseResult = parseConfig(configContent, isUserConfig: isUserConfig, warnings: &warnings)
 
     switch parseResult {
         case .success(let parsedConfig):

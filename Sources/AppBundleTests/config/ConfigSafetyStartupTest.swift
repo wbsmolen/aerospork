@@ -58,11 +58,60 @@ final class ConfigSafetyStartupTest: XCTestCase {
         XCTAssertNil(testConfigOverride)
         guard case .failure(let reason) = readConfig() else { return XCTFail("a test read a real config") }
         assertEquals(reason, "tests may not touch a real config")
-        assertEquals(configBaseText(), "")
+        guard case .failure = configBaseText() else { return XCTFail("a test read a real config") }
         guard case .failure = userConfigTargetUrl() else { return XCTFail("a test resolved a real config to write") }
         // A forced read still reads exactly the file it names.
         guard case .success((_, let url)) = readConfig(forceConfigUrl: defaultConfigUrl) else { return XCTFail() }
         assertEquals(url, defaultConfigUrl)
+    }
+
+    /// A config that existed and could not be read loaded as "the defaults, successfully": no banner,
+    /// and the log said the user's file had loaded. A Latin-1 file is the likely case.
+    func testUnreadableConfigIsAFailureNotTheDefaults() throws {
+        let locked = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: locked.path) }
+        let latin1 = locked.deletingLastPathComponent().appending(path: "latin1.toml")
+        try Data("accordion-padding = 31 # caf\u{E9}\n".data(using: .isoLatin1).orDie()).write(to: latin1)
+
+        for (url, why) in [(locked, "permission denied"), (latin1, "isn't UTF-8 text")] {
+            configLoadFailure = nil
+            guard case .failure(let reason) = readConfig(at: url) else { return XCTFail("\(url.lastPathComponent) loaded") }
+            XCTAssertTrue(reason.contains(why), reason)
+            // `initAppBundle`'s fallback: it must succeed, and leave the failure showing.
+            guard case .success((_, let fallback)) = readConfig(forceConfigUrl: defaultConfigUrl) else { return XCTFail() }
+            configUrl = fallback
+            XCTAssertTrue(isRunningFallbackDefaults, url.lastPathComponent)
+        }
+    }
+
+    /// A dangling link (a dotfiles repo not checked out yet) read as "no config", and the first
+    /// Settings save replaced the link with a regular file.
+    func testDanglingConfigLinkIsReportedAndNotReplaced() async throws {
+        let link = try useTemporaryConfig("", for: self)
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "dotfiles/aerospork.toml")
+        let missing = link.deletingLastPathComponent().appending(path: "missing.toml")
+
+        guard case .file(let found) = findCustomConfigUrl(among: [link, missing]) else { return XCTFail("the link was not found") }
+        assertEquals(found, link)
+        guard case .failure(let reason) = readConfig(at: link) else { return XCTFail("a dangling link loaded") }
+        XCTAssertTrue(reason.contains("is a link to dotfiles/aerospork.toml, which does not exist"), reason)
+
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        vm.load(fromText: "")
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+
+        XCTAssertNotNil(vm.errorMessage)
+        assertEquals(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), "dotfiles/aerospork.toml")
+
+        // A stale link next to a working config changes nothing: the config is still found.
+        let real = link.deletingLastPathComponent().appending(path: "real.toml")
+        try "".write(to: real, atomically: true, encoding: .utf8)
+        guard case .file(let foundReal) = findCustomConfigUrl(among: [link, real]) else { return XCTFail() }
+        assertEquals(foundReal, real)
     }
 
     /// The migration rewrites the user's file, so it belongs to startup. Inside `readConfig` it also

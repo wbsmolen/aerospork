@@ -31,13 +31,17 @@ import TOMLKit
 
 /// The text we edit in place. The user config if present, else the shipped default config so a
 /// first save produces a full, commented config seeded from the defaults.
-@MainActor func configBaseText() -> String {
-    // "" is what an unreadable file gives too. A real read never returns it: the default is the floor.
-    if isUnitTest { return testConfigOverride.map(configBaseText(at:)) ?? "" }
-    return configBaseText(at: findCustomConfigUrl().urlOrNil ?? defaultConfigUrl)
+///
+/// A user config that exists and can't be read is a failure, never "". An empty base has no keys for
+/// `refusal` to protect, so a save replaced the whole file with the one edited key.
+@MainActor func configBaseText() -> Result<String, String> {
+    if isUnitTest { return testConfigOverride.map(readConfigText(at:)) ?? .failure("tests may not touch a real config") }
+    guard let url = findCustomConfigUrl().urlOrNil else {
+        // No user file, so nothing to protect.
+        return .success((try? readConfigText(at: defaultConfigUrl).get()) ?? "")
+    }
+    return readConfigText(at: url)
 }
-
-func configBaseText(at url: URL) -> String { (try? String(contentsOf: url)) ?? "" }
 
 /// Under XCTest, the one config file that reads and writes may touch. With none set, the URL-less
 /// reads and writes fail: under `swift test` they resolved to the developer's own
@@ -76,7 +80,7 @@ enum ConfigurationWriter {
 
     static func write(_ result: String, to target: URL) throws {
         let existed = FileManager.default.fileExists(atPath: target.path)
-        if existed { backUpOncePerSession(target) }
+        if existed { try backUpOncePerSession(target) }
         ConfigFileWatcher.suppressNextSelfWrite()
         try result.write(to: target, atomically: true, encoding: .utf8)
         // The watcher bails when the file doesn't exist, and only re-arms from its own event
@@ -116,20 +120,25 @@ enum ConfigurationWriter {
     /// anyone wanted it.
     static func startBackupSession() { sessionHasBackup = false }
 
-    static func backUpOncePerSession(_ target: URL, now: Date = Date()) {
+    static func backUpOncePerSession(_ target: URL, now: Date = Date()) throws {
         guard !sessionHasBackup else { return }
+        try backUp(target, now: now)
         sessionHasBackup = true
-        backUp(target, now: now)
     }
 
-    /// Copies `target` aside and prunes to `backupsToKeep`. Best-effort: a config we could not back
-    /// up is not a reason to refuse the user's edit, and the pre-write validation already ran.
-    static func backUp(_ target: URL, now: Date = Date()) {
+    /// Copies `target` aside and prunes to `backupsToKeep`. A copy that fails refuses the write: the
+    /// file exists and its text was just read, so a failure means something is wrong with it, and the
+    /// write would then replace it with no copy kept. Pruning stays best-effort.
+    static func backUp(_ target: URL, now: Date = Date()) throws {
         let backup = target.appendingPathExtension("\(timestamp(now))\(backupSuffix)")
         // Same second as an existing backup (a debounced save burst): keep the older copy, which is
         // further from whatever went wrong.
         if !FileManager.default.fileExists(atPath: backup.path) {
-            try? FileManager.default.copyItem(at: target, to: backup)
+            do {
+                try FileManager.default.copyItem(at: target, to: backup)
+            } catch {
+                throw WriteRefused(reason: "Could not back up \(target.path), so it was left as it is: \(error.localizedDescription)")
+            }
         }
         for stale in backups(of: target).dropFirst(backupsToKeep) {
             try? FileManager.default.removeItem(at: stale)
