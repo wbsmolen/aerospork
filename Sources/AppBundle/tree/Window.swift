@@ -99,6 +99,10 @@ class Window: TreeNode, Hashable {
 
     /// No-ops here, because a test double has no native state to change.
     func setNativeMinimized(_ value: Bool) {}
+    func setNativeFullscreen(_ value: Bool) {}
+    /// A test double is an ordinary window. Overridden by `MacWindow`, which asks the app.
+    @MainActor
+    func getAxUiElementWindowType() async throws -> AxUiElementWindowType { .window }
     func unhideApp() {}
 
     func setAxTopLeftCorner(_ point: CGPoint) { die("Not implemented") }
@@ -139,6 +143,4 @@ extension Window {
         if !isBackgroundTab { (parent as? TilingContainer)?.noteAway(self) }
         bind(to: container, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
     }
-
-    func asMacWindow() -> MacWindow { self as! MacWindow }
 }
