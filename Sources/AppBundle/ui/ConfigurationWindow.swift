@@ -100,8 +100,9 @@ public struct ConfigurationWindow: View {
         // convention, and it is only safe because an untouched section is never rewritten. The Raw
         // TOML tab has its own explicit Apply, since half-typed TOML is invalid most of the time.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            // The raw tab shows its own errors inline next to its Apply button.
-            if let error = viewModel.errorMessage, selectedPane != .rawToml {
+            // On every pane, Raw TOML included. Its inline status shows only the parse diagnostic of
+            // the buffer; a failed Apply or Restore, or the changed-on-disk conflict, shows only here.
+            if let error = viewModel.errorMessage {
                 VStack(spacing: 0) {
                     Divider()
                     StatusLabel(error, kind: .error)
