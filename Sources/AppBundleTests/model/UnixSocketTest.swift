@@ -61,6 +61,16 @@ final class UnixSocketTest: XCTestCase {
         assertTrue(Date().timeIntervalSince(start) < 10)
     }
 
+    /// The peer would refuse it anyway, and past 4 GiB `UInt32(data.count)` traps.
+    func testAnOversizeFrameIsRefusedBeforeAnythingIsWritten() {
+        let (peerFd, conn) = socketPair()
+        defer { Darwin.close(peerFd); conn.close() }
+        assertFalse(conn.sendMessage(Data(count: Int(UnixSocketConnection.maxFrameSize) + 1)))
+        var byte: UInt8 = 0
+        assertEquals(recv(peerFd, &byte, 1, MSG_DONTWAIT), -1) // not even the header
+        assertEquals(errno, EAGAIN)
+    }
+
     func testWriteToAPeerThatHungUpFailsInsteadOfRaisingSigpipe() {
         let (peerFd, conn) = socketPair()
         defer { conn.close() }
