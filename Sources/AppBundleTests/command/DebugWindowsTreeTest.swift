@@ -9,10 +9,6 @@ final class DebugWindowsTreeTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
     override func tearDown() async throws {
         for child in macosMinimizedWindowsContainer.children { child.unbindFromParent() }
-        testMonitors = [defaultTestMonitor]
-        gcMonitors()
-        _ = mainMonitor.setActiveWorkspace(focus.workspace)
-        Workspace.garbageCollectUnusedWorkspaces()
     }
 
     func testParse() {

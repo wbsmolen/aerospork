@@ -69,8 +69,10 @@ These seams let the suite run with no live window server:
 - **Source checks.** Some paths need a real `MacApp`. Tests such as `WorkspaceMemoryTest` and
   `WindowDetectionRetryTest` read the Swift source and check that a call is present or absent.
 - **Shared state.** `setUpWorkspacesForTests` (`AppBundleTests/testUtil.swift`) resets the config,
-  the workspaces and `TestApp.shared`. It does not reset `testMonitors`: a test that changes the
-  monitors sets `testMonitors = [defaultTestMonitor]` again, as `MonitorIdentityTest` does.
+  `testMonitors`, the workspaces and `TestApp.shared`. A test that changes the monitors needs no reset
+  of its own, as long as every test that reads them calls `setUpWorkspacesForTests` or sets
+  `testMonitors` first. `ParkPositionTest` does not touch the tree, so it sets `testMonitors` in its
+  own `setUp`.
 
 ## Add a test
 
@@ -80,7 +82,7 @@ These seams let the suite run with no live window server:
    `CommonTests/`.
 3. Call `setUpWorkspacesForTests()` in `setUp` when the test touches the tree.
 4. Reset in `tearDown` any global that the test sets and that `setUpWorkspacesForTests` does not
-   reset, such as `testMonitors`. `DegradeInsteadOfDieTest`, `OpenSettingsTest` and `OwnWindowsAndSingleInstanceTest` do
+   reset, such as `_prevFocusedWorkspaceName`. `DegradeInsteadOfDieTest`, `OpenSettingsTest` and `OwnWindowsAndSingleInstanceTest` do
    this. A flag such as `focusedWindowReadTimesOut` can also be reset with `defer`.
 5. Cite symbols in comments and messages, not line numbers. A line number goes stale with the next
    edit.

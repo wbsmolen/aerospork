@@ -16,12 +16,6 @@ final class DegradeInsteadOfDieTest: XCTestCase {
     override func tearDown() async throws {
         config.execOnWorkspaceChange = []
         _prevFocusedWorkspaceName = nil
-        testMonitors = [defaultTestMonitor]
-        // A workspace left visible on a fake second monitor would survive the next setUp's GC, as in
-        // `MonitorIdentityTest.tearDown`.
-        gcMonitors()
-        _ = mainMonitor.setActiveWorkspace(focus.workspace)
-        Workspace.garbageCollectUnusedWorkspaces()
         try await super.tearDown()
     }
 

@@ -21,7 +21,6 @@ final class SummonWorkspaceCommandTest: XCTestCase {
     /// every monitor, shuffling workspaces that had nothing to do with it.
     func testSummoningFromAnotherMonitorTradesPlacesAndTouchesNothingElse() async throws {
         threeMonitors()
-        defer { testMonitors = [defaultTestMonitor] }
         let (a, b, c) = (Workspace.get(byName: "a"), Workspace.get(byName: "b"), Workspace.get(byName: "c"))
         check(testMonitors[0].setActiveWorkspace(a))
         check(testMonitors[1].setActiveWorkspace(b))
@@ -39,7 +38,6 @@ final class SummonWorkspaceCommandTest: XCTestCase {
     /// that monitor must keep what it shows. It was replaced by a stub, behind a fatal `check`.
     func testMovingAHiddenWorkspaceLeavesItsOldMonitorAlone() async throws {
         threeMonitors()
-        defer { testMonitors = [defaultTestMonitor] }
         let (a, b) = (Workspace.get(byName: "a"), Workspace.get(byName: "b"))
         check(testMonitors[0].setActiveWorkspace(a))
         check(testMonitors[1].setActiveWorkspace(b))

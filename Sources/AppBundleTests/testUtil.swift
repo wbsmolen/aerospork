@@ -70,6 +70,7 @@ func withoutComments(_ text: some StringProtocol) -> String {
 
 @MainActor
 func setUpWorkspacesForTests() {
+    testMonitors = [defaultTestMonitor] // before `gcMonitors()`, so a multi-monitor test needs no reset of its own
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable
@@ -89,10 +90,12 @@ func setUpWorkspacesForTests() {
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
     resetWorkspaceScreensForTests() // or `getStubWorkspace` hands out what an earlier test showed
     gcMonitors() // a multi-monitor test leaves its workspaces visible on monitors that are gone by now
+    // Before the GC: when the focus already named this workspace, `focusWorkspace` returned early and left
+    // the main monitor showing whatever a multi-monitor test put there.
+    check(mainMonitor.setActiveWorkspace(focus.workspace))
     Workspace.garbageCollectUnusedWorkspaces()
     check(focus.workspace.isEffectivelyEmpty)
     check(focus.workspace === Workspace.all.singleOrNil(), Workspace.all.map(\.description).joined(separator: ", "))
-    check(mainMonitor.setActiveWorkspace(focus.workspace))
 
     TestApp.shared.focusedWindow = nil
     TestApp.shared.windows = []

@@ -4,7 +4,7 @@ import XCTest
 /// Parking a window of a workspace that left the screen. `layoutWorkspaces` parks only `MacWindow`s, which need a
 /// real app, so the decisions are pure functions and the wiring is pinned in the source.
 final class ParkPositionTest: XCTestCase {
-    override func tearDown() { testMonitors = [defaultTestMonitor] }
+    override func setUp() { testMonitors = [defaultTestMonitor] } // no `setUpWorkspacesForTests` here
 
     /// A tiled window is parked from where layout last put it, not from a frame read over AX. The two must give
     /// the same answer whenever they are the same rect.

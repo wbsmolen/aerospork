@@ -10,15 +10,7 @@ import XCTest
 @MainActor
 final class MonitorIdentityTest: XCTestCase {
     override func tearDown() async throws {
-        testMonitors = [defaultTestMonitor]
         config.workspaceToMonitorForceAssignment = [:]
-        // Hand back exactly the state `setUpWorkspacesForTests` assumes. The workspace-to-screen map
-        // is keyed by screen POINT and nothing in setUp clears it, so a workspace left visible on a
-        // fake second monitor stays "visible" -- and the next test's setUp cannot displace it,
-        // because `setFocus` early-returns when the frozen focus already names its target.
-        gcMonitors() // rebuild the map for the restored single-monitor world
-        _ = mainMonitor.setActiveWorkspace(focus.workspace)
-        Workspace.garbageCollectUnusedWorkspaces()
         try await super.tearDown()
     }
 
@@ -33,11 +25,10 @@ final class MonitorIdentityTest: XCTestCase {
         gcMonitors()
         check(side.setActiveWorkspace(Workspace.get(byName: "earlier-a")))
         check(side.setActiveWorkspace(Workspace.get(byName: "earlier-b"))) // the side point last showed earlier-a
-        testMonitors = [defaultTestMonitor]
         setUpWorkspacesForTests()
 
-        testMonitors = [side] // a later test whose main monitor sits at that point
         setUpWorkspacesForTests()
+        testMonitors = [side] // a later test whose main monitor sits at that point
         assertNotEquals(getStubWorkspace(for: mainMonitor).name, "earlier-a")
     }
 

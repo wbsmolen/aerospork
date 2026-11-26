@@ -85,7 +85,6 @@ final class FocusCommandTest: XCTestCase {
         let left = MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "left", rect: Rect(topLeftX: 0, topLeftY: 0, width: 1000, height: 1000), visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1000, height: 1000))
         let right = MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "right", rect: Rect(topLeftX: 1000, topLeftY: 0, width: 1000, height: 1000), visibleRect: Rect(topLeftX: 1000, topLeftY: 0, width: 1000, height: 1000))
         testMonitors = [left, right]
-        defer { testMonitors = [defaultTestMonitor] }
         let onRight = Workspace.get(byName: "right")
         check(right.setActiveWorkspace(onRight))
         check(onRight.focusWorkspace())
