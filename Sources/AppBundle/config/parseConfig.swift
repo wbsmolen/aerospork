@@ -3,12 +3,22 @@ import Common
 import TOMLKit
 
 /// `found` stands in for the search for the user's config, so a test can hand it files of its own.
+///
+/// It reads and reports, and records nothing: `reload-config --dry-run` reads too, and a dry run that
+/// cleared the failure took the fallback banner away while the defaults still ran. The one read that
+/// is applied records it, through `recordConfigHealth`.
 @MainActor
 func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil) -> Result<(Config, URL), String> {
+    var warnings: [String] = []
+    return readConfig(forceConfigUrl: forceConfigUrl, found: found, warnings: &warnings)
+}
+
+@MainActor
+func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: inout [String]) -> Result<(Config, URL), String> {
     // Before the search, not after it. The forced read is `initAppBundle`'s fallback once the user's
     // config failed, and it `check`s the result. When the search itself was what failed (two
     // configs), the fallback failed the same way and the app died at startup.
-    if let forceConfigUrl { return readConfig(at: forceConfigUrl) }
+    if let forceConfigUrl { return readConfig(at: forceConfigUrl, warnings: &warnings) }
     let customConfig: ConfigFile
     if let found {
         customConfig = found
@@ -20,7 +30,7 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil) -> Result<
     }
     switch customConfig {
         case .file(let url):
-            return readConfig(at: url)
+            return readConfig(at: url, warnings: &warnings)
         case .noCustomConfigExists:
             // A migrating user's first launch: the config they brought is right there and not read,
             // so they get the default keymap and no hint why.
@@ -28,44 +38,41 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil) -> Result<
                 AppLog.config.notice("\(hint, privacy: .public)")
                 printStderr(hint)
             }
-            return readConfig(at: defaultConfigUrl, isUserConfig: false)
+            return readConfig(at: defaultConfigUrl, isUserConfig: false, warnings: &warnings)
         case .ambiguousConfigError(let candidates):
             let msg = """
                 Ambiguous config error. Several configs found:
                 \(candidates.map(\.path).joined(separator: "\n"))
                 """
-            // Recorded like any other failure, so the defaults that run instead show the banner.
-            configLoadFailure = msg
             return .failure(msg)
     }
 }
 
 @MainActor
 func readConfig(at configUrl: URL, isUserConfig: Bool = true) -> Result<(Config, URL), String> {
-    // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
-    // Recording health here would erase the only surviving record that the user's config failed --
-    // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
-    let recordHealth = configUrl != defaultConfigUrl
+    var warnings: [String] = []
+    return readConfig(at: configUrl, isUserConfig: isUserConfig, warnings: &warnings)
+}
 
+@MainActor
+func readConfig(at configUrl: URL, isUserConfig: Bool = true, warnings: inout [String]) -> Result<(Config, URL), String> {
     let configContent: String
     switch readConfigText(at: configUrl) {
         case .success(let text):
             configContent = text
         case .failure(let reason):
             // The bundled default has `Config()` behind it, and the startup fallback must not fail.
-            guard recordHealth else { return .success((defaultConfig, configUrl)) }
-            configLoadFailure = reason
+            guard configUrl != defaultConfigUrl else { return .success((defaultConfig, configUrl)) }
             return .failure(reason)
     }
-    var warnings: [TomlParseError] = []
-    let parseResult = parseConfig(configContent, isUserConfig: isUserConfig, warnings: &warnings)
+    var parseWarnings: [TomlParseError] = []
+    let parseResult = parseConfig(configContent, isUserConfig: isUserConfig, warnings: &parseWarnings)
 
     switch parseResult {
         case .success(let parsedConfig):
-            if recordHealth {
-                configLoadFailure = nil
-                configWarnings = warnings.map(\.description)
-                for warning in configWarnings { printStderr("\(configUrl.lastPathComponent): \(warning)") }
+            warnings = parseWarnings.map(\.description)
+            if configUrl != defaultConfigUrl {
+                for warning in warnings { printStderr("\(configUrl.lastPathComponent): \(warning)") }
             }
             return .success((parsedConfig, configUrl))
         case .failure(let errors):
@@ -74,8 +81,23 @@ func readConfig(at configUrl: URL, isUserConfig: Bool = true) -> Result<(Config,
 
                 \(errors.map(\.description).joined(separator: "\n\n"))
                 """
-            if recordHealth { configLoadFailure = msg }
             return .failure(msg)
+    }
+}
+
+/// What the banner and the menu warning show, from the read that is applied.
+@MainActor
+func recordConfigHealth(_ result: Result<(Config, URL), String>, warnings: [String]) {
+    switch result {
+        case .success((_, let url)):
+            // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
+            // Recording it would erase the only surviving record that the user's config failed --
+            // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
+            guard url != defaultConfigUrl else { return }
+            configLoadFailure = nil
+            configWarnings = warnings
+        case .failure(let msg):
+            configLoadFailure = msg
     }
 }
 

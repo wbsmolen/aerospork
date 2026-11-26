@@ -49,8 +49,35 @@ final class ConfigSafetyStartupTest: XCTestCase {
     /// after it was recorded, leaving nothing anywhere that says the config did not load.
     func testForcedDefaultReadDoesNotEraseTheFailure() {
         configLoadFailure = "Failed to parse ~/.aerospork.toml"
-        _ = readConfig(forceConfigUrl: defaultConfigUrl)
+        var warnings: [String] = []
+        recordConfigHealth(readConfig(forceConfigUrl: defaultConfigUrl, warnings: &warnings), warnings: warnings)
         assertEquals(configLoadFailure, "Failed to parse ~/.aerospork.toml")
+    }
+
+    /// `reload-config --dry-run` promises to change nothing. A passing one cleared the failure, so the
+    /// banner went away while the defaults still ran, and a failing one set a failure for a config the
+    /// app was not running.
+    func testDryRunDoesNotTouchHealth() throws {
+        let good = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        let bad = good.deletingLastPathComponent().appending(path: "bad.toml")
+        try "accordion-padding = 'thirty'\n".write(to: bad, atomically: true, encoding: .utf8)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.dryRun = true
+        args.noGui = true
+        var stdout = ""
+
+        configUrl = defaultConfigUrl
+        configLoadFailure = "Failed to parse ~/.aerospork.toml"
+        configWarnings = ["a warning from the running config"]
+        XCTAssertTrue(reloadConfig(args: args, forceConfigUrl: good, stdout: &stdout), stdout)
+        assertEquals(configLoadFailure, "Failed to parse ~/.aerospork.toml")
+        assertEquals(configWarnings, ["a warning from the running config"])
+        XCTAssertTrue(isRunningFallbackDefaults)
+
+        configLoadFailure = nil
+        XCTAssertFalse(reloadConfig(args: args, forceConfigUrl: bad, stdout: &stdout))
+        XCTAssertNil(configLoadFailure)
+        assertEquals(configWarnings, ["a warning from the running config"])
     }
 
     /// Under `swift test` the URL-less read resolved to the developer's own `~/.aerospork-debug.toml`.
@@ -75,7 +102,9 @@ final class ConfigSafetyStartupTest: XCTestCase {
         guard case .ambiguousConfigError = twoConfigs else { return XCTFail("two configs were not ambiguous") }
         configLoadFailure = nil
 
-        guard case .failure = readConfig(found: twoConfigs) else { return XCTFail("an ambiguous config loaded") }
+        let read = readConfig(found: twoConfigs)
+        guard case .failure = read else { return XCTFail("an ambiguous config loaded") }
+        recordConfigHealth(read, warnings: [])
         guard case .success((_, let url)) = readConfig(forceConfigUrl: defaultConfigUrl, found: twoConfigs) else {
             return XCTFail("the startup fallback failed, and initAppBundle would die")
         }
@@ -94,8 +123,10 @@ final class ConfigSafetyStartupTest: XCTestCase {
 
         for (url, why) in [(locked, "permission denied"), (latin1, "isn't UTF-8 text")] {
             configLoadFailure = nil
-            guard case .failure(let reason) = readConfig(at: url) else { return XCTFail("\(url.lastPathComponent) loaded") }
+            let read = readConfig(at: url)
+            guard case .failure(let reason) = read else { return XCTFail("\(url.lastPathComponent) loaded") }
             XCTAssertTrue(reason.contains(why), reason)
+            recordConfigHealth(read, warnings: [])
             // `initAppBundle`'s fallback: it must succeed, and leave the failure showing.
             guard case .success((_, let fallback)) = readConfig(forceConfigUrl: defaultConfigUrl) else { return XCTFail() }
             configUrl = fallback

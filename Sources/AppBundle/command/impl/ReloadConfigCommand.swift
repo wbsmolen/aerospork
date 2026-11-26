@@ -24,10 +24,13 @@ struct ReloadConfigCommand: Command {
     forceConfigUrl: URL? = nil,
     stdout: inout String,
 ) -> Bool {
-    switch readConfig(forceConfigUrl: forceConfigUrl) {
+    var warnings: [String] = []
+    let result = readConfig(forceConfigUrl: forceConfigUrl, warnings: &warnings)
+    // A dry run promises to change nothing, and that includes what the banner says.
+    if !args.dryRun { recordConfigHealth(result, warnings: warnings) }
+    switch result {
         case .success(let (parsedConfig, url)):
             if !args.dryRun {
-                resetHotKeys()
                 config = parsedConfig
                 configUrl = url
                 activateMode(activeMode)
@@ -37,7 +40,7 @@ struct ReloadConfigCommand: Command {
             // on. `readConfig` already prints warnings, but only to stderr -- and a .app launched by
             // launchd has nowhere for stderr to go, so that record did not survive the session.
             AppLog.config.notice("Config loaded: \(url.path, privacy: .public)")
-            for warning in configWarnings {
+            for warning in warnings {
                 AppLog.config.notice("Config warning: \(warning, privacy: .public)")
             }
             return true

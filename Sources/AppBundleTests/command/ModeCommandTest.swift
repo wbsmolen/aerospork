@@ -45,6 +45,33 @@ final class ModeCommandTest: XCTestCase {
         assertNil(activeMode)
     }
 
+    /// A mode switch or a reload unregistered every key and registered it again, so a press queued
+    /// across the gap was dropped and the combo reached the focused app meanwhile.
+    func testHotkeyRegistrationPlanKeepsSharedBindings() {
+        func binding(_ modifiers: NSEvent.ModifierFlags, _ key: Key, _ notation: String) -> HotkeyBinding {
+            HotkeyBinding(modifiers, key, [parseCommand("focus left").cmdOrDie], descriptionWithKeyNotation: notation)
+        }
+        let altH = binding([.option], .h, "alt-h")
+        let altJ = binding([.option], .j, "alt-j")
+        let altK = binding([.option], .k, "alt-k")
+        let target = [altH, altJ, altK].reduce(into: [String: HotkeyBinding]()) { $0[$1.descriptionWithKeyCode] = $1 }
+
+        // alt-h is kept, alt-l goes, and alt-j and alt-k are new.
+        var plan = hotkeyRegistrationPlan(current: [1: altH.descriptionWithKeyCode, 2: "alt-l"], target: target)
+        assertEquals(plan.unregister, [2])
+        assertEquals(plan.register.map(\.descriptionWithKeyNotation), ["alt-j", "alt-k"])
+
+        // alt-k failed to register last time (another app owns it), so it is not current and is tried again.
+        plan = hotkeyRegistrationPlan(current: [1: altH.descriptionWithKeyCode, 3: altJ.descriptionWithKeyCode], target: target)
+        assertEquals(plan.unregister, [])
+        assertEquals(plan.register.map(\.descriptionWithKeyNotation), ["alt-k"])
+
+        // `enable off` is the nil mode, which has no bindings: everything goes.
+        plan = hotkeyRegistrationPlan(current: [1: altH.descriptionWithKeyCode, 3: altJ.descriptionWithKeyCode], target: [:])
+        assertEquals(plan.unregister, [1, 3])
+        assertEquals(plan.register.map(\.descriptionWithKeyNotation), [])
+    }
+
     /// `zip` stops at the shorter list, so a binding equalled any longer binding it was a prefix of.
     func testBindingsWithDifferentCommandCountsAreNotEqual() {
         let left: [any Command] = [parseCommand("focus left").cmdOrDie]
