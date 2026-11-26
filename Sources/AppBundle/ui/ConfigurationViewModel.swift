@@ -666,9 +666,10 @@ final class ConfigurationViewModel: ObservableObject {
         // only then failed to reload, leaving a broken file plus two separate error surfaces. Raw
         // TOML replaces the whole file, so all it has to be is valid.
         let rendered = ConfigurationWriter.render(baseText: base, from: self)
+        var validated: ConfigurationWriter.Validated?
         let refusal = rawTomlApplyRequested
-            ? ConfigurationWriter.validate(rendered)
-            : ConfigurationWriter.refusal(rendered: rendered, base: base, from: self)
+            ? ConfigurationWriter.validate(rendered, validated: &validated)
+            : ConfigurationWriter.refusal(rendered: rendered, base: base, from: self, validated: &validated)
         if let refusal {
             errorMessage = refusal
             return
@@ -680,10 +681,10 @@ final class ConfigurationViewModel: ObservableObject {
             if rendered != base {
                 if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
                 try ConfigurationWriter.write(rendered)
-                // The file watcher refreshes after its reload; it skips this save's bytes, which this reload
-                // applies, and this did not, so a gap, layout or normalization change did nothing on screen until
+                // The file watcher refreshes after its reload; it skips this save's bytes, which this apply
+                // records, and this did not, so a gap, layout or normalization change did nothing on screen until
                 // some unrelated window event. Not under XCTest, where a refresh enumerates the machine's apps.
-                if reloadConfig(), !isUnitTest {
+                if applySavedConfig(validated), !isUnitTest {
                     runRefreshSession(.globalObserver("settingsSaved"), screenIsDefinitelyUnlocked: false)
                 }
             }

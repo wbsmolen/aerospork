@@ -57,6 +57,14 @@ import TOMLKit
 enum ConfigurationWriter {
     private typealias Settings = ConfigurationViewModel.Settings
 
+    /// The config a check parsed from `text`, with its warnings. A save applies it when the file reads
+    /// back as exactly `text` (`applySavedConfig`), instead of parsing the same bytes again.
+    struct Validated {
+        let text: String
+        let config: Config
+        let warnings: [String]
+    }
+
     struct ValidationDiagnostic: Equatable {
         let message: String
         let line: Int?
@@ -90,7 +98,7 @@ enum ConfigurationWriter {
         }
         if FileManager.default.fileExists(atPath: target.path) { try backUpOncePerSession(target) }
         // The watcher sees this write and re-arms on the new file, through a link too. The caller's
-        // reload records these bytes as applied, so the watcher does not reload them a second time.
+        // apply records these bytes as applied, so the watcher does not reload them a second time.
         try result.write(to: resolved, atomically: true, encoding: .utf8)
     }
 
@@ -246,6 +254,12 @@ enum ConfigurationWriter {
     /// what the panes say, and every other top-level key has to say what it said before. A spelling
     /// the writer can't edit is refused only when the edit actually touches it.
     static func refusal(rendered: String, base: String, from vm: ConfigurationViewModel) -> String? {
+        var validated: Validated?
+        return refusal(rendered: rendered, base: base, from: vm, validated: &validated)
+    }
+
+    /// `validated` is what `rendered` parsed to, for the save to apply when nil comes back.
+    static func refusal(rendered: String, base: String, from vm: ConfigurationViewModel, validated: inout Validated?) -> String? {
         if vm.hasUnsavedChanges, let shape = unsupportedShapeReason(base) { return shape }
         let cannotEdit = "This change can't be made to how the config file is written, so nothing was saved. Use the Raw TOML tab."
         let baseTable = try? TOMLTable(string: base)
@@ -253,10 +267,12 @@ enum ConfigurationWriter {
         // broken by the surgery, and the parser's complaint about a stray line would only confuse.
         guard let table = try? TOMLTable(string: rendered) else { return baseTable == nil ? validate(rendered) : cannotEdit }
         let parsed: Config
-        switch parseConfig(rendered) {
+        var warnings: [TomlParseError] = []
+        switch parseConfig(table: table, rawToml: rendered, warnings: &warnings) {
             case .success(let config): parsed = config
             case .failure(let errors): return errors.map(\.description).joined(separator: "\n")
         }
+        validated = Validated(text: rendered, config: parsed, warnings: warnings.map(\.description))
         let want = vm.settings.asWritten
         if let row = firstDuplicate(want.assignments.map(\.workspace)) { return "Two rows pin workspace '\(row)'. Remove one, and this change will save." }
         if let row = firstDuplicate(want.exec.envVars.map(\.name)) { return "Two rows set '\(row)'. Remove one, and this change will save." }
@@ -305,8 +321,16 @@ enum ConfigurationWriter {
     /// Validate before writing. A config that fails to parse used to land on disk anyway and only
     /// then pop a separate error dialog, leaving the user with a broken file and two error surfaces.
     static func validate(_ text: String) -> String? {
-        switch parseConfig(text) {
-            case .success: return nil
+        var validated: Validated?
+        return validate(text, validated: &validated)
+    }
+
+    static func validate(_ text: String, validated: inout Validated?) -> String? {
+        var warnings: [TomlParseError] = []
+        switch parseConfig(text, warnings: &warnings) {
+            case .success(let config):
+                validated = Validated(text: text, config: config, warnings: warnings.map(\.description))
+                return nil
             case .failure(let errors): return errors.map(\.description).joined(separator: "\n")
         }
     }
@@ -316,8 +340,9 @@ enum ConfigurationWriter {
     /// localized error string. Semantic config errors still carry their key path in `message` and
     /// intentionally have no pretend source position.
     static func diagnostic(_ text: String) -> ValidationDiagnostic? {
+        let table: TOMLTable
         do {
-            _ = try TOMLTable(string: text)
+            table = try TOMLTable(string: text)
         } catch let error as TOMLParseError {
             return ValidationDiagnostic(
                 message: error.debugDescription,
@@ -327,7 +352,9 @@ enum ConfigurationWriter {
         } catch {
             return ValidationDiagnostic(message: error.localizedDescription, line: nil, column: nil)
         }
-        return validate(text).map { ValidationDiagnostic(message: $0, line: nil, column: nil) }
+        var warnings: [TomlParseError] = []
+        guard case .failure(let errors) = parseConfig(table: table, rawToml: text, warnings: &warnings) else { return nil }
+        return ValidationDiagnostic(message: errors.map(\.description).joined(separator: "\n"), line: nil, column: nil)
     }
 
     /// A file with both line endings can't be given back the way it arrived: `render` normalizes to

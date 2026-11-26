@@ -294,7 +294,16 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     } catch let e {
         return .failure([.syntax(e.localizedDescription)])
     }
+    return parseConfig(table: rawTable, rawToml: rawToml, isUserConfig: isUserConfig, warnings: &warnings)
+}
 
+/// The same, for a caller that already holds the parsed table of `rawToml`, so the text is not parsed twice.
+@MainActor func parseConfig(
+    table rawTable: TOMLTable,
+    rawToml: String,
+    isUserConfig: Bool = true,
+    warnings: inout [TomlParseError],
+) -> Result<Config, [TomlParseError]> {
     var errors: [TomlParseError] = []
 
     var config = rawTable.parseTable(Config(), configParser, .emptyRoot, &errors)
