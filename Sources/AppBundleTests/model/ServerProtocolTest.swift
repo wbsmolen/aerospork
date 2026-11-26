@@ -19,7 +19,17 @@ final class ServerProtocolTest: XCTestCase {
         assertEquals(answer("no-such-subcommand")?.exitCode, ExitCode.badArgs)
     }
 
+    /// The socket sends an args array, and the args parser does not register `exec-and-forget`, so it
+    /// fails to parse before `nonRunningAnswer` ever sees a command.
     func testExecOverSocketGetsBadArgs() {
+        let (cmd, help, err) = parseCommand(["exec-and-forget", "echo", "hi"]).unwrap()
+        assertNil(cmd)
+        assertEquals(nonRunningAnswer(command: cmd, help: help, err: err)?.exitCode, ExitCode.badArgs)
+    }
+
+    /// Only the string parser, which the config uses, builds an `ExecAndForgetCommand`. The socket never
+    /// reaches this refusal; it is defence in depth in case a later path hands one over.
+    func testAnExecCommandIsStillRefusedIfOneReachesTheServer() {
         assertEquals(answer("exec-and-forget echo hi")?.exitCode, ExitCode.badArgs)
     }
 

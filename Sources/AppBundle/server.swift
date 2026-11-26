@@ -53,6 +53,8 @@ func serverAnswer(_ exitCode: Int32, stdout: String = "", stderr: String = "") -
 func nonRunningAnswer(command: (any Command)?, help: String?, err: String?) -> ServerAnswer? {
     if let help { return serverAnswer(ExitCode.success, stdout: help) }
     if let err { return serverAnswer(ExitCode.badArgs, stderr: err) }
+    // Defence in depth. The socket parses an args array, where `exec-and-forget` is not registered and
+    // fails as `err` above, so a request from the socket never reaches this branch.
     if command?.isExec == true { return serverAnswer(ExitCode.badArgs, stderr: "exec-and-forget is prohibited in CLI") }
     return nil
 }
