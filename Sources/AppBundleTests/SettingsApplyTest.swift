@@ -175,7 +175,8 @@ final class SettingsApplyTest: XCTestCase {
 
     func testTheWindowFlushesOnClose() throws {
         let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationWindow.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains(".onDisappear { Task { await viewModel.flushPendingAutoSave() } }"))
+        let close = try XCTUnwrap(source.split(separator: "\n").first { $0.contains(".onDisappear") }, "closing the window no longer flushes")
+        XCTAssertTrue(close.contains("flushPendingAutoSave()"), "closing the window must flush the pending edit, not drop it: \(close)")
     }
 
     // MARK: - Window rule rows are found by id
@@ -249,7 +250,7 @@ final class SettingsApplyTest: XCTestCase {
     /// only its place after the write is checked in the source.
     func testASavedChangeIsAppliedOnScreenWithoutWaitingForAWindowEvent() throws {
         let body = try sourceBody("func saveConfiguration()", in: "Sources/AppBundle/ui/ConfigurationViewModel.swift")
-        let write = try XCTUnwrap(body.range(of: "try ConfigurationWriter.write(rendered)"))
+        let write = try XCTUnwrap(body.range(of: "ConfigurationWriter.write("))
         let refresh = try XCTUnwrap(body.range(of: "runRefreshSession("), "a GUI save no longer refreshes")
         XCTAssertLessThan(write.lowerBound, refresh.lowerBound)
     }

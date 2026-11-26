@@ -513,25 +513,21 @@ final class WorkspaceMemoryTest: XCTestCase {
         )
     }
 
-    /// And the result has to be what the window is bound to, not something computed and dropped.
+    /// And the result has to be what the window is bound to, not something computed and dropped:
+    /// `remembered` wins over the location fallback, and the workspace it picks is the one bound to.
+    /// Only those tokens, in that order: the fallback expression is not this rule.
     func testTheRestoredWorkspaceIsWhatTheWindowIsBoundTo() throws {
-        let source = try String(
-            contentsOf: projectRoot.appending(path: "Sources/AppBundle/tree/MacWindow.swift"),
-            encoding: .utf8,
-        )
-        let normalised = source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        XCTAssertTrue(
-            normalised.contains(
-                "let remembered = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId) "
-                    + "let workspace = remembered "
-                    + "?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace) "
-                    + "var data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)",
-            ),
-            """
+        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift")
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let message = """
             the remembered workspace is not the value bound to the window -- location is being used
             regardless, so the memory is computed and thrown away.
-            """,
-        )
+            """
+        let lookup = try XCTUnwrap(body.range(of: "let remembered = WorkspaceMemory.restoredWorkspace("), message)
+        let preferred = try XCTUnwrap(body.range(of: "let workspace = remembered ??"), message)
+        let bound = try XCTUnwrap(body.range(of: "unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace,"), message)
+        XCTAssertLessThan(lookup.lowerBound, preferred.lowerBound, message)
+        XCTAssertLessThan(preferred.lowerBound, bound.lowerBound, message)
     }
 
     /// Restoring the name without the monitor is the reverted defect. `restoredWorkspace` is the one

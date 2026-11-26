@@ -126,6 +126,17 @@ final class PersistentWorkspacesTest: XCTestCase {
         assertEquals(next?.name, "2")
     }
 
+    /// In text order 10 sorts between 1 and 2, so `next` from 9 would wrap round to 1.
+    func testNextAndPrevSortNumerically() {
+        config.persistentWorkspaces = Set((1 ... 10).map(String.init))
+        Workspace.garbageCollectUnusedWorkspaces()
+        XCTAssertTrue(Workspace.get(byName: "9").focusWorkspace())
+        assertEquals(getNextPrevWorkspace(current: focus.workspace, isNext: true, wrapAround: true, stdin: "", target: focus)?.name, "10")
+
+        XCTAssertTrue(Workspace.get(byName: "10").focusWorkspace())
+        assertEquals(getNextPrevWorkspace(current: focus.workspace, isNext: false, wrapAround: true, stdin: "", target: focus)?.name, "9")
+    }
+
     /// The Monitors pane's "Pin a workspace here" menu lists defined workspaces. It must read both
     /// spellings, or a config written with the older key offers nothing to pin.
     func testSettingsTreatsBothSpellingsAsDefined() {

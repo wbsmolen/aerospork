@@ -284,6 +284,15 @@ final class NativeTabsTest: XCTestCase {
         XCTAssertTrue(popup.parent === macosPopupWindowsContainer)
     }
 
+    /// A new tab is no new window, so `on-window-detected` does not run for it: a rule that moves the app's
+    /// windows would tear the tab out of its group. Registration needs a real app's AX, so this reads the source.
+    func testANewTabRunsNoWindowRules() throws {
+        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift")
+        XCTAssertTrue(body.contains("let isNewTab = !tabsBeside.isEmpty"))
+        let rules = try XCTUnwrap(body.split(separator: "\n").first { $0.contains("tryOnWindowDetected(") }, "registration no longer runs window rules")
+        XCTAssertTrue(rules.contains("if !isNewTab {"), "window rules run for a new tab: \(rules)")
+    }
+
     /// An app with several groups.
     func testATabIsMatchedToItsGroupByTitleThenFrame() {
         let frame = Rect(topLeftX: 10, topLeftY: 20, width: 300, height: 400)
