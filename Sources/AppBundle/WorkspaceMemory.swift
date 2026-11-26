@@ -464,6 +464,11 @@ enum WorkspaceMemory {
     /// guarantee the OLDER snapshot won about half the time — measured 240/500. Worse, `lastWritten`
     /// had already recorded the newer one, so the early-out suppressed every attempt to correct it.
     private static let writeQueue = DispatchQueue(label: "\(aeroSporkAppId).workspace-memory")
+    /// Whether the last write failed. Touched only on `writeQueue`, which orders the writes, so an
+    /// episode ends exactly at the first write that lands.
+    private nonisolated(unsafe) static var writeIsFailing = false
+    /// Failure records logged so far. Touched only on `writeQueue`; a test reads it after `waitForWrites()`.
+    nonisolated(unsafe) static var writeFailureNotices = 0
 
     private static func write(_ state: State, waitForCompletion: Bool) {
         // Never persist a state whose session we could not determine: `load()` would reject it, so
@@ -471,8 +476,19 @@ enum WorkspaceMemory {
         guard !state.session.isEmpty else { return }
         let url = fileUrl
         let work: @Sendable () -> Void = {
-            guard let data = try? JSONEncoder().encode(state) else { return }
-            try? data.write(to: url, options: .atomic)
+            do {
+                try JSONEncoder().encode(state).write(to: url, options: .atomic)
+                writeIsFailing = false
+            } catch {
+                // Once per episode: on a full disk every changed refresh fails, up to 20 times a second.
+                // `lastWritten` is left alone, so the next real change retries.
+                if !writeIsFailing {
+                    writeIsFailing = true
+                    writeFailureNotices += 1
+                    AppLog.session.error("Workspace memory not saved: \(error.localizedDescription, privacy: .public)")
+                }
+                return
+            }
             // 0600: this names every running app's bundle id and every monitor's UUID. Set after the
             // write because `.atomic` replaces the file, so any mode set beforehand is discarded.
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
@@ -551,5 +567,9 @@ enum WorkspaceMemory {
         fileUrlOverride = nil
         cachedSession = nil
         sessionOverrideForTests = nil
+        writeQueue.sync {
+            writeIsFailing = false
+            writeFailureNotices = 0
+        }
     }
 }

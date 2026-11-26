@@ -370,6 +370,31 @@ final class WorkspaceMemoryTest: XCTestCase {
         assertEquals(try Data(contentsOf: WorkspaceMemory.fileUrl), before)
     }
 
+    /// A failed write was silent. Now it logs once per episode, not once per refresh, and the first
+    /// write that lands ends the episode.
+    func testAFailedWriteIsRecordedOncePerEpisode() throws {
+        let directory = tempDir.appending(path: "gone")
+        WorkspaceMemory.fileUrlOverride = directory.appending(path: "state.json")
+        let snapshot = state(session: WorkspaceMemory.session(), windows: ["42": .init(workspace: "A", bundleId: "com.apple.finder")])
+        func writeTwice() {
+            WorkspaceMemory.writeForTests(snapshot)
+            WorkspaceMemory.writeForTests(snapshot)
+            WorkspaceMemory.waitForWrites()
+        }
+
+        writeTwice()
+        assertEquals(WorkspaceMemory.writeFailureNotices, 1)
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        writeTwice()
+        assertEquals(WorkspaceMemory.writeFailureNotices, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: WorkspaceMemory.fileUrl.path))
+
+        try FileManager.default.removeItem(at: directory)
+        writeTwice()
+        assertEquals(WorkspaceMemory.writeFailureNotices, 2, additionalMsg: "a write that landed did not end the episode")
+    }
+
     /// Failing to identify the session is not proof the file is stale. Deleting it on that basis
     /// destroys a perfectly good memory whenever the process table read happens to fail.
     func testAnUnidentifiableLiveSessionLeavesTheFileAlone() throws {
