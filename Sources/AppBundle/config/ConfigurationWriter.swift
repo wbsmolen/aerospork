@@ -88,15 +88,10 @@ enum ConfigurationWriter {
         if isLink, !FileManager.default.isWritableFile(atPath: resolved.deletingLastPathComponent().path) {
             throw WriteRefused(reason: "\(target.path) is a link to a read-only file. Edit it where it is managed.")
         }
-        let existed = FileManager.default.fileExists(atPath: target.path)
-        if existed { try backUpOncePerSession(target) }
-        ConfigFileWatcher.suppressNextSelfWrite()
+        if FileManager.default.fileExists(atPath: target.path) { try backUpOncePerSession(target) }
+        // The watcher sees this write and re-arms on the new file, through a link too. The caller's
+        // reload records these bytes as applied, so the watcher does not reload them a second time.
         try result.write(to: resolved, atomically: true, encoding: .utf8)
-        // The watcher bails when the file doesn't exist, and only re-arms from its own event
-        // handler -- so the first-ever GUI save left hot-reload dead until an app restart. Its fd
-        // follows a link to the file the write just replaced, so re-open it on the new one.
-        // Not under XCTest: it watches the real config, not the test's file.
-        if !existed || isLink, !isUnitTest { ConfigFileWatcher.start() }
     }
 
     // MARK: - Backups

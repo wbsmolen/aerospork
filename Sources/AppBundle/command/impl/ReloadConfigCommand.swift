@@ -25,9 +25,14 @@ struct ReloadConfigCommand: Command {
     stdout: inout String,
 ) -> Bool {
     var warnings: [String] = []
+    // Before the read, for the watcher. Not for a dry run, which applies nothing, nor for the forced
+    // read of the bundled default, which is not the user's file.
+    let applied = args.dryRun || forceConfigUrl != nil ? nil : ConfigSnapshot.now()
     let result = readConfig(forceConfigUrl: forceConfigUrl, warnings: &warnings)
     // A dry run promises to change nothing, and that includes what the banner says.
     if !args.dryRun { recordConfigHealth(result, warnings: warnings) }
+    // A failure too, so saving the same broken bytes again does not raise a second dialog.
+    if let applied { ConfigFileWatcher.recordApplied(applied) }
     switch result {
         case .success(let (parsedConfig, url)):
             if !args.dryRun {

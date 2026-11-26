@@ -110,8 +110,7 @@ struct RawTomlTab: View {
             .buttonStyle(.borderless)
             .help("External edits are picked up automatically — the config file is watched")
 
-            // Kept only because the watcher cannot arm on a file that does not exist yet: someone
-            // who creates their first config entirely outside the app has no other way in.
+            // The watcher picks up outside edits on its own. This loads the file now, by hand.
             if let token: RunSessionGuard = .isServerEnabled {
                 Button("Reload") {
                     runDetached("rawTomlApply") {
@@ -124,7 +123,7 @@ struct RawTomlTab: View {
                 .disabled(viewModel.rawTomlEdited)
                 .help(viewModel.rawTomlEdited
                     ? "Apply or revert your edits first"
-                    : "Only needed for a config file created outside the app — every other edit is picked up on save.")
+                    : "Load the config file again now. Edits made in other apps are picked up on their own.")
             }
         }
         .padding(.horizontal, 14)

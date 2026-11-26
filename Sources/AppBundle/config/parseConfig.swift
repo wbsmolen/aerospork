@@ -19,15 +19,7 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: 
     // config failed, and it `check`s the result. When the search itself was what failed (two
     // configs), the fallback failed the same way and the app died at startup.
     if let forceConfigUrl { return readConfig(at: forceConfigUrl, warnings: &warnings) }
-    let customConfig: ConfigFile
-    if let found {
-        customConfig = found
-    } else if isUnitTest {
-        guard let testConfigOverride else { return .failure("tests may not touch a real config") }
-        customConfig = .file(testConfigOverride)
-    } else {
-        customConfig = findCustomConfigUrl()
-    }
+    guard let customConfig = found ?? searchUserConfig() else { return .failure("tests may not touch a real config") }
     switch customConfig {
         case .file(let url):
             return readConfig(at: url, warnings: &warnings)
@@ -46,6 +38,13 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: 
                 """
             return .failure(msg)
     }
+}
+
+/// The search `readConfig` runs and the watcher compares. Under XCTest only `testConfigOverride`, and nil
+/// without one.
+@MainActor
+func searchUserConfig() -> ConfigFile? {
+    isUnitTest ? testConfigOverride.map { findCustomConfigUrl(among: [$0]) } : findCustomConfigUrl()
 }
 
 @MainActor

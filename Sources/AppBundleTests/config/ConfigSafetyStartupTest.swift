@@ -192,6 +192,147 @@ final class ConfigSafetyStartupTest: XCTestCase {
     /// user was busy typing would not be picked up until the app was restarted.
     func testWatcherNeverWatchesTheBundledDefault() {
         configUrl = defaultConfigUrl
-        XCTAssertNotEqual(ConfigFileWatcher.watchedPath, defaultConfigUrl.path)
+        let plan = ConfigFileWatcher.plan
+        XCTAssertNotEqual(plan.file, defaultConfigUrl.path)
+        XCTAssertFalse(plan.dirs.contains(defaultConfigUrl.deletingLastPathComponent().path), "\(plan.dirs)")
+    }
+
+    // MARK: - The watcher's check step
+
+    /// One save, one reload: the save applies its own bytes, and the watcher, which sees the write,
+    /// skips them. A 500 ms timer did this before, and swallowed any outside edit in that window.
+    func testOneSettingsWriteCausesOneReload() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        vm.load(fromText: try String(contentsOf: url, encoding: .utf8))
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+
+        XCTAssertNil(vm.errorMessage)
+        assertEquals(config.accordionPadding, 42)
+        let reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "the watcher reloaded the save a second time")
+    }
+
+    /// The documented first step, `cp … ~/.aerospork.toml`, did nothing until a restart.
+    func testAppearingFileIsLoaded() async throws {
+        let url = try useTemporaryConfig("", for: self)
+        try FileManager.default.removeItem(at: url)
+        XCTAssertTrue(reloadConfig())
+        assertEquals(configUrl, defaultConfigUrl)
+        var reloaded = await ConfigFileWatcher.check(grace: .zero)
+        XCTAssertFalse(reloaded, "still no config, and the defaults already run")
+
+        try "accordion-padding = 31\n".write(to: url, atomically: true, encoding: .utf8)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(configUrl, url)
+        assertEquals(config.accordionPadding, 31)
+    }
+
+    func testWatcherSkipsIdenticalBytesAndAppliesChangedOnes() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        var reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded)
+        try "accordion-padding = 31\n".write(to: url, atomically: true, encoding: .utf8)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "the same bytes again")
+
+        try "accordion-padding = 32\n".write(to: url, atomically: true, encoding: .utf8)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(config.accordionPadding, 32)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded)
+    }
+
+    /// `reload-config --dry-run` applies nothing, so it must not mark the text applied, or the watcher
+    /// would skip the change it read.
+    func testDryRunDoesNotMarkTextApplied() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        try "accordion-padding = 32\n".write(to: url, atomically: true, encoding: .utf8)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.dryRun = true
+        args.noGui = true
+        var stdout = ""
+        XCTAssertTrue(reloadConfig(args: args, stdout: &stdout), stdout)
+        assertEquals(config.accordionPadding, 31)
+
+        let reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(config.accordionPadding, 32)
+    }
+
+    /// What an editor's save is: a new file renamed over the old one.
+    func testAtomicRenameOverTheFileReloadsOnce() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        let temp = url.deletingLastPathComponent().appending(path: ".config.toml.swp")
+        try "accordion-padding = 33\n".write(to: temp, atomically: false, encoding: .utf8)
+        XCTAssertEqual(rename(temp.path, url.path), 0)
+
+        var reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(config.accordionPadding, 33)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "one rename, two reloads")
+    }
+
+    /// `git stash`, or a move away and back, empties the path for a moment. Falling back at once put the
+    /// bundled keymap on, and the watcher, now unarmed, never saw the file come back.
+    func testDeleteAndRecreateWithinTheGraceKeepsTheConfig() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        try FileManager.default.removeItem(at: url)
+        // Runs while `check` waits out the grace.
+        Task { try? "accordion-padding = 31\n".write(to: url, atomically: true, encoding: .utf8) }
+
+        let reloaded = await ConfigFileWatcher.check(grace: .milliseconds(300))
+        XCTAssertFalse(reloaded)
+        assertEquals(configUrl, url)
+        assertEquals(config.accordionPadding, 31)
+    }
+
+    /// `default-config.toml`: "If you delete your copy, AeroSpork uses this file again."
+    func testDeleteThatStaysFallsBackToTheDefaults() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        try FileManager.default.removeItem(at: url)
+
+        var reloaded = await ConfigFileWatcher.check(grace: .milliseconds(10))
+        XCTAssertTrue(reloaded)
+        assertEquals(configUrl, defaultConfigUrl)
+        assertEquals(config.accordionPadding, 30)
+        XCTAssertFalse(isRunningFallbackDefaults, "a deleted config is not a broken one")
+        reloaded = await ConfigFileWatcher.check(grace: .zero)
+        XCTAssertFalse(reloaded)
+    }
+
+    // MARK: - What the watcher arms
+
+    func testWatchPlanArmsDirectoriesWhenNoFileExists() {
+        let candidates = ["/h/.aerospork.toml", "/h/.config/aerospork/aerospork.toml"]
+        let plan = ConfigFileWatcher.watchPlan(candidates: candidates, existing: { ["/h", "/h/.config"].contains($0) }, home: "/h")
+        XCTAssertNil(plan.file)
+        assertEquals(plan.dirs, ["/h", "/h/.config"])
+
+        // `--config-path` outside the home folder: its nearest existing folder.
+        let outside = ConfigFileWatcher.watchPlan(candidates: ["/etc/aerospork/a.toml"], existing: { $0 == "/etc" }, home: "/h")
+        assertEquals(outside.dirs, ["/etc"])
+    }
+
+    func testWatchPlanSkipsMissingDirectories() {
+        let candidates = ["/h/.aerospork.toml", "/h/.config/aerospork/aerospork.toml"]
+        let homeOnly = ConfigFileWatcher.watchPlan(candidates: candidates, existing: { $0 == "/h" || $0 == candidates[0] }, home: "/h")
+        assertEquals(homeOnly.file, candidates[0])
+        assertEquals(homeOnly.dirs, ["/h"])
+
+        let all = ConfigFileWatcher.watchPlan(candidates: candidates, existing: { _ in true }, home: "/h")
+        XCTAssertNil(all.file, "two configs: neither is the config")
+        assertEquals(all.dirs, ["/h", "/h/.config/aerospork", "/h/.config"])
     }
 }
