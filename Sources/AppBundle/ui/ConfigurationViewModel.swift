@@ -60,7 +60,15 @@ final class ConfigurationViewModel: ObservableObject {
     @Published var liveMonitors: [MonitorRow] = []
 
     // Raw TOML editor -- the guarantee that nothing in the config is unreachable from the GUI.
-    @Published var rawToml = ""
+    /// Its own observable, so a keystroke re-renders the Raw TOML pane alone. As a `@Published` on
+    /// this view model it re-ran the window body and all seven panes on every key. Only `RawTomlTab`
+    /// observes it; the window must never read it.
+    let raw = RawTomlBuffer()
+    var rawToml: String {
+        get { raw.text }
+        set { raw.text = newValue }
+    }
+
     private var loadedRawToml = ""
     var rawTomlEdited: Bool { rawToml != loadedRawToml }
 
@@ -652,6 +660,12 @@ final class ConfigurationViewModel: ObservableObject {
         // saved, and calling them saved lost any other rule edit made alongside it.
         if settings.windowRules.contains(where: \.hasNoCommand) { loaded.windowRules = rulesOnDisk }
     }
+}
+
+/// The Raw TOML buffer, apart from the view model that every pane observes.
+@MainActor
+final class RawTomlBuffer: ObservableObject {
+    @Published var text = ""
 }
 
 // MARK: - The snapshot

@@ -1,5 +1,6 @@
 @testable import AppBundle
 import AppKit
+import Combine
 import Common
 import Foundation
 import XCTest
@@ -205,6 +206,26 @@ final class UISettingsTest: XCTestCase {
 
     /// In fallback mode Raw TOML holds the file that failed to load. It said "Matches the file on
     /// disk", with no error line, until the user typed.
+    /// Every pane and the window observe the view model, so a keystroke that published there re-ran
+    /// all seven pane bodies. Only the buffer may announce a change, and edit detection still works.
+    func testRawTomlTypingPublishesOnTheBufferAlone() {
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: "accordion-padding = 30\n")
+        var viewModelChanges = 0
+        var bufferChanges = 0
+        let subscriptions = [
+            vm.objectWillChange.sink { viewModelChanges += 1 },
+            vm.raw.objectWillChange.sink { bufferChanges += 1 },
+        ]
+        defer { subscriptions.forEach { $0.cancel() } }
+
+        XCTAssertFalse(vm.rawTomlEdited)
+        vm.rawToml = "accordion-padding = 7\n"
+        XCTAssertEqual(viewModelChanges, 0, "a keystroke must not re-render every pane")
+        XCTAssertEqual(bufferChanges, 1)
+        XCTAssertTrue(vm.rawTomlEdited)
+    }
+
     func testRawTomlValidatesTheBrokenFileInFallbackMode() {
         assertTrue(RawTomlTab.needsValidation(edited: false, fallback: true))
         assertTrue(RawTomlTab.needsValidation(edited: true, fallback: false))

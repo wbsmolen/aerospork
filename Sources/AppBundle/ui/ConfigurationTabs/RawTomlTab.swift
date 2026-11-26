@@ -16,6 +16,9 @@ struct RawTomlTab: View {
     }
 
     @ObservedObject var viewModel: ConfigurationViewModel
+    /// Observed here and nowhere else, so typing re-renders this pane alone. `@ObservedObject`, not
+    /// a plain read through `viewModel`: without it `.task(id:)` never sees the new text.
+    @ObservedObject private var raw: RawTomlBuffer
     @State private var validationDiagnostic: ConfigurationWriter.ValidationDiagnostic?
     @State private var validationPending = false
     @State private var cursorLine = 1
@@ -25,6 +28,11 @@ struct RawTomlTab: View {
     @State private var backups: [URL] = []
     @State private var sectionHeaders: [SectionHeader] = []
 
+    init(viewModel: ConfigurationViewModel) {
+        self.viewModel = viewModel
+        raw = viewModel.raw
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             pathBar
@@ -32,7 +40,7 @@ struct RawTomlTab: View {
             // Not `TextEditor`: it applies macOS text substitutions, and smart quotes turn the `'`
             // in `key = 'focus left'` into `'`, which is not valid TOML.
             CodeEditor(
-                text: $viewModel.rawToml,
+                text: $raw.text,
                 jumpToLine: jumpToLine,
                 errorLine: validationDiagnostic?.line,
             ) { line, column in
@@ -46,19 +54,19 @@ struct RawTomlTab: View {
         // Parsing a full config on every keystroke makes fast typing contend with the main-actor
         // SwiftUI update that produced it. `task(id:)` gives us cancellation for free: only the
         // last buffer in a burst is validated, while Apply remains disabled during the short wait.
-        .task(id: viewModel.rawToml) {
+        .task(id: raw.text) {
             let needsValidation = Self.needsValidation(edited: viewModel.rawTomlEdited, fallback: isRunningFallbackDefaults)
             validationPending = needsValidation
             guard needsValidation else {
                 validationDiagnostic = nil
-                sectionHeaders = Self.sections(in: viewModel.rawToml)
+                sectionHeaders = Self.sections(in: raw.text)
                 return
             }
             validationDiagnostic = nil
             try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled else { return }
-            sectionHeaders = Self.sections(in: viewModel.rawToml)
-            validationDiagnostic = ConfigurationWriter.diagnostic(viewModel.rawToml)
+            sectionHeaders = Self.sections(in: raw.text)
+            validationDiagnostic = ConfigurationWriter.diagnostic(raw.text)
             validationPending = false
         }
         .task {
