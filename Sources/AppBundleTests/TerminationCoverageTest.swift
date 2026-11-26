@@ -59,6 +59,23 @@ final class TerminationCoverageTest: XCTestCase {
         )
     }
 
+    /// `killall` must end the app within ten seconds even when the main thread is stuck (see
+    /// `interceptTermination`). `SIG_IGN` has removed the kernel's fallback, so a source on `.main` would
+    /// never fire while the main queue is blocked, and SIGTERM would do nothing.
+    func testKillallExitsOnADeadlineEvenWhenTheMainThreadIsStuck() throws {
+        let file = "Sources/AppBundle/util/appBundleUtil.swift"
+        let source = try String(contentsOf: projectRoot.appending(path: file), encoding: .utf8)
+        XCTAssertTrue(source.contains("let terminationQueue = DispatchQueue(label:"), "the signal source's queue must be a queue of its own")
+        XCTAssertTrue(source.contains("terminationCleanupDeadline: DispatchTimeInterval = .seconds(10)"), "the guide promises an exit within 10 s")
+
+        let body = try sourceBody("func interceptTermination(", in: file)
+        let makeSource = try XCTUnwrap(body.split(separator: "\n").first { $0.contains("makeSignalSource(") })
+        XCTAssertTrue(makeSource.contains("queue: terminationQueue"), "the signal source moved onto another queue: \(makeSource)")
+        let wait = try XCTUnwrap(body.range(of: "wait(timeout: .now() + terminationCleanupDeadline) == .timedOut"), "the cleanup no longer waits on the deadline")
+        let hardExit = try XCTUnwrap(body.range(of: "_exit("), "a cleanup that misses the deadline must still end the process")
+        XCTAssertLessThan(wait.lowerBound, hardExit.lowerBound)
+    }
+
     /// AppKit-initiated quits never reach a POSIX signal handler at all.
     func testAppKitQuitsAreCovered() throws {
         let delegate = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/AppDelegate.swift"), encoding: .utf8)
