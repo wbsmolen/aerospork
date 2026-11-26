@@ -109,7 +109,7 @@ func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Res
         return .failure(CliFailure(
             message: """
                 Can't decode the answer from AeroSpork server. The server is probably a different
-                version than this client (client: \(cliClientVersionAndHash)).
+                version than this client (client: \(aeroSporkVersionAndHash)).
                 Restart AeroSpork.app -- a server restart is required after each update.
                 """,
             exitCode: ExitCode.failure,
@@ -137,7 +137,7 @@ struct Main {
             case .version, .send: break
         }
 
-        let socketFile = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock"
+        let socketFile = cliSocketPath(appId: aeroSporkAppId)
         guard let socket = UnixSocketConnection.connect(to: socketFile) else {
             if action == .version { printVersionAndExit(serverVersion: nil) }
             printStderr("Can't connect to AeroSpork server. Is AeroSpork.app running?")
@@ -153,7 +153,7 @@ struct Main {
         if !ans.stderr.isEmpty { printStderr(ans.stderr) }
         // Unconditional: a mismatched client that happens to succeed is exactly the case that
         // silently does the wrong thing, so it needs the warning most.
-        if let warning = versionMismatchWarning(client: cliClientVersionAndHash, server: ans.serverVersionAndHash) {
+        if let warning = versionMismatchWarning(client: aeroSporkVersionAndHash, server: ans.serverVersionAndHash) {
             printStderr(warning)
         }
         exit(ans.exitCode)
@@ -172,7 +172,7 @@ extension Result where Failure == CliFailure {
 func printVersionAndExit(serverVersion: String?) -> Never {
     print(
         """
-        AeroSpork CLI client version: \(cliClientVersionAndHash)
+        AeroSpork CLI client version: \(aeroSporkVersionAndHash)
         AeroSpork.app server version: \(serverVersion ?? "Unknown. The server is not running")
         """,
     )

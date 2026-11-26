@@ -89,7 +89,7 @@ extension TreeNode {
         let currentWeight = getWeight(orientation) // Check assertions
         return weightBeforeResizeWithMouse
             ?? (lastAppliedLayoutVirtualRect?.getDimension(orientation) ?? currentWeight)
-            .also { weightBeforeResizeWithMouse = $0 }
+            .apply { weightBeforeResizeWithMouse = $0 }
     }
 
     fileprivate func resetResizeWeightBeforeResizeRecursive() {
