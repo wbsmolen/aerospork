@@ -111,7 +111,7 @@ function BindingRow({ b, needle, dense, onUpdate, onRemove, onOverride, onDuplic
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto' }}>
         {b.origin === 'generated' && <Badge help="Generated from mod and workspaces. It is not written in your config file.">generated</Badge>}
-        <IconButton systemImage="doc.on.doc" label={'Duplicate “' + b.command + '”'} onClick={() => onDuplicate(b)} />
+        <IconButton systemImage="plus.square.on.square" label={'Duplicate “' + b.command + '”'} onClick={() => onDuplicate(b)} />
         {b.origin === 'explicit'
           ? <IconButton systemImage="minus.circle" role="destructive" label={'Remove “' + b.key + '”'} onClick={() => onRemove(b.id)} />
           : <Button variant="borderless" onClick={() => onOverride(b)}>Override</Button>}

@@ -1044,6 +1044,7 @@ const SF_TO_LUCIDE = {
   'xmark.circle.fill': 'circle-x',
   'magnifyingglass': 'search',
   'doc.on.doc': 'copy',
+  'plus.square.on.square': 'copy-plus',
   'checkmark': 'check',
   'checkmark.circle': 'circle-check',
   'equal.circle': 'circle-equal',
@@ -1094,6 +1095,7 @@ const ICON_SHAPES = {
   "circle-minus": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M8 12h8\" />",
   "circle-x": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m15 9-6 6\" /><path d=\"m9 9 6 6\" />",
   "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />",
+  "copy-plus": "<line x1=\"15\" x2=\"15\" y1=\"12\" y2=\"18\" /><line x1=\"12\" x2=\"18\" y1=\"15\" y2=\"15\" /><rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />",
   "circle-equal": "<path d=\"M7 10h10\" /><path d=\"M7 14h10\" /><circle cx=\"12\" cy=\"12\" r=\"10\" />",
   "git-branch": "<line x1=\"6\" x2=\"6\" y1=\"3\" y2=\"15\" /><circle cx=\"18\" cy=\"6\" r=\"3\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M18 9a9 9 0 0 1-9 9\" />",
   "list": "<path d=\"M3 5h.01\" /><path d=\"M3 12h.01\" /><path d=\"M3 19h.01\" /><path d=\"M8 5h13\" /><path d=\"M8 12h13\" /><path d=\"M8 19h13\" />",
@@ -3085,7 +3087,7 @@ function BindingRow({
   }, b.origin === 'generated' && /*#__PURE__*/React.createElement(Badge, {
     help: "Generated from mod and workspaces. It is not written in your config file."
   }, "generated"), /*#__PURE__*/React.createElement(IconButton, {
-    systemImage: "doc.on.doc",
+    systemImage: "plus.square.on.square",
     label: 'Duplicate “' + b.command + '”',
     onClick: () => onDuplicate(b)
   }), b.origin === 'explicit' ? /*#__PURE__*/React.createElement(IconButton, {

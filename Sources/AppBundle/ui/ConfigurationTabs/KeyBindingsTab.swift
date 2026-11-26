@@ -313,7 +313,7 @@ struct KeyBindingsTab: View {
                 .frame(width: 170, height: 22)
                 SettingsField("Command", prompt: "focus left", text: command(rowId, b.command))
                     .accessibilityLabel("Command for \(b.key)")
-                IconButton(systemImage: "doc.on.doc", label: "Duplicate “\(b.command)”") { duplicate(b) }
+                IconButton(systemImage: "plus.square.on.square", label: "Duplicate “\(b.command)”") { duplicate(b) }
                 IconButton(systemImage: "minus.circle", label: "Remove “\(b.key)”", role: .destructive) {
                     remove(rowId)
                 }
@@ -336,7 +336,7 @@ struct KeyBindingsTab: View {
                 // Generated bindings appear nowhere in the config file, so without this the tab
                 // shows dozens of rows the user cannot find when they go looking.
                 Badge.generated
-                IconButton(systemImage: "doc.on.doc", label: "Duplicate “\(b.command)”") { duplicate(b) }
+                IconButton(systemImage: "plus.square.on.square", label: "Duplicate “\(b.command)”") { duplicate(b) }
                 Button("Override") { override(b) }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Override \(b.key)")
