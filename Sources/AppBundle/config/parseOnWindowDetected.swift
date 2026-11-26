@@ -1,7 +1,7 @@
 import Common
 import TOMLKit
 
-struct WindowDetectedCallback: ConvenienceCopyable, Equatable {
+struct WindowDetectedCallback: ConvenienceCopyable {
     var matcher: WindowDetectedCallbackMatcher = WindowDetectedCallbackMatcher()
     var checkFurtherCallbacks: Bool = false
     var rawRun: [any Command]? = nil
@@ -18,14 +18,9 @@ struct WindowDetectedCallback: ConvenienceCopyable, Equatable {
         }
         return .dict(result)
     }
-
-    static func == (lhs: WindowDetectedCallback, rhs: WindowDetectedCallback) -> Bool {
-        return lhs.matcher == rhs.matcher && lhs.checkFurtherCallbacks == rhs.checkFurtherCallbacks &&
-            zip(lhs.run, rhs.run).allSatisfy { $0.equals($1) }
-    }
 }
 
-struct WindowDetectedCallbackMatcher: ConvenienceCopyable, Equatable {
+struct WindowDetectedCallbackMatcher: ConvenienceCopyable {
     var appId: String?
     var appNameRegexSubstring: Regex<AnyRegexOutput>?
     var windowTitleRegexSubstring: Regex<AnyRegexOutput>?
@@ -38,7 +33,7 @@ struct WindowDetectedCallbackMatcher: ConvenienceCopyable, Equatable {
             resultParts.append("appId=\"\(appId)\"")
         }
         if appNameRegexSubstring != nil {
-            resultParts.append("appNameRegexSubstrin=Regex")
+            resultParts.append("appNameRegexSubstring=Regex")
         }
         if windowTitleRegexSubstring != nil {
             resultParts.append("windowTitleRegexSubstring=Regex")
@@ -52,16 +47,6 @@ struct WindowDetectedCallbackMatcher: ConvenienceCopyable, Equatable {
             resultParts.append("during-aerospork-startup=\(duringAeroSporkStartup)")
         }
         return .string(resultParts.joined(separator: ", "))
-    }
-
-    static func == (lhs: WindowDetectedCallbackMatcher, rhs: WindowDetectedCallbackMatcher) -> Bool {
-        check(
-            lhs.appNameRegexSubstring == nil &&
-                lhs.windowTitleRegexSubstring == nil &&
-                rhs.appNameRegexSubstring == nil &&
-                rhs.windowTitleRegexSubstring == nil,
-        )
-        return lhs.appId == rhs.appId
     }
 }
 

@@ -334,30 +334,6 @@ final class ConfigTest: XCTestCase {
                 run = ['move-node-to-workspace S', 'layout h_tiles']
             """,
         )
-        /*assertEquals(parsed.onWindowDetected, [
-             WindowDetectedCallback(
-                 matcher: WindowDetectedCallbackMatcher(
-                     appId: nil,
-                     appNameRegexSubstring: nil,
-                     windowTitleRegexSubstring: nil,
-                 ),
-                 checkFurtherCallbacks: true,
-                 rawRun: [
-                     LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.floating])),
-                     MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W")),
-                 ],
-             ),
-             WindowDetectedCallback(
-                 matcher: WindowDetectedCallbackMatcher(
-                     appId: "com.apple.systempreferences",
-                     appNameRegexSubstring: nil,
-                     windowTitleRegexSubstring: nil,
-                 ),
-                 checkFurtherCallbacks: false,
-                 rawRun: [],
-             ),
-         ])*/
-
         assertEquals(errors.descriptions, [
             "on-window-detected[2]: \'run\' is mandatory key",
             "on-window-detected[3]: For now, \'move-node-to-workspace\' must be the latest instruction in the callback (otherwise it\'s error-prone). Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
