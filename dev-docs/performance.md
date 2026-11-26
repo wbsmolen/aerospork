@@ -243,9 +243,14 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     validation scratchpad): equality and hashing of `AXUIElement` cost about 47 ns and 27 ns, with no
     IPC, and were stable across reads in Finder, Discord, Messages, Edge and T3 Code; over 300
     create-and-close cycles AppKit never handed a new window a dead window's element, and no
-    element's window id changed. Residual risk: an AX server that is not AppKit and recycles element
-    tokens would show a new window as an old one until that app's windows change. Liveness is
-    untouched: a window off the list still goes through `isDestroyed()` (#39). Measure:
+    element's window id changed. Residual risk: an AX server that is not AppKit (Java, Qt, a custom
+    NSAccessibility) and recycles element tokens, closing one window and opening another with the
+    old token within one refresh, would show the new window as the dead one for as long as the new
+    window stays open: it is listed, so the dead id stays alive, and the new window's own id is never
+    registered. To check an app, run `probeA` and `probeB` against a Java or Qt app that closes one
+    window and opens another within 50 ms, and see whether `CFEqual` holds between the old element
+    and the new one. Otherwise liveness is untouched: a window off the list still goes through
+    `isDestroyed()` (#39). Measure:
     `containingWindowId` intervals per refresh with no window opening; expect zero instead of one
     per listed window.
 
