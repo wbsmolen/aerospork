@@ -124,7 +124,9 @@ if test "$build_version" = "$feed_version" || test "$(printf '%s\n%s\n' "$feed_v
     exit 1
 fi
 
-# A tag at HEAD is a re-run after a later step failed, so the tag step reuses it. Anywhere else, the
+# A tag at HEAD is a re-run after a step before the site deploy failed, so the tag step reuses it and
+# the release step re-uploads the archives. Once the deploy landed the live feed names this version and
+# the checks above refuse a re-run, which is right: only the appcast PR is left. Anywhere else, the
 # version was already cut from other code.
 tag_exists=false
 if tagged_commit="$(git rev-parse -q --verify "refs/tags/v$build_version^{commit}")"; then
@@ -167,8 +169,14 @@ fi
 # Also when the tag existed: a no-op if it is on GitHub, and the missing step if the last push failed.
 git push origin "v$build_version"
 
-gh release create "v$build_version" --repo "$repo" --title "AeroSpork $build_version" \
-    --notes-file "$notes_file" "$dist_zip" "$sparkle_zip"
+# A re-run rebuilt and re-signed both archives, so a release left by the failed run gets the new files:
+# the appcast below signs these bytes, and a stale download would fail its signature.
+if gh release view "v$build_version" --repo "$repo" > /dev/null 2>&1; then
+    gh release upload "v$build_version" --repo "$repo" --clobber "$dist_zip" "$sparkle_zip"
+else
+    gh release create "v$build_version" --repo "$repo" --title "AeroSpork $build_version" \
+        --notes-file "$notes_file" "$dist_zip" "$sparkle_zip"
+fi
 
 ##################
 ### THE APPCAST ##

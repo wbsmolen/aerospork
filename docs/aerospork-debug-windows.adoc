@@ -28,7 +28,7 @@ To record a session:
 . Run `aerospork debug-windows` again. The recording stops and the command prints what it recorded.
 
 `debug-windows --tree` prints, as JSON, what AeroSpork holds: each monitor and the workspace it shows, the tree of each workspace with its windows and the windows that macOS took out of the tiles, each app, and a list of the inconsistencies it found.
-It asks no app anything, so an app that does not answer cannot stop it.
+The dump reads only AeroSpork's own state and asks no app anything. Like every command, it still waits its turn behind a command already running, so an app that does not answer can delay the reply but not stop it.
 
 `debug-windows` is not a stable API.
 Do not rely on the command, or on its output format, in a script.

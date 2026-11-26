@@ -88,15 +88,18 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 
 `run-tests.sh` runs these steps in order and stops at the first failure:
 
-1. `build-debug.sh`.
-2. `swift test --skip-build`, which runs `AppBundleTests` and `CommonTests` from the build of step 1.
-3. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
-4. `swiftformat --lint`, `swiftlint lint`, `shellcheck -S warning ./*.sh script/*.sh`,
+1. `generate.sh --all`. The script records `git status` before this step and compares it right after.
+   If the tree changed, the generated files are out of date: commit what `generate.sh` wrote. Local
+   work and untracked files do not fail it.
+2. `swiftformat --lint`, `swiftlint lint`, `shellcheck -S warning ./*.sh script/*.sh`,
    `py_compile` of `script/*.py`, and the self-check of `script/release-notes-html.py`. None of them
    rewrites a file.
-5. `generate.sh --all`. The script records `git status` before step 1 and compares it after step 5.
-   If the run changed the tree, the generated files are out of date and the script fails. Local
-   work and untracked files do not fail it.
+3. `build-debug.sh`, then a count of build warnings, which never fails the run.
+4. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
+5. `swift test --skip-build`, which runs `AppBundleTests` and `CommonTests` from the build of step 3.
+   The run fails unless `AppBundleTests` actually ran.
+6. A second comparison with the `git status` of step 1. If it fails, "A test wrote into the tree":
+   a test created or changed a file in the repository, which regenerating will not fix. Find the test.
 
 The project has no CI service. `build-release.sh` is the only build of the Release configuration.
 
@@ -230,8 +233,11 @@ and updates the Homebrew tap. It needs a Developer ID certificate, a notary prof
    script refuses a tree with uncommitted or untracked files, a HEAD that is not `origin/main`, an
    `updates-site/appcast.xml` that differs from the live feed (the previous release's appcast PR has
    not merged), a version that is not above the newest in the feed, and a `vX.Y.Z` tag that exists
-   but is not at HEAD. A tag at HEAD is reused, so you can run the script again after a later step
-   fails.
+   but is not at HEAD. A tag at HEAD is reused and an existing GitHub release gets the new archives,
+   so you can run the script again when a step before the site deploy fails. Restore
+   `updates-site/appcast.xml` first (`git checkout updates-site/appcast.xml`) if the run got as far as
+   signing it. Once the deploy has landed, the live feed names the new version and the script refuses
+   to run again; what is left is the appcast pull request.
 3. Run the script:
 
    ```bash
