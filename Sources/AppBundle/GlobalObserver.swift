@@ -110,7 +110,13 @@ class GlobalObserver {
         let signature = monitorSetSignature()
 
         // Not left to `gcMonitors`, which only looks at the count: two panels trading places keep it.
-        if signature != lastMonitorSignature { rearrangeWorkspacesOnMonitors() }
+        if signature != lastMonitorSignature {
+            rearrangeWorkspacesOnMonitors()
+            // Here and never in `gcMonitors`, which runs on every refresh. DisplayLink flapping and zero-screen
+            // sets were not measurable without it. A rearrange onto no screens is skipped.
+            let count = monitors.count
+            AppLog.session.notice("monitor set changed: \(count, privacy: .public) monitors, rearranged: \(count > 0 ? "yes" : "no", privacy: .public)")
+        }
 
         // Run a refresh session to update monitor state
         runRefreshSession(.globalObserver("didChangeScreenParameters"), screenIsDefinitelyUnlocked: true)
