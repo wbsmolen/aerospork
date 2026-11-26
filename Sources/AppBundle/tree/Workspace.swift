@@ -293,6 +293,13 @@ extension CGPoint {
 /// The stable id of the panel at each screen point, as of the last rearrange. See `matchMonitors`.
 @MainActor private var screenPointToMonitorUuid: [CGPoint: String] = [:]
 
+/// Forgets which workspace each screen point showed before and which panel was at it, so a test's stub
+/// workspace is never a name an earlier test left behind. Production never calls it.
+@MainActor func resetWorkspaceScreensForTests() {
+    screenPointToPrevVisibleWorkspace = [:]
+    screenPointToMonitorUuid = [:]
+}
+
 /// Which old screen each new screen continues: the same panel by UUID, then the same position, then the
 /// nearest. Position alone sends every workspace to the wrong panel when two monitors trade places, and
 /// taking the nearest screen in monitor order lets one monitor steal another's exact match.
