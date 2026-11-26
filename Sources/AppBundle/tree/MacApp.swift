@@ -90,7 +90,15 @@ final class MacApp: AbstractApp {
     /// app is tiled before the user notices), doubling to a 30s ceiling for apps that simply have
     /// no usable AX interface. At the ceiling that is ~1 probe/30s instead of ~20/s under the 50ms
     /// refresh debounce.
-    @MainActor private static var failedPids: [pid_t: (nextAttempt: Date, backoff: TimeInterval, launchDate: Date?)] = [:]
+    ///
+    /// Not private: the tests plant an entry for a dead pid, to check `forgetFailedRegistrationsOfGoneProcesses`.
+    @MainActor static var failedPids: [pid_t: (nextAttempt: Date, backoff: TimeInterval, launchDate: Date?)] = [:]
+
+    /// An entry leaves `failedPids` on a success or a pid reuse, so one for a process that exited stayed forever.
+    /// A `kill(pid, 0)` per entry: not only the pass's `gone` set, which misses a process LaunchServices dropped.
+    @MainActor static func forgetFailedRegistrationsOfGoneProcesses() {
+        failedPids = failedPids.filter { !processIsGone($0.key) }
+    }
     private static let registrationRetryMinDelay: TimeInterval = 1
     private static let registrationRetryMaxDelay: TimeInterval = 30
 
@@ -236,6 +244,15 @@ final class MacApp: AbstractApp {
         await awaitRegistration(of: pid)
         try checkCancellation()
         return allAppsMap[pid]
+    }
+
+    /// A collected window's pending jobs, each with a lock of its own, which stayed until the app quit. Every
+    /// native tab is a window id, so a long-lived Finder or Terminal grew these for weeks. Cancelling is harmless:
+    /// the window is dead, or if it is detected again, registration writes its frame again.
+    @MainActor
+    func forget(_ windowId: UInt32) {
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        nativeStateJobs.removeValue(forKey: windowId)?.cancel()
     }
 
     @MainActor
@@ -537,6 +554,7 @@ final class MacApp: AbstractApp {
         // `await`, for an app that dies in the middle of the pass.
         let gone = Set((Array(regularApps.values) + allAppsMap.values.map(\.nsApp)).filter(\.isGone).map(\.processIdentifier))
         regularApps = regularApps.filter { !gone.contains($0.key) } // or the loop below registers it again
+        forgetFailedRegistrationsOfGoneProcesses()
         for (pid, app) in MacApp.allAppsMap where gone.contains(pid) { // gc dead apps
             try checkCancellation()
             app.destroy()

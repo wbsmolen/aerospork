@@ -81,6 +81,39 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertTrue(perApp.contains("MacApp.noteAnswer(pid: pid, answered: !outcome.timedOut"), "the window-list read no longer notes answers")
     }
 
+    // MARK: - State of the dead is let go
+
+    /// A pass prunes failed registrations of processes that exited. The pass itself registers every running app,
+    /// so it is not run here; the call into the prune is pinned in the source.
+    func testAFailedRegistrationOfADeadPidIsForgottenByThePass() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try child.run()
+        child.waitUntilExit()
+        let dead = child.processIdentifier
+        let alive = ProcessInfo.processInfo.processIdentifier
+        let saved = MacApp.failedPids
+        defer { MacApp.failedPids = saved }
+        MacApp.failedPids[dead] = (nextAttempt: .now + 30, backoff: 30, launchDate: nil)
+        MacApp.failedPids[alive] = (nextAttempt: .now + 30, backoff: 30, launchDate: nil)
+
+        MacApp.forgetFailedRegistrationsOfGoneProcesses()
+
+        XCTAssertNil(MacApp.failedPids[dead])
+        XCTAssertNotNil(MacApp.failedPids[alive])
+        let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(pass.contains("forgetFailedRegistrationsOfGoneProcesses()"))
+    }
+
+    /// Each collected window's jobs stayed until its app quit.
+    func testACollectedWindowsJobsAreForgotten() throws {
+        let body = try sourceBody("func garbageCollect(skipClosedWindowsCache: Bool)", in: "Sources/AppBundle/tree/MacWindow.swift")
+        XCTAssertTrue(body.contains("macApp.forget(windowId)"))
+        let forget = try sourceBody("func forget(_ windowId: UInt32)", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(forget.contains("setFrameJobs.removeValue(forKey: windowId)?.cancel()"))
+        XCTAssertTrue(forget.contains("nativeStateJobs.removeValue(forKey: windowId)?.cancel()"))
+    }
+
     func testEachPassChecksLivenessOnceAndAgainAfterItsAwait() throws {
         let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
         let gone = try XCTUnwrap(pass.range(of: "let gone = Set("))

@@ -123,6 +123,7 @@ final class MacWindow: Window {
         if MacWindow.allWindowsMap.removeValue(forKey: windowId) == nil {
             return
         }
+        macApp.forget(windowId)
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded(window: self) }
         for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { $0 == windowId } }
         passTabPlaceOn()
