@@ -13,7 +13,7 @@ desktop so the chips have something to describe.
 - The "service" mode link shows the capsule chip, which comes before the workspace chips, and the
   *Leave mode* row that only appears while a non-main mode is active.
 - The "Break the config" link shows the two rows a config that failed to parse puts at the top:
-  *Config not loaded — running defaults* and *Show config error…*.
+  *Config not loaded: running defaults* and *Show config error…*.
 - *Check for updates…* is in release builds only. A debug build has no update feed, so the row is
   not there.
 

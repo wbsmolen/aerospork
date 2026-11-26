@@ -50,7 +50,7 @@ function MenuBarKit() {
 
   const items = [
     ...(configFailed ? [
-      { label: <><Icon sf="exclamationmark.octagon.fill" size={12} style={{ marginRight: 6 }} />Config not loaded — running defaults</>, disabled: true },
+      { label: <><Icon sf="exclamationmark.octagon.fill" size={12} style={{ marginRight: 6 }} />Config not loaded: running defaults</>, disabled: true },
       { label: 'Show config error…', onClick: () => { setOpen(false); window.alert('AeroSpork config error\n\n~/.aerospork.toml: line 12: unknown key "gapz"'); } },
       { divider: true },
     ] : []),

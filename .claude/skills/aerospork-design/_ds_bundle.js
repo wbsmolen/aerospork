@@ -2214,7 +2214,7 @@ function MenuBarKit() {
       style: {
         marginRight: 6
       }
-    }), "Config not loaded \u2014 running defaults"),
+    }), "Config not loaded: running defaults"),
     disabled: true
   }, {
     label: 'Show config error…',
