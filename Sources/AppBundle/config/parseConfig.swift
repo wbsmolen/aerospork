@@ -30,7 +30,7 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: 
                 AppLog.config.notice("\(hint, privacy: .public)")
                 printStderr(hint)
             }
-            return readConfig(at: defaultConfigUrl, isUserConfig: false, warnings: &warnings)
+            return readConfig(at: defaultConfigUrl, warnings: &warnings)
         case .ambiguousConfigError(let candidates):
             let msg = """
                 Ambiguous config error. Several configs found:
@@ -48,31 +48,33 @@ func searchUserConfig() -> ConfigFile? {
 }
 
 @MainActor
-func readConfig(at configUrl: URL, isUserConfig: Bool = true) -> Result<(Config, URL), String> {
+func readConfig(at configUrl: URL) -> Result<(Config, URL), String> {
     var warnings: [String] = []
-    return readConfig(at: configUrl, isUserConfig: isUserConfig, warnings: &warnings)
+    return readConfig(at: configUrl, warnings: &warnings)
 }
 
 @MainActor
-func readConfig(at configUrl: URL, isUserConfig: Bool = true, warnings: inout [String]) -> Result<(Config, URL), String> {
+func readConfig(at configUrl: URL, warnings: inout [String]) -> Result<(Config, URL), String> {
+    // Parsed once, at launch, with `Config()` behind it, so the startup fallback cannot fail. It is also
+    // the no-file case's config, which parsed the bundled file again on every reload.
+    if configUrl == defaultConfigUrl {
+        warnings = []
+        return .success((defaultConfig, configUrl))
+    }
     let configContent: String
     switch readConfigText(at: configUrl) {
         case .success(let text):
             configContent = text
         case .failure(let reason):
-            // The bundled default has `Config()` behind it, and the startup fallback must not fail.
-            guard configUrl != defaultConfigUrl else { return .success((defaultConfig, configUrl)) }
             return .failure(reason)
     }
     var parseWarnings: [TomlParseError] = []
-    let parseResult = parseConfig(configContent, isUserConfig: isUserConfig, warnings: &parseWarnings)
+    let parseResult = parseConfig(configContent, warnings: &parseWarnings)
 
     switch parseResult {
         case .success(let parsedConfig):
             warnings = parseWarnings.map(\.description)
-            if configUrl != defaultConfigUrl {
-                for warning in warnings { printStderr("\(configUrl.lastPathComponent): \(warning)") }
-            }
+            for warning in warnings { printStderr("\(configUrl.lastPathComponent): \(warning)") }
             return .success((parsedConfig, configUrl))
         case .failure(let errors):
             let msg = """
@@ -278,14 +280,14 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 }
 
-@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true) -> Result<Config, [TomlParseError]> {
+@MainActor func parseConfig(_ rawToml: String) -> Result<Config, [TomlParseError]> {
     var discarded: [TomlParseError] = []
-    return parseConfig(rawToml, isUserConfig: isUserConfig, warnings: &discarded)
+    return parseConfig(rawToml, warnings: &discarded)
 }
 
 /// `warnings` collects the non-fatal findings (deprecated keys). They are reported to the user but
 /// must not fail the load; only `.failure` refuses the config.
-@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true, warnings: inout [TomlParseError]) -> Result<Config, [TomlParseError]> {
+@MainActor func parseConfig(_ rawToml: String, warnings: inout [TomlParseError]) -> Result<Config, [TomlParseError]> {
     let rawTable: TOMLTable
     do {
         rawTable = try TOMLTable(string: rawToml)
@@ -294,14 +296,13 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     } catch let e {
         return .failure([.syntax(e.localizedDescription)])
     }
-    return parseConfig(table: rawTable, rawToml: rawToml, isUserConfig: isUserConfig, warnings: &warnings)
+    return parseConfig(table: rawTable, rawToml: rawToml, warnings: &warnings)
 }
 
 /// The same, for a caller that already holds the parsed table of `rawToml`, so the text is not parsed twice.
 @MainActor func parseConfig(
     table rawTable: TOMLTable,
     rawToml: String,
-    isUserConfig: Bool = true,
     warnings: inout [TomlParseError],
 ) -> Result<Config, [TomlParseError]> {
     var errors: [TomlParseError] = []
@@ -326,24 +327,19 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
 
     // Declared workspaces always exist -- see `Workspace.garbageCollectUnusedWorkspaces`. `workspaces`
     // was added in `applyConfigV2` and `persistent-workspaces` by the table walker; a force-assignment
-    // is a declaration too, since pinning a workspace to a monitor says it exists. Unlike the
-    // binding-derived names below, this holds for the bundled default as well: copying the default to
-    // a file of your own must not change what it does.
+    // is a declaration too, since pinning a workspace to a monitor says it exists.
     config.persistentWorkspaces.formUnion(config.workspaceToMonitorForceAssignment.keys)
 
-    // Only preserve workspace names if this is a user config, not the default config
-    if isUserConfig {
-        config.preservedWorkspaceNames = config.modes.values.lazy
-            .flatMap { (mode: Mode) -> [HotkeyBinding] in Array(mode.bindings.values) }
-            .flatMap { (binding: HotkeyBinding) -> [String] in
-                binding.commands.filterIsInstance(of: WorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw } +
-                    binding.commands.filterIsInstance(of: MoveNodeToWorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw }
-            }
-            + (config.workspaceToMonitorForceAssignment).keys
-    } else {
-        // For default config, only preserve workspaces with force assignments
-        config.preservedWorkspaceNames = Array(config.workspaceToMonitorForceAssignment.keys)
-    }
+    // The names a binding reaches, for `getStubWorkspace`. Only names: no workspace is made for them.
+    // The same for the bundled default as for any file, so copying the default to a file of your own
+    // does not change what it does. (The default once got only its force-assigned names here.)
+    config.preservedWorkspaceNames = config.modes.values.lazy
+        .flatMap { (mode: Mode) -> [HotkeyBinding] in Array(mode.bindings.values) }
+        .flatMap { (binding: HotkeyBinding) -> [String] in
+            binding.commands.filterIsInstance(of: WorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw } +
+                binding.commands.filterIsInstance(of: MoveNodeToWorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw }
+        }
+        + (config.workspaceToMonitorForceAssignment).keys
 
     if config.enableNormalizationFlattenContainers {
         let containsSplitCommand = config.modes.values.lazy.flatMap { $0.bindings.values }
