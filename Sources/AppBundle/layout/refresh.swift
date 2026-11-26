@@ -269,6 +269,9 @@ func hideSpot(for size: CGSize, on v: Rect, otherMonitors: [Rect], sliver: CGFlo
 
 @MainActor
 func layoutWorkspaces() async throws {
+    // No screens: every frame would be computed against a placeholder rect. The reconnect lays out again.
+    let monitors = monitors
+    if monitors.isEmpty { return }
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.compactMap { $0 as? MacWindow }.forEach { $0.unhideFromCorner() }
@@ -276,7 +279,6 @@ func layoutWorkspaces() async throws {
         }
         return
     }
-    let monitors = monitors
 
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {

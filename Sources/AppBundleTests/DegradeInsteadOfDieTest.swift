@@ -17,6 +17,11 @@ final class DegradeInsteadOfDieTest: XCTestCase {
         config.execOnWorkspaceChange = []
         _prevFocusedWorkspaceName = nil
         testMonitors = [defaultTestMonitor]
+        // A workspace left visible on a fake second monitor would survive the next setUp's GC, as in
+        // `MonitorIdentityTest.tearDown`.
+        gcMonitors()
+        _ = mainMonitor.setActiveWorkspace(focus.workspace)
+        Workspace.garbageCollectUnusedWorkspaces()
         try await super.tearDown()
     }
 
@@ -101,6 +106,50 @@ final class DegradeInsteadOfDieTest: XCTestCase {
         assertEquals(mainScreenIndex(isMainFlags: [true, true]), 0) // mirrored: first wins
         assertEquals(mainScreenIndex(isMainFlags: [false, false]), 0) // none claims the origin
         assertNil(mainScreenIndex(isMainFlags: []))
+    }
+
+    /// No screens at all (displays asleep, a DisplayLink dock mid-reconnect): `monitorApproximation`
+    /// was `minByOrDie`, so the next layout or mouse-up was fatal, and `gcMonitors` rearranged onto
+    /// nothing, which made every workspace invisible and erased the UUID map the reconnect needs.
+    func testZeroScreensDegradesAndKeepsTheMappingForTheReconnect() async throws {
+        let left = panel(id: 1, x: 0, uuid: "L")
+        let right = panel(id: 2, x: 1920, uuid: "R")
+        testMonitors = [left, right]
+        rearrangeWorkspacesOnMonitors() // records the UUID of each screen point
+        check(left.setActiveWorkspace(Workspace.get(byName: "on-left")))
+        check(right.setActiveWorkspace(Workspace.get(byName: "on-right")))
+
+        testMonitors = []
+        // Reaching the end of these is the first assertion.
+        _ = CGPoint.zero.monitorApproximation
+        gcMonitors()
+        try await layoutWorkspaces()
+
+        testMonitors = [left, right]
+        assertTrue(Workspace.get(byName: "on-left").isVisible)
+        assertTrue(Workspace.get(byName: "on-right").isVisible)
+        assertEquals(left.activeWorkspace.name, "on-left")
+        assertEquals(right.activeWorkspace.name, "on-right")
+
+        // The panels come back in swapped positions. Only the UUID map can tell, since position
+        // alone would keep each workspace where it was.
+        let leftMoved = panel(id: 1, x: 1920, uuid: "L")
+        let rightMoved = panel(id: 2, x: 0, uuid: "R")
+        testMonitors = [rightMoved, leftMoved]
+        rearrangeWorkspacesOnMonitors()
+        assertEquals(leftMoved.activeWorkspace.name, "on-left")
+        assertEquals(rightMoved.activeWorkspace.name, "on-right")
+    }
+
+    private func panel(id: Int, x: CGFloat, uuid: String) -> MonitorImpl {
+        let rect = Rect(topLeftX: x, topLeftY: 0, width: 1920, height: 1080)
+        return MonitorImpl(
+            monitorAppKitNsScreenScreensId: id, name: "DisplayLink Display", rect: rect, visibleRect: rect,
+            fingerprint: MonitorFingerprint(
+                vendorID: nil, modelID: nil, serialNumber: nil,
+                displayName: "DisplayLink Display", widthPixels: 1920, heightPixels: 1080, displayUUID: uuid,
+            ),
+        )
     }
 
     /// `Monitor.activeWorkspace` ended with `return self.activeWorkspace` after rebuilding the
