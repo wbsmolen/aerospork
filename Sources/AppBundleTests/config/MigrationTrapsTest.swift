@@ -32,6 +32,24 @@ final class MigrationTrapsTest: XCTestCase {
         }
     }
 
+    /// A binding to a command that does not parse is fatal for the whole config, and `swap` was the one
+    /// binding command AeroSpace has that AeroSpork lacked.
+    func testABindingToSwapLoadsWithTheRestOfTheConfig() {
+        let (result, _) = parse("""
+            accordion-padding = 7
+
+            [mode.main.binding]
+            alt-s = 'swap left'
+            alt-h = 'focus left'
+            """)
+        guard case .success(let config) = result else { return XCTFail("the whole config was discarded: \(result)") }
+        assertEquals(config.accordionPadding, 7)
+        let commands = config.modes[mainModeId]?.bindings.values.flatMap(\.commands) ?? []
+        assertEquals(commands.count, 2)
+        XCTAssertTrue(commands.contains { $0 is SwapCommand })
+        XCTAssertTrue(commands.contains { $0 is FocusCommand })
+    }
+
     /// Still an error -- the rule cannot be honoured -- but one that names the fix.
     func testAStringIfSaysWhatToWriteInstead() {
         let (result, _) = parse("""

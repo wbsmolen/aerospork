@@ -25,7 +25,7 @@ struct KeyBindingsTab: View {
             id: "move", title: "Move & workspace", icon: "rectangle.3.group",
             commandPrefixes: [
                 "move", "move-mouse", "move-node-to-monitor", "move-node-to-workspace",
-                "move-workspace-to-monitor", "summon-workspace", "workspace", "workspace-back-and-forth",
+                "move-workspace-to-monitor", "summon-workspace", "swap", "workspace", "workspace-back-and-forth",
             ],
         ),
         BindingCategory(
