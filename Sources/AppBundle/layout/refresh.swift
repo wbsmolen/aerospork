@@ -179,19 +179,33 @@ func refreshModel() {
 /// ponytail: a closed sticky window costs one lookup per refresh until AeroSpork restarts; prune if that adds up.
 @MainActor var stickyWindowIds: Set<UInt32> = []
 
-/// Moves each sticky window off a workspace that left the screen, onto the one its monitor shows now, where it
-/// keeps its frame. Here rather than in `setActiveWorkspace`, which focus, monitor rearranges and the restores all
-/// call, sometimes halfway through rebuilding the tree: one pass per refresh covers every way the visible workspace
-/// changes. An empty set is the whole cost for anyone without a sticky window.
+/// Where each sticky window was at the end of the last pass: its workspace, and the monitor that showed it.
+@MainActor var stickyPlaces: [UInt32: (workspace: String, monitor: CGPoint)] = [:]
+
+/// Moves each sticky window onto the workspace its monitor shows now, where it keeps its frame. Here rather than in
+/// `setActiveWorkspace`, which focus, monitor rearranges and the restores all call, sometimes halfway through
+/// rebuilding the tree: one pass per refresh covers every way the visible workspace changes. An empty set is the
+/// whole cost for anyone without a sticky window.
 @MainActor
 func followVisibleWorkspaces() {
+    var places: [UInt32: (workspace: String, monitor: CGPoint)] = [:]
+    defer { stickyPlaces = places }
     for id in stickyWindowIds {
         guard let window = Window.get(byId: id) else { continue }
         switch window.parent {
             case let workspace as Workspace:
-                if workspace.isVisible { continue }
-                let target = workspace.workspaceMonitor.activeWorkspace
+                // Its monitor is the one it was on, not its workspace's: `move-workspace-to-monitor` and
+                // `summon-workspace` take a workspace to another monitor and leave it visible, and the window stays.
+                // A window something moved since, or a monitor that is gone, goes by where its workspace is.
+                let remembered = stickyPlaces[id].flatMap { place in
+                    place.workspace == workspace.name ? monitors.first { $0.rect.topLeftCorner == place.monitor } : nil
+                }
+                let monitor = remembered ?? workspace.workspaceMonitor
+                places[id] = (workspace.name, monitor.rect.topLeftCorner)
+                if remembered == nil && workspace.isVisible { continue }
+                let target = monitor.activeWorkspace
                 if target == workspace { continue }
+                places[id] = (target.name, monitor.rect.topLeftCorner)
                 // Not the target's focus fallback, unless it has nothing else: the switch goes where it went before.
                 let mru = target.mostRecentWindowRecursive
                 window.bindAsFloatingWindow(to: target)
