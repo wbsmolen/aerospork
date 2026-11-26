@@ -80,6 +80,9 @@ final class ConfigurationViewModel: ObservableObject {
     var rawTomlApplyRequested = false
 
     @Published var errorMessage: String?
+    /// The config file General and Raw TOML show. Looked up on reload and after "Open in…", never in a
+    /// pane body: the lookup touches the disk, and a body can run on every keystroke.
+    @Published private(set) var configPath = ""
     private var isSaving = false
     /// Changes only after a complete reload. Views with non-persisted presentation state use this
     /// to seed themselves once without recomputing while the user is typing.
@@ -295,8 +298,19 @@ final class ConfigurationViewModel: ObservableObject {
         if rows != liveMonitors { liveMonitors = rows }
     }
 
+    /// "Open in…" can create the first config, so the path is read again after it.
+    func openConfigInEditor() {
+        if let reason = openConfigInExternalEditor() { errorMessage = reason }
+        refreshConfigPath()
+    }
+
+    private func refreshConfigPath() {
+        configPath = (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+    }
+
     private func reloadFromConfig() {
         refreshLiveMonitors()
+        refreshConfigPath()
         switch configBaseText() {
             case .success(let text): adopt(text, config)
             // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.

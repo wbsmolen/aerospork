@@ -468,23 +468,36 @@ struct Banner: View {
     return editor
 }
 
-/// Opens the user's config in that editor, creating it from the bundled default if it is missing.
-@MainActor func openConfigInExternalEditor() {
-    let editor = getTextEditorToOpenConfig()
-    let fallbackConfig = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
-    switch findCustomConfigUrl() {
-        case .file(let url):
-            url.open(with: editor)
-        case .noCustomConfigExists:
-            _ = try? FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
-            // `ConfigFileWatcher.start()` bails when there is no user config to watch, and it ran at
-            // launch. Without re-arming here, the file we just created is not watched, so the edit
-            // the user is about to make in that editor would never be picked up.
-            ConfigFileWatcher.start()
-            fallbackConfig.open(with: editor)
-        case .ambiguousConfigError:
-            fallbackConfig.open(with: editor)
+/// Opens the config the server reads in that editor, creating it from the bundled default if it is
+/// missing. Returns why it could not, for the pane to show.
+///
+/// The file is `userConfigTargetUrl()`, the one the writer saves to. This used to create
+/// `~/.aerospork.toml` whenever no config existed, so with `--config-path` naming a file not yet
+/// created the user edited a file the server never reads, and a failed copy said nothing.
+/// `target` and `open` are seams for tests.
+@MainActor func openConfigInExternalEditor(
+    target: Result<URL, String> = userConfigTargetUrl(),
+    open: (URL) -> Void = { $0.open(with: getTextEditorToOpenConfig()) },
+) -> String? {
+    let url: URL
+    switch target {
+        case .success(let it): url = it
+        case .failure(let reason): return reason
     }
+    if !FileManager.default.fileExists(atPath: url.path) {
+        do {
+            try FileManager.default.copyItem(at: defaultConfigUrl, to: url)
+        } catch {
+            return "Could not create \(url.path(percentEncoded: false)): \(error.localizedDescription) Check that its folder exists and that you can write to it."
+        }
+        // `ConfigFileWatcher.start()` bails when there is no user config to watch, and it ran at
+        // launch. Without re-arming here, the file just created is not watched, so the edit the user
+        // is about to make in that editor would never be picked up. Not under XCTest, where it would
+        // watch the developer's own config.
+        if !isUnitTest { ConfigFileWatcher.start() }
+    }
+    open(url)
+    return nil
 }
 
 /// Small borderless "copy this string" button. Two tabs need it and they had two different ones.

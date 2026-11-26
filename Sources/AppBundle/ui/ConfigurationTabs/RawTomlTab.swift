@@ -24,7 +24,6 @@ struct RawTomlTab: View {
     @State private var cursorLine = 1
     @State private var cursorColumn = 1
     @State private var jumpToLine: Int?
-    @State private var configPath = ""
     @State private var backups: [URL] = []
     @State private var sectionHeaders: [SectionHeader] = []
 
@@ -70,9 +69,8 @@ struct RawTomlTab: View {
             validationPending = false
         }
         .task {
-            // Both calls touch the file system. Raw TOML publishes on every keystroke, so leaving
-            // them in computed view properties turned typing into repeated directory scans.
-            configPath = (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+            // Touches the file system. The pane re-renders on every keystroke, so leaving it in a
+            // computed view property turned typing into repeated directory scans.
             backups = viewModel.configBackups()
         }
     }
@@ -80,13 +78,13 @@ struct RawTomlTab: View {
     private var pathBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "doc.plaintext").foregroundStyle(.secondary)
-            Text(configPath)
+            Text(viewModel.configPath)
                 .font(.system(.callout, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .textSelection(.enabled)
-            CopyButton(value: configPath, help: "Copy config path")
+            CopyButton(value: viewModel.configPath, help: "Copy config path")
             Spacer(minLength: 12)
             Text("Ln \(cursorLine), Col \(cursorColumn)")
                 .font(.callout)
@@ -107,7 +105,7 @@ struct RawTomlTab: View {
             .help("Jump to a TOML section")
             // Both were permanent menu bar rows. They belong next to the text they act on.
             Button("Open in \(getTextEditorToOpenConfig().deletingPathExtension().lastPathComponent)") {
-                openConfigInExternalEditor()
+                viewModel.openConfigInEditor()
             }
             .buttonStyle(.borderless)
             .help("External edits are picked up automatically — the config file is watched")

@@ -429,6 +429,15 @@ final class UISettingsTest: XCTestCase {
         XCTAssertEqual(changes, 0, "an unchanged monitor list must not publish")
     }
 
+    /// General and Raw TOML read the path from here. General used to look it up in its body, which
+    /// ran file-system checks on every Raw TOML keystroke.
+    func testLoadingPublishesTheConfigPath() async {
+        let vm = ConfigurationViewModel()
+        XCTAssertEqual(vm.configPath, "")
+        await vm.loadConfiguration()
+        XCTAssertFalse(vm.configPath.isEmpty)
+    }
+
     func testPinUnpinRoundTripThroughTheMenuFlow() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }

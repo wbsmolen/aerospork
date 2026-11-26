@@ -4,10 +4,6 @@ import SwiftUI
 struct GeneralSettingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
 
-    private var configPath: String {
-        (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
-    }
-
     var body: some View {
         Form {
             Section {
@@ -95,13 +91,13 @@ struct GeneralSettingsTab: View {
                 }
                 LabeledContent("Config file") {
                     HStack(spacing: 6) {
-                        Text(configPath)
+                        Text(viewModel.configPath)
                             .font(.system(.callout, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .truncationMode(.head)
                             .lineLimit(1)
                             .textSelection(.enabled)
-                        CopyButton(value: configPath, help: "Copy path")
+                        CopyButton(value: viewModel.configPath, help: "Copy path")
                     }
                 }
             } header: {
