@@ -4,6 +4,12 @@ import Foundation
 import os
 
 public let unixUserName = NSUserName()
+/// What the CLI and the server each report as their version, so a mismatch warning compares like with like.
+public let aeroSporkVersionAndHash = "\(aeroSporkAppVersion) \(gitHash)"
+
+/// The socket the server of the build with `appId` listens on, and the CLI of that build connects to.
+public func cliSocketPath(appId: String) -> String { "/tmp/\(appId)-\(unixUserName).sock" }
+
 public let mainModeId = "main"
 
 public let potentialBugsUrl = "https://github.com/wbsmolen/aerospork/issues/new?template=bug_report.md"

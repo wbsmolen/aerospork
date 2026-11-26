@@ -6,7 +6,7 @@ import Common
 /// holding a thread hostage. Applies to each frame, in each direction.
 private let clientFrameTimeoutSec = 30
 
-func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock") {
+func startUnixSocketServer(socketFile: String = cliSocketPath(appId: aeroSporkAppId)) {
     // A thread of its own: the loop never returns, so on `DispatchQueue.global()` it held a pool worker forever.
     Thread.detachNewThread {
         guard let listener = UnixSocketListener.bind(to: socketFile) else {
@@ -61,7 +61,7 @@ func acceptConnections(_ accept: () -> UnixSocketConnection?, handle: (UnixSocke
 /// keeps the two ids in sync instead of hardcoding a second literal that can rot.
 var releaseServerSocketPath: String {
     check(isDebug && aeroSporkAppId.hasSuffix(".debug"))
-    return "/tmp/\(aeroSporkAppId.dropLast(".debug".count))-\(unixUserName).sock"
+    return cliSocketPath(appId: String(aeroSporkAppId.dropLast(".debug".count)))
 }
 
 /// Best effort. It runs on the main actor at launch, before this build's own socket exists, and again at
@@ -77,10 +77,8 @@ func sendCommandToReleaseServer(args: [String], socketPath: String = releaseServ
     _ = try? socket.recvMessage()
 }
 
-private let serverVersionAndHash = "\(aeroSporkAppVersion) \(gitHash)"
-
 func serverAnswer(_ exitCode: Int32, stdout: String = "", stderr: String = "") -> ServerAnswer {
-    ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: serverVersionAndHash)
+    ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: aeroSporkVersionAndHash)
 }
 
 /// The answers that need no window tree: help text, argument errors, and commands the socket
@@ -150,7 +148,7 @@ func newConnection(_ socket: UnixSocketConnection) async {
             await answerToClient(serverAnswer(
                 ExitCode.badArgs,
                 stderr: """
-                    Can't parse request '\(String(describing: String(data: rawRequest, encoding: .utf8)).singleQuoted)'.
+                    Can't parse request '\(String(decoding: rawRequest.prefix(200), as: UTF8.self))'.
                     Error: \(_request.failureOrNil.prettyDescription)
                     """,
             ))
@@ -181,7 +179,7 @@ func newConnection(_ socket: UnixSocketConnection) async {
                         exitCode: cmdResult.exitCode,
                         stdout: cmdResult.stdout.joined(separator: "\n"),
                         stderr: cmdResult.stderr.joined(separator: "\n"),
-                        serverVersionAndHash: serverVersionAndHash,
+                        serverVersionAndHash: aeroSporkVersionAndHash,
                     )
                 }
             }.result
