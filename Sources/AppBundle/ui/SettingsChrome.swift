@@ -99,7 +99,6 @@ struct IconButton: View {
     let systemImage: String
     let label: String
     var role: ButtonRole?
-    var isEnabled = true
     let action: () -> Void
 
     var body: some View {
@@ -109,7 +108,6 @@ struct IconButton: View {
                 .settingsHitTarget()
         }
         .buttonStyle(.borderless)
-        .disabled(!isEnabled)
         .help(label)
         .accessibilityLabel(label)
     }

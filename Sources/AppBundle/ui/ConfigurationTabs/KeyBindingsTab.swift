@@ -49,9 +49,6 @@ struct KeyBindingsTab: View {
     @State private var selectedMode = mainModeId
     @State private var newKey = ""
     @State private var newCommand = ""
-    @State private var recording = false
-    /// Which row's recorder is armed, by key. One piece of state instead of one per row.
-    @State private var recordingRow: String?
     @State private var newMode = ""
     @State private var addingMode = false
     @State private var query = ""
@@ -311,7 +308,7 @@ struct KeyBindingsTab: View {
         HStack(spacing: 8) {
             if let rowId = b.rowId {
                 KeyRecorderField(
-                    notation: key(rowId, b.key), isRecording: recorder(b.key), keys: recorderKeys, showsClear: false,
+                    notation: key(rowId, b.key), keys: recorderKeys, showsClear: false,
                 )
                 .frame(width: 170, height: 22)
                 SettingsField("Command", prompt: "focus left", text: command(rowId, b.command))
@@ -387,10 +384,6 @@ struct KeyBindingsTab: View {
         )
     }
 
-    private func recorder(_ key: String) -> Binding<Bool> {
-        Binding(get: { recordingRow == key }, set: { recordingRow = $0 ? key : nil })
-    }
-
     private func composer(modes: [String], allRows: [ConfigurationViewModel.DisplayBinding]) -> some View {
         // What the shortcut in the composer is bound to *right now*, if anything.
         let conflict = viewModel.existingBinding(mode: selectedMode, key: newKey)
@@ -398,7 +391,7 @@ struct KeyBindingsTab: View {
         return VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
-                KeyRecorderField(notation: $newKey, isRecording: $recording, keys: recorderKeys)
+                KeyRecorderField(notation: $newKey, keys: recorderKeys)
                     .frame(width: 170, height: 22)
                 SettingsField("New command", prompt: "command, e.g. focus left", text: $newCommand)
                     .onSubmit(add)
@@ -494,7 +487,6 @@ struct KeyBindingsTab: View {
     private func duplicate(_ binding: ConfigurationViewModel.DisplayBinding) {
         newKey = ""
         newCommand = binding.command
-        recording = false
     }
 
     private func otherModeOwners(modes: [String]) -> [String] {
@@ -537,14 +529,13 @@ struct KeyBindingsTab: View {
 /// Click, then press a shortcut. Beats typing `alt-shift-h` by hand and guessing the notation.
 private struct KeyRecorderField: View {
     @Binding var notation: String
-    @Binding var isRecording: Bool
     var keys: KeyMapping
     /// Off for an existing row: clearing it would leave a binding with no key, which is not a
     /// thing that can be written, so the button would be visibly dead.
     var showsClear = true
 
     var body: some View {
-        Recorder(notation: $notation, isRecording: $isRecording, keys: keys)
+        Recorder(notation: $notation, keys: keys)
             .overlay(alignment: .trailing) {
                 if showsClear, !notation.isEmpty {
                     IconButton(systemImage: "xmark.circle.fill", label: "Clear this shortcut") { notation = "" }
@@ -556,18 +547,17 @@ private struct KeyRecorderField: View {
 
     private struct Recorder: NSViewRepresentable {
         @Binding var notation: String
-        @Binding var isRecording: Bool
         let keys: KeyMapping
 
         func makeNSView(context: Context) -> RecorderView {
             let v = RecorderView(frame: .zero)
-            v.onCapture = { notation = $0; isRecording = false }
+            v.onCapture = { notation = $0 }
             v.keys = keys
             return v
         }
 
         func updateNSView(_ nsView: RecorderView, context: Context) {
-            nsView.onCapture = { notation = $0; isRecording = false }
+            nsView.onCapture = { notation = $0 }
             nsView.keys = keys
             nsView.displayed = notation
             nsView.needsDisplay = true

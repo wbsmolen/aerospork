@@ -90,8 +90,6 @@ struct GapsSettingsTab: View {
             }
             .formStyle(.grouped)
 
-            // Plain prose, no backticks: a markdown code span containing brackets makes SwiftUI's
-            // parser fail and fall back to the literal string, backticks included.
             SettingsFooter(
                 // Reworded so the config key fits in a code span. SwiftUI's markdown parser reads the
                 // `[` of an array inside backticks as the start of a link, fails, and falls back to
