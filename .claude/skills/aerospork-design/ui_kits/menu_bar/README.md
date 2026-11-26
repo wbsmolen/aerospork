@@ -10,7 +10,11 @@ desktop so the chips have something to describe.
   "Open config" row here.
 - **Pause tiling** swaps the label for `pause.circle.fill` and lets the windows float, which is
   what the real command does.
-- The "service" mode link shows the capsule chip and the *Leave mode* row that only appears while a
-  non-main mode is active.
+- The "service" mode link shows the capsule chip, which comes before the workspace chips, and the
+  *Leave mode* row that only appears while a non-main mode is active.
+- The "Break the config" link shows the two rows a config that failed to parse puts at the top:
+  *Config not loaded — running defaults* and *Show config error…*.
+- *Check for updates…* is in release builds only. A debug build has no update feed, so the row is
+  not there.
 
 Window contents are schematic stand-ins; the app never draws other apps' windows.

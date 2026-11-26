@@ -1,4 +1,4 @@
-const { FormSection, SectionLabel, NumberField, SettingsFooter, GapsPreview, Toggle, StatusLabel } = window.AeroSporkDesignSystem_078bd7;
+const { FormSection, SectionLabel, NumberField, GapsPreview, Toggle, StatusLabel } = window.AeroSporkDesignSystem_078bd7;
 
 function GapsTab({ s, set }) {
   const D = window.AS_DATA;
@@ -13,7 +13,7 @@ function GapsTab({ s, set }) {
       <div className="form-page">
         <FormSection header={<SectionLabel title="Preview" sf="eye" />}
           footer={D.gapsHavePerMonitorOverrides
-            ? <StatusLabel kind="neutral">Some of these gaps have per-monitor rules set in Raw TOML — editing any value below replaces the whole section with flat numbers.</StatusLabel>
+            ? <StatusLabel kind="neutral">Some gaps have per-monitor rules in Raw TOML. Editing any value below replaces the whole section with flat numbers.</StatusLabel>
             : null}>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
             <GapsPreview width={560} height={156}
@@ -31,8 +31,12 @@ function GapsTab({ s, set }) {
           {!innerLinked && <NumberField title="Horizontal" value={s.innerH} onChange={(v) => set('innerH', v)} />}
           {!innerLinked && <NumberField title="Vertical" value={s.innerV} onChange={(v) => set('innerV', v)} />}
         </FormSection>
+        {/* With overrides, the Preview footer already says where they live. Without, this is the only
+            place that says per-monitor gaps exist. A section footer is a SettingsHint (FormSection). */}
         <FormSection header={<SectionLabel title="Around the screen" sf="rectangle.inset.filled" />}
-          footer="The top gap is measured below the menu bar, so 0 is flush with the usable area.">
+          footer={D.gapsHavePerMonitorOverrides
+            ? 'The top gap is measured below the menu bar, so 0 is flush with the usable area.'
+            : 'The top gap is measured below the menu bar, so 0 is flush with the usable area. Per-monitor gaps are set in Raw TOML.'}>
           <Toggle label="Same on all sides" checked={outerLinked} onChange={(v) => {
             setOuterLinked(v);
             if (v) { set('outerBottom', s.outerTop); set('outerLeft', s.outerTop); set('outerRight', s.outerTop); }
@@ -45,7 +49,6 @@ function GapsTab({ s, set }) {
           {!outerLinked && <NumberField title="Right" value={s.outerRight} onChange={(v) => set('outerRight', v)} />}
         </FormSection>
       </div>
-      <SettingsFooter>Raw TOML can set a different value per monitor for any of these six gaps. Editing a gap here always writes one flat number for every monitor. Use Raw TOML for per-monitor rules.</SettingsFooter>
     </div>
   );
 }
