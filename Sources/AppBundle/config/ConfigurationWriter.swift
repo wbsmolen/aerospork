@@ -78,15 +78,25 @@ enum ConfigurationWriter {
         }
     }
 
+    /// `target` stays the path the user configured (messages, backups and the watcher use it). Only
+    /// the write goes through a link: an atomic write to the link path replaced it with a regular
+    /// file, which detached a stow, chezmoi or home-manager config from its dotfiles repo.
     static func write(_ result: String, to target: URL) throws {
+        let isLink = (try? FileManager.default.destinationOfSymbolicLink(atPath: target.path)) != nil
+        let resolved = target.resolvingSymlinksInPath()
+        // The Nix store. The atomic write needs the directory, and its Cocoa error named neither file.
+        if isLink, !FileManager.default.isWritableFile(atPath: resolved.deletingLastPathComponent().path) {
+            throw WriteRefused(reason: "\(target.path) is a link to a read-only file. Edit it where it is managed.")
+        }
         let existed = FileManager.default.fileExists(atPath: target.path)
         if existed { try backUpOncePerSession(target) }
         ConfigFileWatcher.suppressNextSelfWrite()
-        try result.write(to: target, atomically: true, encoding: .utf8)
+        try result.write(to: resolved, atomically: true, encoding: .utf8)
         // The watcher bails when the file doesn't exist, and only re-arms from its own event
-        // handler -- so the first-ever GUI save left hot-reload dead until an app restart.
+        // handler -- so the first-ever GUI save left hot-reload dead until an app restart. Its fd
+        // follows a link to the file the write just replaced, so re-open it on the new one.
         // Not under XCTest: it watches the real config, not the test's file.
-        if !existed, !isUnitTest { ConfigFileWatcher.start() }
+        if !existed || isLink, !isUnitTest { ConfigFileWatcher.start() }
     }
 
     // MARK: - Backups
@@ -130,12 +140,15 @@ enum ConfigurationWriter {
     /// file exists and its text was just read, so a failure means something is wrong with it, and the
     /// write would then replace it with no copy kept. Pruning stays best-effort.
     static func backUp(_ target: URL, now: Date = Date()) throws {
+        // Named next to the link, where the Restore menu lists them and out of the user's dotfiles
+        // repo. The copy is of the file: `copyItem` on a link copies the link, which follows the
+        // live file and so backs up nothing.
         let backup = target.appendingPathExtension("\(timestamp(now))\(backupSuffix)")
         // Same second as an existing backup (a debounced save burst): keep the older copy, which is
         // further from whatever went wrong.
         if !FileManager.default.fileExists(atPath: backup.path) {
             do {
-                try FileManager.default.copyItem(at: target, to: backup)
+                try FileManager.default.copyItem(at: target.resolvingSymlinksInPath(), to: backup)
             } catch {
                 throw WriteRefused(reason: "Could not back up \(target.path), so it was left as it is: \(error.localizedDescription)")
             }

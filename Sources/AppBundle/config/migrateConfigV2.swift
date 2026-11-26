@@ -39,10 +39,13 @@ import TOMLKit
     guard !FileManager.default.fileExists(atPath: backup.path) else { return }
     guard let original = try? String(contentsOf: url, encoding: .utf8),
           let migrated = migrateToConfigV2(original) else { return }
-    // Back up FIRST. If this fails there is no safe copy, so there is no migration either.
-    guard (try? original.write(to: backup, atomically: true, encoding: .utf8)) != nil else { return }
+    // Back up FIRST. If this fails there is no safe copy, so there is no migration either. A copy of
+    // the real file, not a fresh write: that got 0644 from the umask when the config was 0600, and
+    // `[exec.env-vars]` can hold secrets. Both go through a link, which a write to `url` replaced.
+    let real = url.resolvingSymlinksInPath()
+    guard (try? FileManager.default.copyItem(at: real, to: backup)) != nil else { return }
     ConfigFileWatcher.suppressNextSelfWrite()
-    try? migrated.write(to: url, atomically: true, encoding: .utf8)
+    try? migrated.write(to: real, atomically: true, encoding: .utf8)
 }
 
 // MARK: - Rendering

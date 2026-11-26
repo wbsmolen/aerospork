@@ -125,6 +125,38 @@ final class ConfigV2MigrationTest: XCTestCase {
 
     // MARK: - The real thing
 
+    // MARK: - The file migration
+
+    private static let v1 = "[mode.main.binding]\nalt-h = 'focus left'\n"
+
+    /// The `.pre-v2` copy was written fresh, so it got 0644 from the umask even when the config was
+    /// 0600, and `[exec.env-vars]` can hold secrets.
+    func testPreV2BackupKeepsTheOriginalMode() throws {
+        let url = try useTemporaryConfig(Self.v1, for: self)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+
+        migrateConfigToV2(at: url)
+
+        let backup = url.appendingPathExtension("pre-v2")
+        assertEquals(try String(contentsOf: backup, encoding: .utf8), Self.v1)
+        assertEquals(try FileManager.default.attributesOfItem(atPath: backup.path)[.posixPermissions] as? Int, 0o600)
+    }
+
+    /// The migration's atomic write replaced a linked config with a regular file, as the Settings save did.
+    func testMigrationThroughALinkKeepsTheLink() throws {
+        let url = try useTemporaryConfig(Self.v1, for: self)
+        let link = url.deletingLastPathComponent().appending(path: "link.toml")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: url)
+
+        migrateConfigToV2(at: link)
+
+        assertEquals(try FileManager.default.attributesOfItem(atPath: link.path)[.type] as? FileAttributeType, .typeSymbolicLink)
+        XCTAssertFalse(try String(contentsOf: url, encoding: .utf8).contains("mode.main.binding"))
+        let backup = link.appendingPathExtension("pre-v2")
+        assertEquals(try FileManager.default.attributesOfItem(atPath: backup.path)[.type] as? FileAttributeType, .typeRegular)
+        assertEquals(try String(contentsOf: backup, encoding: .utf8), Self.v1)
+    }
+
     /// The measured 202-line config this schema was designed from. READ ONLY, and skipped when it is
     /// not on this machine -- but when it IS, it is the only test here whose input was written by a
     /// user rather than by the person implementing the feature.
