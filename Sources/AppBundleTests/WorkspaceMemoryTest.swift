@@ -618,10 +618,9 @@ final class WorkspaceMemoryTest: XCTestCase {
         assertNil(WorkspaceMemory.restoredWorkspace(forWindowId: 42, bundleId: "com.apple.finder"))
     }
 
-    /// `setUpWorkspacesForTests` assumes the one monitor the rest of the suite runs on.
+    /// `setUpWorkspacesForTests` puts back the one monitor the rest of the suite runs on.
     private func setUpWorkspacesOnTheseMonitors() {
         let these = testMonitors
-        testMonitors = [defaultTestMonitor]
         setUpWorkspacesForTests()
         testMonitors = these
     }

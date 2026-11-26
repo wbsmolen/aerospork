@@ -14,7 +14,6 @@ final class MoveCommandTest: XCTestCase {
             MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "left", rect: left, visibleRect: left),
             MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "right", rect: right, visibleRect: right),
         ]
-        defer { testMonitors = [defaultTestMonitor] }
         let (a, b) = (Workspace.get(byName: "a"), Workspace.get(byName: "b"))
         check(testMonitors[0].setActiveWorkspace(a))
         check(testMonitors[1].setActiveWorkspace(b))

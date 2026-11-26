@@ -15,11 +15,6 @@ final class LayoutRecursiveTest: XCTestCase {
         config.accordionPadding = 30
     }
 
-    override func tearDown() {
-        testMonitors = [defaultTestMonitor]
-        super.tearDown()
-    }
-
     /// A monitor anchored at the origin, so `mainMonitor` and `monitorApproximation` both pick it.
     private func monitor(width: CGFloat) -> MonitorImpl {
         let rect = Rect(topLeftX: 0, topLeftY: 0, width: width, height: 1080)
