@@ -89,7 +89,7 @@ struct WindowRulesTab: View {
             ContentUnavailableViewCompat(
                 icon: "macwindow",
                 title: "No window rules",
-                message: "Rules run once, when a window first appears — the usual use is sending an app straight to its workspace.",
+                message: "Rules run once, when a window first appears: the usual use is sending an app straight to its workspace.",
                 actionTitle: "Add rule",
                 action: { addRule() },
             )

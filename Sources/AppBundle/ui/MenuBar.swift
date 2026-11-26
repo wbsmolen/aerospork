@@ -26,7 +26,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         // they never wrote, and every one of their bindings is gone -- they have to be told here,
         // not only in a startup dialog they already dismissed.
         if isRunningFallbackDefaults {
-            Label("Config not loaded — running defaults", systemImage: Banner.Kind.error.icon)
+            Label("Config not loaded: running defaults", systemImage: Banner.Kind.error.icon)
             Button("Show config error…") { showConfigErrorInSettings() }
             Divider()
         }

@@ -33,7 +33,7 @@ struct WorkspacesMonitorsTab: View {
                     viewModel.scheduleAutoSave()
                     selection = nil
                 },
-                hint: "Hardware fingerprints already in your config are preserved — they show up here under the monitor's name. A workspace named here stays available even with no windows on it.",
+                hint: "Hardware fingerprints already in your config are preserved, and show up here under the monitor's name. A workspace named here stays available even with no windows on it.",
             )
         }
         .onAppear { autoSelectIfNeeded() }
@@ -70,7 +70,7 @@ struct WorkspacesMonitorsTab: View {
             }
 
             if viewModel.liveMonitors.isEmpty {
-                SettingsHint("No monitors reported yet — they appear as soon as macOS reports one, and their UUIDs are what pins a workspace to a physical panel.")
+                SettingsHint("No monitors reported yet. They appear as soon as macOS reports one, and their UUIDs are what pins a workspace to a physical panel.")
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
             } else {
@@ -203,7 +203,7 @@ struct WorkspacesMonitorsTab: View {
             }
             if !movable.isEmpty {
                 if !unpinned.isEmpty { Divider() }
-                Section("Pinned elsewhere — move here") {
+                Section("Pinned elsewhere: move here") {
                     ForEach(movable) { assignment in
                         Button(assignment.workspace) {
                             selection = viewModel.setAssignment(workspace: assignment.workspace, monitorToken: token)
@@ -216,7 +216,7 @@ struct WorkspacesMonitorsTab: View {
                 let id = viewModel.addAssignment(monitorToken: token)
                 selection = id
                 focusedWorkspaceField = id
-                settingsAnnounce("Empty assignment added — type a workspace name")
+                settingsAnnounce("Empty assignment added. Type a workspace name.")
             }
         }
         .menuStyle(.button)
@@ -306,7 +306,7 @@ struct WorkspacesMonitorsTab: View {
                             if row.isComplex {
                                 Badge(
                                     "complex",
-                                    help: "Written with more detail than this editor can show — use Raw TOML to change its fallback list or hardware fingerprint.",
+                                    help: "Written with more detail than this editor can show. Use Raw TOML to change its fallback list or hardware fingerprint.",
                                 )
                             }
                             Spacer(minLength: 0)

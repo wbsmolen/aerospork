@@ -157,6 +157,19 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertFalse(strip.contains("selectedPane"), "the error strip is hidden on some pane: \(strip)")
     }
 
+    /// The product voice keeps the em dash for the rare interruption nothing else handles
+    /// (`.claude/skills/aerospork-design/readme.md`), and the panes had 17 of them in their copy. A
+    /// colon, a comma or a full stop says each of these better. Comments are not copy.
+    func testUiCopyHasNoEmDashes() throws {
+        var offenders: [String] = []
+        try forEachCodeLine { path, line, code in
+            // The odd segments between quotes are the string literals on the line.
+            let literals = code.split(separator: "\"", omittingEmptySubsequences: false).enumerated().filter { $0.offset % 2 == 1 }
+            if literals.contains(where: { $0.element.contains("—") }) { offenders.append("\(path):\(line)") }
+        }
+        XCTAssertEqual(offenders, [], "rewrite with a colon, a comma or a full stop")
+    }
+
     /// A debug build has no feed, so an update control there is a permanent dead control. The test
     /// process runs with the updater disabled, so a render cannot see the gate: this reads the source.
     func testUpdateControlsAreGatedOnTheUpdaterBeingEnabled() throws {
