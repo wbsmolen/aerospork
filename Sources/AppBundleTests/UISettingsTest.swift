@@ -475,6 +475,15 @@ final class UISettingsTest: XCTestCase {
         assertEquals(Set([mode, workspace]).count, 2)
     }
 
+    /// VoiceOver read the tray text's `*` and `│` aloud, and "S" for a mode named "service".
+    func testTraySpokenTextNamesTheModeAndTheFocusedWorkspace() {
+        assertEquals(
+            traySpokenText(mode: "service", workspaces: [("1", true), ("2", false)]),
+            "Service mode. Workspace 1, focused. Workspace 2.",
+        )
+        assertEquals(traySpokenText(mode: nil, workspaces: [("1", true)]), "Workspace 1.")
+    }
+
     // MARK: - Branding
 
     /// The fork's own name, enforced over the settings UI. `BrandingTest` scans the rest of the
