@@ -49,11 +49,7 @@ public struct ConfigurationWindow: View {
             // The startup error dialog is modal-and-gone. Without a persistent banner, an app
             // running the bundled default keymap looks exactly like one running the user's config.
             if isRunningFallbackDefaults {
-                Banner(
-                    "Your config was not loaded, so AeroSpork is running built-in defaults. Fix the error in Raw TOML or your editor; the config reloads by itself.\n\(configLoadFailure ?? "")",
-                    kind: .error,
-                    action: showInRawToml,
-                )
+                Banner(Self.fallbackBanner(configLoadFailure ?? ""), kind: .error, action: configFailureIsInTheText ? showInRawToml : nil)
             } else if !configWarnings.isEmpty {
                 Banner(configWarnings.joined(separator: "\n"), kind: .warning)
             }
@@ -116,6 +112,20 @@ public struct ConfigurationWindow: View {
         }
         // Flushed, not cancelled: closing the window inside the 600ms debounce used to drop the last edit.
         .onDisappear { Task { await viewModel.flushPendingAutoSave() } }
+    }
+
+    /// Only a parse error is in text Raw TOML can show. Two configs, or one that can't be read, are
+    /// fixed outside Settings, and the failure below names the files.
+    static func fallbackBanner(_ failure: String) -> String {
+        let reload = "then run aerospork reload-config if it does not reload by itself."
+        let recovery = if failure.hasPrefix(configParseFailurePrefix) {
+            "Fix the error in Raw TOML or your editor; the config reloads by itself."
+        } else if failure.hasPrefix(ambiguousConfigFailurePrefix) {
+            "AeroSpork reads one config and found several: remove or rename all but one in Finder, \(reload)"
+        } else {
+            "Settings can't open the file below: fix it in Finder or your editor, \(reload)"
+        }
+        return "Your config was not loaded, so AeroSpork is running built-in defaults. \(recovery)\n\(failure)"
     }
 
     /// Raw TOML holds the file that failed to load, with the parser's error on it. None on that pane.

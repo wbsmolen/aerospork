@@ -33,7 +33,7 @@ func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: 
             return readConfig(at: defaultConfigUrl, warnings: &warnings)
         case .ambiguousConfigError(let candidates):
             let msg = """
-                Ambiguous config error. Several configs found:
+                \(ambiguousConfigFailurePrefix) Several configs found:
                 \(candidates.map(\.path).joined(separator: "\n"))
                 """
             return .failure(msg)
@@ -78,13 +78,18 @@ func readConfig(at configUrl: URL, warnings: inout [String]) -> Result<(Config, 
             return .success((parsedConfig, configUrl))
         case .failure(let errors):
             let msg = """
-                Failed to parse \(configUrl.absoluteURL.path)
+                \(configParseFailurePrefix)\(configUrl.absoluteURL.path)
 
                 \(errors.map(\.description).joined(separator: "\n\n"))
                 """
             return .failure(msg)
     }
 }
+
+/// How the two failures that are not "can't read this file" start. The banner and the menu word their
+/// recovery by which one `configLoadFailure` is.
+let configParseFailurePrefix = "Failed to parse "
+let ambiguousConfigFailurePrefix = "Ambiguous config error."
 
 /// What the banner and the menu warning show, from the read that is applied.
 @MainActor

@@ -198,6 +198,8 @@ struct RawTomlTab: View {
             }
         } else if viewModel.rawTomlEdited {
             StatusLabel("Valid. Press Apply (⌘S) to write it.", kind: .ok)
+        } else if !viewModel.rawTomlIsTheFile {
+            StatusLabel("Not the file on disk: Settings can't open it", kind: .warning)
         } else {
             StatusLabel("Matches the file on disk", kind: .neutral)
         }

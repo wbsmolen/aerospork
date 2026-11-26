@@ -153,8 +153,12 @@ func settingsBridged(_ content: some View) -> some View {
 
 /// Raw TOML holds the file that failed to load, with the parser's error highlighted and a "Go to
 /// line" button, so the menu opens Settings there instead of a modal with the bare parser text. The
-/// modal stays for when Settings cannot open (see `openSettingsWindow`).
+/// modal stays for when Settings cannot open (see `openSettingsWindow`), and for two configs or one
+/// that can't be read, which Raw TOML can neither show nor fix.
 @MainActor func showConfigErrorInSettings() {
+    guard configFailureIsInTheText else {
+        return showMessageInGui(filenameIfConsoleApp: nil, title: "AeroSpork config error", message: configLoadFailure ?? "")
+    }
     UserDefaults.standard.set(ConfigurationWindow.SettingsPane.rawToml.rawValue, forKey: ConfigurationWindow.selectedPaneKey)
     ConfigurationViewModel.errorJumpRequested = true
     NotificationCenter.default.post(name: ConfigurationViewModel.showConfigErrorNotification, object: nil)

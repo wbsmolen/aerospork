@@ -508,6 +508,49 @@ final class UISettingsTest: XCTestCase {
         XCTAssertEqual(vm.configPath, url.path(percentEncoded: false))
     }
 
+    /// Two configs, or one that can't be read, are in no text Raw TOML has. The banner sent the user
+    /// there anyway, and Raw TOML showed the bundled default as "Matches the file on disk".
+    func testOnlyAParseErrorIsSentToRawToml() throws {
+        let broken = try useTemporaryConfig("accordion-padding = 'thirty'\n", for: self)
+        let other = broken.deletingLastPathComponent().appending(path: "other.toml")
+        try "accordion-padding = 31\n".write(to: other, atomically: true, encoding: .utf8)
+        let latin1 = broken.deletingLastPathComponent().appending(path: "latin1.toml")
+        try Data("accordion-padding = 31 # caf\u{E9}\n".data(using: .isoLatin1).orDie()).write(to: latin1)
+
+        let failures: [(String, Result<(Config, URL), String>, [URL])] = [
+            ("parse", readConfig(at: broken), [broken]),
+            ("ambiguous", readConfig(found: findCustomConfigUrl(among: [broken, other])), [broken, other]),
+            ("unreadable", readConfig(at: latin1), [latin1]),
+        ]
+        for (kind, read, files) in failures {
+            guard case .failure(let failure) = read else { return XCTFail("\(kind) loaded") }
+            configLoadFailure = failure
+            let banner = ConfigurationWindow.fallbackBanner(failure)
+            for file in files { XCTAssertTrue(banner.contains(file.path), "\(kind): \(banner)") }
+            XCTAssertEqual(configFailureIsInTheText, kind == "parse", kind)
+            XCTAssertEqual(banner.contains("Raw TOML"), kind == "parse", "\(kind): \(banner)")
+            XCTAssertEqual(banner.contains("Finder"), kind != "parse", "\(kind): \(banner)")
+        }
+    }
+
+    func testRawTomlDoesNotClaimAFileItCouldNotLoad() async throws {
+        let first = try useTemporaryConfig("accordion-padding = 1\n", for: self)
+        let second = first.deletingLastPathComponent().appending(path: "second.toml")
+        try "accordion-padding = 2\n".write(to: second, atomically: true, encoding: .utf8)
+        guard case .failure(let reason) = configBaseText(found: findCustomConfigUrl(among: [first, second])) else {
+            return XCTFail("two configs gave Raw TOML the bundled default")
+        }
+        XCTAssertTrue(reason.contains(second.path), reason)
+
+        let vm = ConfigurationViewModel()
+        await vm.loadConfiguration()
+        XCTAssertTrue(vm.rawTomlIsTheFile)
+        try Data("accordion-padding = 31 # caf\u{E9}\n".data(using: .isoLatin1).orDie()).write(to: first)
+        vm.revertChanges()
+        XCTAssertFalse(vm.rawTomlIsTheFile, "Raw TOML would say it matches a file it never loaded")
+        XCTAssertNotNil(vm.errorMessage)
+    }
+
     func testPinUnpinRoundTripThroughTheMenuFlow() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }

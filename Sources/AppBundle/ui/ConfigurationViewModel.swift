@@ -70,6 +70,9 @@ final class ConfigurationViewModel: ObservableObject {
     }
 
     private var loadedRawToml = ""
+    /// False while the buffer is not the file: a config Settings can't read never reaches it, so Raw
+    /// TOML must not call it "Matches the file on disk".
+    @Published private(set) var rawTomlIsTheFile = false
     var rawTomlEdited: Bool { rawToml != loadedRawToml }
 
     /// Set ONLY by the Raw TOML pane's Apply button.
@@ -344,7 +347,9 @@ final class ConfigurationViewModel: ObservableObject {
         switch configBaseText() {
             case .success(let text): adopt(text, config)
             // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.
-            case .failure(let reason): errorMessage = reason
+            case .failure(let reason):
+                errorMessage = reason
+                rawTomlIsTheFile = false
         }
     }
 
@@ -370,6 +375,7 @@ final class ConfigurationViewModel: ObservableObject {
             if case .perMonitor = value { true } else { false }
         }
         rawToml = text
+        rawTomlIsTheFile = true
         // Both spellings declare workspaces the runtime keeps alive; see `Config.persistentWorkspaces`.
         definedWorkspaces = workspaceNames(table, "workspaces") + workspaceNames(table, "persistent-workspaces")
         inheritedBindings = loadInheritedBindings(table)
