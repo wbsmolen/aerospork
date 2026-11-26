@@ -19,7 +19,7 @@ final class ConfigurationViewModel: ObservableObject {
             object: nil,
             queue: .main,
         ) { [weak self] _ in
-            Task { @MainActor in self?.liveMonitors = self?.loadMonitors() ?? [] }
+            Task { @MainActor in self?.refreshLiveMonitors() }
         }
     }
 
@@ -141,8 +141,11 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
-    struct MonitorRow: Identifiable {
-        let id = UUID()
+    /// Equatable with an id that survives a reload, so a screen-change notification that changes
+    /// nothing publishes nothing, and `ForEach` keeps each box (its focus and hover) across one that does.
+    /// A minted `UUID()` tore every box down on each DisplayLink connect step and Dock frame change.
+    struct MonitorRow: Identifiable, Equatable {
+        var id: String { uuid ?? "\(name)#\(position)" }
         var name: String
         var resolution: String
         var uuid: String?
@@ -285,8 +288,15 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
+    /// Assigns only a changed list: the screen notification fires for every connect step and Dock
+    /// or menu bar frame change, and each publish re-renders every pane.
+    func refreshLiveMonitors() {
+        let rows = loadMonitors()
+        if rows != liveMonitors { liveMonitors = rows }
+    }
+
     private func reloadFromConfig() {
-        liveMonitors = loadMonitors()
+        refreshLiveMonitors()
         switch configBaseText() {
             case .success(let text): adopt(text, config)
             // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.
@@ -330,7 +340,7 @@ final class ConfigurationViewModel: ObservableObject {
         loadedRawToml = rawToml
     }
 
-    private func loadMonitors() -> [MonitorRow] {
+    func loadMonitors() -> [MonitorRow] {
         sortedMonitors.enumerated().map { offset, monitor in
             // `fingerprint` is part of the protocol. Downcasting discarded fingerprints from test
             // and alternate monitor implementations and also performed a needless runtime cast per

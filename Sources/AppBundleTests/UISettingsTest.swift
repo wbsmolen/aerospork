@@ -410,6 +410,25 @@ final class UISettingsTest: XCTestCase {
         XCTAssertNil(vm.monitorRow(forToken: "secondary"))
     }
 
+    /// A screen-change notification fires for each DisplayLink connect step and Dock frame change.
+    /// Rows that came back with new identities tore down every monitor box (focus, hover) and
+    /// re-rendered every pane for a list that had not changed.
+    func testMonitorRowsKeepTheirIdentityAndAnUnchangedListDoesNotPublish() {
+        let vm = ConfigurationViewModel()
+        let first = vm.loadMonitors()
+        let second = vm.loadMonitors()
+        XCTAssertFalse(first.isEmpty)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.map(\.id), second.map(\.id))
+
+        vm.refreshLiveMonitors()
+        var changes = 0
+        let subscription = vm.objectWillChange.sink { changes += 1 }
+        defer { subscription.cancel() }
+        vm.refreshLiveMonitors()
+        XCTAssertEqual(changes, 0, "an unchanged monitor list must not publish")
+    }
+
     func testPinUnpinRoundTripThroughTheMenuFlow() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
