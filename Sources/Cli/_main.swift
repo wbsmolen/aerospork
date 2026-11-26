@@ -78,10 +78,28 @@ func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Res
     guard let request = try? JSONEncoder().encode(ClientRequest(args: args, stdin: stdin)) else {
         return .failure(CliFailure(message: "Can't encode the request", exitCode: ExitCode.badArgs))
     }
+    // The server refuses a frame over the limit and hangs up, which read as "Can't send request".
+    guard request.count <= Int(UnixSocketConnection.maxFrameSize) else {
+        return .failure(CliFailure(
+            message: "The request is too large to send to AeroSpork server (\(request.count) bytes, the limit is \(UnixSocketConnection.maxFrameSize) bytes)",
+            exitCode: ExitCode.badArgs,
+        ))
+    }
     guard socket.sendMessage(request) else {
         return .failure(CliFailure(message: "Can't send request to AeroSpork server", exitCode: ExitCode.serverUnreachable))
     }
-    guard let answer = try? socket.recvMessage() else {
+    let reply: Data?
+    do {
+        reply = try socket.recvMessage()
+    } catch UnixSocketError.frameTooLarge(let size) {
+        return .failure(CliFailure(
+            message: "The answer from AeroSpork server is too large to receive (\(size) bytes, the limit is \(UnixSocketConnection.maxFrameSize) bytes)",
+            exitCode: ExitCode.serverUnreachable,
+        ))
+    } catch {
+        reply = nil
+    }
+    guard let answer = reply else {
         return .failure(CliFailure(message: "No response from AeroSpork server", exitCode: ExitCode.serverUnreachable))
     }
     guard let decoded = try? JSONDecoder().decode(ServerAnswer.self, from: answer) else {

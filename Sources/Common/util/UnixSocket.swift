@@ -134,9 +134,11 @@ public final class UnixSocketConnection: @unchecked Sendable {
         return out
     }
 
-    /// Send a framed message (4-byte big-endian length + payload).
+    /// Send a framed message (4-byte big-endian length + payload). false, with nothing written, for a
+    /// payload over `maxFrameSize`: the peer would refuse it, and past 4 GiB the length would trap.
     @discardableResult
     public func sendMessage(_ data: Data) -> Bool {
+        guard data.count <= Int(Self.maxFrameSize) else { return false }
         var len = UInt32(data.count).bigEndian
         var framed = Data(bytes: &len, count: 4)
         framed.append(data)
@@ -156,7 +158,7 @@ public final class UnixSocketConnection: @unchecked Sendable {
 }
 
 /// A listening AF_UNIX stream socket.
-public final class UnixSocketListener: @unchecked Sendable {
+public final class UnixSocketListener: Sendable {
     private let fd: Int32
     private init(fd: Int32) { self.fd = fd }
 

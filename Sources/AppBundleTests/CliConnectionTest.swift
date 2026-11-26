@@ -46,6 +46,22 @@ final class CliConnectionTest: XCTestCase {
         assertEquals(answer.exitCode, ExitCode.badArgs)
     }
 
+    /// `sendMessage` refuses a frame over the limit, so an oversize answer used to reach the client as
+    /// silence: "No response from AeroSpork server".
+    func testAnOversizeAnswerBecomesAFailureThatSaysSo() throws {
+        // Decoded, not compared as bytes: JSONEncoder's key order changes from one run to the next.
+        let small = try JSONDecoder().decode(ServerAnswer.self, from: try XCTUnwrap(encodedAnswer(serverAnswer(ExitCode.success, stdout: "ok"))))
+        assertEquals(small.exitCode, ExitCode.success)
+        assertEquals(small.stdout, "ok")
+
+        let huge = serverAnswer(ExitCode.success, stdout: String(repeating: "x", count: Int(UnixSocketConnection.maxFrameSize)))
+        let data = try XCTUnwrap(encodedAnswer(huge))
+        XCTAssertLessThan(data.count, 1000)
+        let answer = try JSONDecoder().decode(ServerAnswer.self, from: data)
+        assertEquals(answer.exitCode, ExitCode.failure)
+        XCTAssertTrue(answer.stderr.contains("too large"), answer.stderr)
+    }
+
     /// `main()` exits, so its order can only be read. Whatever feeds the pipe can take as long as it
     /// likes, and the server hangs up on a connection that says nothing.
     func testTheCliReadsStdinBeforeItConnects() throws {

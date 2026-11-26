@@ -1,5 +1,7 @@
 @testable import Cli
 @testable import Common
+import Darwin
+import Foundation
 import XCTest
 
 /// `exec-and-forget` is config-only by design (see CmdArgsParsingTest), so it is neither parseable
@@ -109,6 +111,37 @@ final class CliSurfaceTest: XCTestCase {
         guard case .badArgs = plan(args: ["exec-and-forget", "true"]) else {
             return XCTFail("exec-and-forget reached the server")
         }
+    }
+
+    private func socketPair() -> (client: UnixSocketConnection, peerFd: Int32) {
+        var fds: [Int32] = [0, 0]
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
+        return (UnixSocketConnection(fd: fds[0]), fds[1])
+    }
+
+    /// The server refused it and hung up, so the CLI said "Can't send request", exit 3, as if the
+    /// server were gone. One huge stdin line is enough: stdin is capped by lines, not bytes.
+    func testAnOversizeRequestIsBadArgsAndIsNotSent() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        let stdin = String(repeating: "x", count: Int(UnixSocketConnection.maxFrameSize))
+        guard case .failure(let failure) = Cli.run(client, ["workspace", "next"], stdin: stdin) else { return XCTFail("sent") }
+        assertEquals(failure.exitCode, ExitCode.badArgs)
+        XCTAssertTrue(failure.message.contains("too large"), failure.message)
+        var byte: UInt8 = 0
+        XCTAssertEqual(recv(peerFd, &byte, 1, MSG_DONTWAIT), -1, "something was written")
+    }
+
+    /// An answer over the limit was reported as "No response from AeroSpork server". It keeps exit
+    /// code 3, so the exit-code contract does not move.
+    func testAnOversizeAnswerIsReportedAsSuch() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        var header = (UnixSocketConnection.maxFrameSize + 1).bigEndian // a header, the way a peer writes it
+        XCTAssertEqual(withUnsafeBytes(of: &header) { Darwin.write(peerFd, $0.baseAddress, 4) }, 4)
+        guard case .failure(let failure) = Cli.run(client, ["focus", "left"], stdin: "") else { return XCTFail("answered") }
+        assertEquals(failure.exitCode, ExitCode.serverUnreachable)
+        XCTAssertTrue(failure.message.contains("too large"), failure.message)
     }
 }
 

@@ -95,6 +95,17 @@ func nonRunningAnswer(command: (any Command)?, help: String?, err: String?) -> S
     return nil
 }
 
+/// The frame for `ans`. An answer over the frame limit, which `sendMessage` refuses, becomes a small
+/// failure that says so: otherwise the client gets nothing and reports that the server did not answer.
+func encodedAnswer(_ ans: ServerAnswer) -> Data? {
+    guard let data = try? JSONEncoder().encode(ans) else { return nil }
+    if data.count <= Int(UnixSocketConnection.maxFrameSize) { return data }
+    return try? JSONEncoder().encode(serverAnswer(
+        ExitCode.failure,
+        stderr: "The output is too large to send (\(data.count) bytes, the limit is \(UnixSocketConnection.maxFrameSize) bytes)",
+    ))
+}
+
 /// Runs a blocking socket call on `queue` and suspends until it returns.
 ///
 /// Called directly it would block a thread of the cooperative pool, which is only as wide as the core
@@ -113,7 +124,7 @@ private func blockingSocketCall<T: Sendable>(on queue: DispatchQueue, _ body: @e
 func newConnection(_ socket: UnixSocketConnection) async {
     let ioQueue = DispatchQueue(label: "\(aeroSporkAppId).cli-connection")
     func answerToClient(_ ans: ServerAnswer) async {
-        guard let data = try? JSONEncoder().encode(ans) else { return }
+        guard let data = encodedAnswer(ans) else { return }
         _ = await blockingSocketCall(on: ioQueue) { socket.sendMessage(data) }
     }
     defer {
