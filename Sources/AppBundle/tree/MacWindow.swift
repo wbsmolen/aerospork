@@ -338,7 +338,15 @@ func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async
 @MainActor
 private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async throws {
     let rules = config.onWindowDetected.filter { !onlyStartupRules || $0.matcher.duringAeroSporkStartup == true }
-    for callback in rules where try await callback.matches(window) {
+    // An AX round trip, so read once for every title rule, and only if one asks.
+    var title: String?
+    func readTitle() async throws -> String {
+        if let title { return title }
+        let read = try await window.title
+        title = read
+        return read
+    }
+    for callback in rules where try await callback.matches(window, title: readTitle) {
         _ = try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
         if !callback.checkFurtherCallbacks {
             return
@@ -348,11 +356,11 @@ private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async th
 
 extension WindowDetectedCallback {
     @MainActor
-    func matches(_ window: Window) async throws -> Bool {
+    func matches(_ window: Window, title: () async throws -> String) async throws -> Bool {
         if let startupMatcher = matcher.duringAeroSporkStartup, startupMatcher != isStartup {
             return false
         }
-        if let regex = matcher.windowTitleRegexSubstring, !(try await window.title).contains(regex) {
+        if let regex = matcher.windowTitleRegexSubstring, !(try await title()).contains(regex) {
             return false
         }
         if let appId = matcher.appId, appId != window.app.bundleId {

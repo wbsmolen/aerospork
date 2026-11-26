@@ -219,6 +219,14 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     asked it per tiled window. Measure: Time Profiler samples under `layoutWorkspace` with many
     windows and two or more monitors; expected to be microseconds per window.
 
+20. **Registration reads a new window's subrole once, and its title once per rule pass.**
+    `getWindowType` hands one lazily read subrole to both heuristics, which each read it before. A
+    window's title is read at most once per `onWindowDetected`, however many title rules there are.
+    The parallel registration prefetch the same report proposed is deferred until a measurement of
+    the first `REFRESH: Completed` after a restart, warm against cold, shows per-window registration
+    reads dominate: it reorders AX reads against the commands rules run. Measure: `get(_:)` intervals
+    tagged `AXSubrole` and `AXTitle` per new window.
+
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
 correctness-sensitive tradeoff with a documented failed experiment above, not a safe micro-cleanup.
 The Settings work is covered by the macOS-13 compile, render smoke tests, config diagnostic test, and

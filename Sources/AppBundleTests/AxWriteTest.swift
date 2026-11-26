@@ -316,6 +316,19 @@ final class AxFocusWriteTest: XCTestCase {
     }
 }
 
+/// What a new window costs to classify. Every read is an AX round trip, during registration.
+final class AxWindowTypeReadTest: XCTestCase {
+    /// `isWindowHeuristicOld` always reads the subrole and `isDialogHeuristic` read it again.
+    func testTheWindowTypeReadsTheSubroleOnce() {
+        for (subrole, expected) in [(kAXStandardWindowSubrole, AxUiElementWindowType.dialog), (kAXDialogSubrole, .dialog)] {
+            let win = FakeAxElement()
+            win.seed(Ax.subroleAttr, subrole)
+            assertEquals(win.getWindowType(axApp: FakeAxElement(), appBundleId: nil), expected)
+            assertEquals(win.reads.count(where: { $0 == kAXSubroleAttribute }), 1)
+        }
+    }
+}
+
 /// The paired native-state read behind `normalizeLayoutReason`.
 ///
 /// That function asks every window of every workspace for its fullscreen and minimized flags on
