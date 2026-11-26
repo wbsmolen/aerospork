@@ -475,7 +475,7 @@ fileprivate final class LineNumberRulerView: NSRulerView {
         return max(0, lower - 1)
     }
 
-    /// Kept, not asked for while drawing. See `KeyRecorderField.RecorderView`.
+    /// Kept, not asked for while drawing. See `RecorderView`.
     private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
     private static let errorNumberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
 

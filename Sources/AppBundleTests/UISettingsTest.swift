@@ -44,7 +44,14 @@ final class UISettingsTest: XCTestCase {
         return files
     }
 
-    private func keyEvent(_ chars: String, keyCode: UInt16, _ flags: NSEvent.ModifierFlags = []) -> NSEvent {
+    /// `ignoringModifiers` defaults to `chars`, but a real event differs: Shift still applies to
+    /// `charactersIgnoringModifiers`, which is how passing one string for both hid UI-1.
+    private func keyEvent(
+        _ chars: String,
+        keyCode: UInt16,
+        _ flags: NSEvent.ModifierFlags = [],
+        ignoringModifiers: String? = nil,
+    ) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
@@ -53,10 +60,70 @@ final class UISettingsTest: XCTestCase {
             windowNumber: 0,
             context: nil,
             characters: chars,
-            charactersIgnoringModifiers: chars,
+            charactersIgnoringModifiers: ignoringModifiers ?? chars,
             isARepeat: false,
             keyCode: keyCode,
         ).orDie("NSEvent.keyEvent returned nil")
+    }
+
+    /// The stock config binds `alt-shift-semicolon`, and `mod` generates `<mod>-shift-<digit>`:
+    /// the recorder named keys from characters, got `!` and `:`, and recorded nothing.
+    func testRecorderNamesShiftedKeysFromTheKeyCode() {
+        assertEquals(KeyNotation.from(event: keyEvent("!", keyCode: 18, [.option, .shift], ignoringModifiers: "!")), "alt-shift-1")
+        assertEquals(KeyNotation.from(event: keyEvent(":", keyCode: 41, [.option, .shift], ignoringModifiers: ":")), "alt-shift-semicolon")
+        assertEquals(KeyNotation.from(event: keyEvent("", keyCode: 122)), "f1")
+        // A German layout's ö sits on the semicolon key; the parser has no `ö`.
+        assertEquals(KeyNotation.from(event: keyEvent("ö", keyCode: 41, [.option])), "alt-semicolon")
+    }
+
+    func testRecorderFollowsTheKeyMapping() {
+        let dvorak = KeyMapping(preset: .dvorak)
+        // The physical R key types p on Dvorak, and the Dvorak preset maps `p` to it.
+        assertEquals(KeyNotation.from(event: keyEvent("r", keyCode: 15, [.option]), keys: dvorak), "alt-p")
+        // A custom alias for a key the preset already names does not replace the preset's name.
+        let aliased = KeyMapping(rawKeyNotationToKeyCode: ["aaa": .semicolon])
+        assertEquals(KeyNotation.from(event: keyEvent(";", keyCode: 41), keys: aliased), "semicolon")
+        // A custom notation is used when it is the only name.
+        let renamed = KeyMapping(rawKeyNotationToKeyCode: ["h": .j])
+        assertNil(KeyNotation.from(event: keyEvent("h", keyCode: 4), keys: renamed))
+        assertEquals(KeyNotation.from(event: keyEvent("j", keyCode: 38), keys: renamed), "j")
+    }
+
+    /// Focus alone must not arm: a keyboard user who tabbed onto a row recorder and pressed Tab
+    /// re-keyed that binding to `tab`, which in `main` mode took Tab away from every app.
+    func testRecorderArmsOnlyOnAnExplicitAction() {
+        let recorder = RecorderView(frame: .zero)
+        // An unarmed key goes up the chain; with nothing above, AppKit would beep.
+        let sink = KeySink()
+        recorder.nextResponder = sink
+        var captured: [String] = []
+        recorder.onCapture = { captured.append($0) }
+        XCTAssertTrue(recorder.becomeFirstResponder())
+        XCTAssertFalse(recorder.isArmed)
+        recorder.keyDown(with: keyEvent("\t", keyCode: 48))
+        XCTAssertEqual(captured, [])
+        XCTAssertFalse(recorder.isArmed)
+        XCTAssertEqual(sink.passedOn, [48], "Tab goes on up the chain, so it still moves focus")
+
+        recorder.keyDown(with: keyEvent(" ", keyCode: 49))
+        XCTAssertTrue(recorder.isArmed)
+        XCTAssertEqual(captured, [], "the Space that arms is not recorded")
+        // Once armed, Tab is recorded like any other key.
+        recorder.keyDown(with: keyEvent("\t", keyCode: 48))
+        XCTAssertEqual(captured, ["tab"])
+
+        let clicked = RecorderView(frame: .zero)
+        let click = NSEvent.mouseEvent(
+            with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+        ).orDie("NSEvent.mouseEvent returned nil")
+        clicked.mouseDown(with: click)
+        XCTAssertTrue(clicked.isArmed)
+        _ = clicked.resignFirstResponder()
+        XCTAssertFalse(clicked.isArmed)
+        XCTAssertTrue(clicked.accessibilityPerformPress())
+        XCTAssertTrue(clicked.isArmed)
+        XCTAssertEqual(clicked.accessibilityRole(), .button)
     }
 
     /// Modifier order is not cosmetic: it is the string written into the config, and `ctrl-alt-h`
@@ -79,6 +146,11 @@ final class UISettingsTest: XCTestCase {
     /// nothing useful and closes the recorder before the real key arrives.
     func testRecorderIgnoresPressesWithNoKey() {
         assertNil(KeyNotation.from(event: keyEvent("", keyCode: 999, [.option])))
+    }
+
+    private final class KeySink: NSResponder {
+        var passedOn: [UInt16] = []
+        override func keyDown(with event: NSEvent) { passedOn.append(event.keyCode) }
     }
 
     func testPrettyRendersModifiersAsGlyphsAndLeavesBareKeysAlone() {

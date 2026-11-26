@@ -308,8 +308,10 @@ struct KeyBindingsTab: View {
     private func row(_ b: ConfigurationViewModel.DisplayBinding) -> some View {
         HStack(spacing: 8) {
             if let rowId = b.rowId {
-                KeyRecorderField(notation: key(rowId, b.key), isRecording: recorder(b.key), showsClear: false)
-                    .frame(width: 170, height: 22)
+                KeyRecorderField(
+                    notation: key(rowId, b.key), isRecording: recorder(b.key), keys: recorderKeys, showsClear: false,
+                )
+                .frame(width: 170, height: 22)
                 SettingsField("Command", prompt: "focus left", text: command(rowId, b.command))
                     .accessibilityLabel("Command for \(b.key)")
                 IconButton(systemImage: "doc.on.doc", label: "Duplicate “\(b.command)”") { duplicate(b) }
@@ -374,6 +376,15 @@ struct KeyBindingsTab: View {
         )
     }
 
+    /// The layout the General pane shows now, not the one last loaded, plus the custom notations
+    /// the parser honours: the recorder names a key the way the parser will read it back.
+    private var recorderKeys: KeyMapping {
+        KeyMapping(
+            preset: KeyMapping.Preset(rawValue: viewModel.settings.keyMappingPreset) ?? .qwerty,
+            rawKeyNotationToKeyCode: config.keyMapping.customKeyNotations,
+        )
+    }
+
     private func recorder(_ key: String) -> Binding<Bool> {
         Binding(get: { recordingRow == key }, set: { recordingRow = $0 ? key : nil })
     }
@@ -388,7 +399,7 @@ struct KeyBindingsTab: View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
-                KeyRecorderField(notation: $newKey, isRecording: $recording)
+                KeyRecorderField(notation: $newKey, isRecording: $recording, keys: recorderKeys)
                     .frame(width: 170, height: 22)
                 SettingsField("New command", prompt: "command, e.g. focus left", text: $newCommand)
                     .onSubmit(add)
@@ -528,12 +539,13 @@ struct KeyBindingsTab: View {
 private struct KeyRecorderField: View {
     @Binding var notation: String
     @Binding var isRecording: Bool
+    var keys: KeyMapping
     /// Off for an existing row: clearing it would leave a binding with no key, which is not a
     /// thing that can be written, so the button would be visibly dead.
     var showsClear = true
 
     var body: some View {
-        Recorder(notation: $notation, isRecording: $isRecording)
+        Recorder(notation: $notation, isRecording: $isRecording, keys: keys)
             .overlay(alignment: .trailing) {
                 if showsClear, !notation.isEmpty {
                     IconButton(systemImage: "xmark.circle.fill", label: "Clear this shortcut") { notation = "" }
@@ -546,149 +558,167 @@ private struct KeyRecorderField: View {
     private struct Recorder: NSViewRepresentable {
         @Binding var notation: String
         @Binding var isRecording: Bool
+        let keys: KeyMapping
 
         func makeNSView(context: Context) -> RecorderView {
             let v = RecorderView(frame: .zero)
             v.onCapture = { notation = $0; isRecording = false }
+            v.keys = keys
             return v
         }
 
         func updateNSView(_ nsView: RecorderView, context: Context) {
             nsView.onCapture = { notation = $0; isRecording = false }
+            nsView.keys = keys
             nsView.displayed = notation
             nsView.needsDisplay = true
         }
     }
+}
 
-    final class RecorderView: NSView {
-        var onCapture: ((String) -> Void)?
-        var displayed = "" {
-            didSet { setAccessibilityValue(displayed.isEmpty ? "" : KeyNotation.pretty(displayed)) }
+/// The drawn control inside `KeyRecorderField`. Internal so a test can drive it without a window.
+final class RecorderView: NSView {
+    var onCapture: ((String) -> Void)?
+    var keys = KeyMapping()
+    var displayed = "" {
+        didSet { setAccessibilityValue(displayed.isEmpty ? "" : KeyNotation.pretty(displayed)) }
+    }
+
+    /// Focus alone never arms. A keyboard user who tabbed onto a row and pressed Tab again
+    /// re-keyed that binding to plain `tab` and saved it, and in `main` mode that took the Tab
+    /// key away from every app.
+    private(set) var isArmed = false
+
+    /// A hand-drawn `NSView` is invisible to accessibility unless it says otherwise, and this
+    /// one is the primary control of the tab. A button, not a text field: VoiceOver's press
+    /// arms a button, and nothing can be typed into this.
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Shortcut recorder")
+        setAccessibilityHelp(
+            "Press to record, then press the key combination you want to bind. "
+                + "Esc and Tab are recorded like any other key. Click elsewhere to cancel.",
+        )
+    }
+
+    required init?(coder: NSCoder) { die("RecorderView is never loaded from a nib") }
+
+    private func arm() {
+        guard !isArmed else { return }
+        isArmed = true
+        needsDisplay = true
+        settingsAnnounce("Recording. Press a shortcut.")
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func becomeFirstResponder() -> Bool { needsDisplay = true; return true }
+    override func resignFirstResponder() -> Bool { isArmed = false; needsDisplay = true; return true }
+    override func mouseDown(with event: NSEvent) { arm(); window?.makeFirstResponder(self) }
+    override func accessibilityPerformPress() -> Bool { arm(); window?.makeFirstResponder(self); return true }
+
+    /// Unarmed, the accent fill is off, so the system focus ring shows where keyboard focus is.
+    override var focusRingMaskBounds: NSRect { bounds }
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5).fill()
+    }
+
+    /// Without this, a shortcut that is also a menu equivalent never reaches `keyDown` -- so
+    /// trying to record ⌘Q quit the app and ⌘W closed the settings window instead of being
+    /// captured. While recording, we are the only thing that gets to see the key.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isArmed, window?.firstResponder === self else { return false }
+        keyDown(with: event)
+        return true
+    }
+
+    /// Unarmed, Space or Return arms, as they press a focused button, and every other key goes
+    /// on up the responder chain, so Tab still moves focus. Armed, Esc and Tab are recorded like
+    /// any other key: the stock config binds plain `esc`. Clicking elsewhere cancels.
+    override func keyDown(with event: NSEvent) {
+        guard isArmed else {
+            if event.keyCode == 36 || event.keyCode == 49 { arm() } else { super.keyDown(with: event) }
+            return
         }
+        guard let notation = KeyNotation.from(event: event, keys: keys) else { return }
+        displayed = notation
+        onCapture?(notation)
+        window?.makeFirstResponder(nil)
+    }
 
-        private var recording = false
+    /// Made once and kept, never asked for while drawing. In a debug build on macOS 27 a fresh system font
+    /// was now and then a broken object. CoreText raised an exception copying the attributes, which nothing
+    /// here can catch, so it took the app down within a few pane switches. With a row per binding, every
+    /// redraw of this pane asked.
+    private static let promptFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    private static let notationFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
-        /// A hand-drawn `NSView` is invisible to accessibility unless it says otherwise, and this
-        /// one is the primary control of the tab.
-        override init(frame: NSRect) {
-            super.init(frame: frame)
-            setAccessibilityElement(true)
-            setAccessibilityRole(.textField)
-            setAccessibilityLabel("Shortcut recorder")
-            setAccessibilityHelp("Click, then press the key combination you want to bind")
-        }
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
+        (isArmed ? NSColor.controlAccentColor.withAlphaComponent(0.14) : NSColor.textBackgroundColor).setFill()
+        path.fill()
+        (isArmed ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        path.lineWidth = isArmed ? 2 : 1
+        path.stroke()
 
-        required init?(coder: NSCoder) { die("RecorderView is never loaded from a nib") }
-
-        override var acceptsFirstResponder: Bool { true }
-        override func becomeFirstResponder() -> Bool { recording = true; needsDisplay = true; return true }
-        override func resignFirstResponder() -> Bool { recording = false; needsDisplay = true; return true }
-        override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
-
-        /// Without this, a shortcut that is also a menu equivalent never reaches `keyDown` -- so
-        /// trying to record ⌘Q quit the app and ⌘W closed the settings window instead of being
-        /// captured. While recording, we are the only thing that gets to see the key.
-        override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            guard recording, window?.firstResponder === self else { return false }
-            keyDown(with: event)
-            return true
-        }
-
-        override func keyDown(with event: NSEvent) {
-            guard let notation = KeyNotation.from(event: event) else { return }
-            displayed = notation
-            onCapture?(notation)
-            window?.makeFirstResponder(nil)
-        }
-
-        /// Made once and kept, never asked for while drawing. In a debug build on macOS 27 a fresh system font
-        /// was now and then a broken object. CoreText raised an exception copying the attributes, which nothing
-        /// here can catch, so it took the app down within a few pane switches. With a row per binding, every
-        /// redraw of this pane asked.
-        private static let promptFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        private static let notationFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-
-        override func draw(_ dirtyRect: NSRect) {
-            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
-            (recording ? NSColor.controlAccentColor.withAlphaComponent(0.14) : NSColor.textBackgroundColor).setFill()
-            path.fill()
-            (recording ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
-            path.lineWidth = recording ? 2 : 1
-            path.stroke()
-
-            let text = !displayed.isEmpty ? KeyNotation.pretty(displayed) : (recording ? "Press a shortcut…" : "Click to record")
-            // Monospace is for the captured notation -- something the user could type into their
-            // config. The instructional placeholder is prose and takes the system face, the same
-            // split the colour below already makes.
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineBreakMode = .byTruncatingTail
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: displayed.isEmpty ? Self.promptFont : Self.notationFont,
-                .foregroundColor: displayed.isEmpty ? NSColor.placeholderTextColor : NSColor.labelColor,
-                .paragraphStyle: paragraph,
-            ]
-            let size = (text as NSString).size(withAttributes: attrs)
-            let inset: CGFloat = 8
-            let rect = NSRect(x: inset, y: (bounds.height - size.height) / 2,
-                              width: max(0, bounds.width - inset * 2), height: size.height)
-            // `draw(with:options:attributes:context:)`, not `draw(in:withAttributes:)`: the latter
-            // ignores `paragraph.lineBreakMode` entirely and hard-clips at the rect edge mid-glyph
-            // with no ellipsis, so a binding like `alt-shift-leftSquareBracket` sheared off instead
-            // of truncating. This overload honours the paragraph style. The 3-arg sibling without
-            // `context:` does too, but is in `NSStringDrawingDeprecated`.
-            (text as NSString).draw(
-                with: rect,
-                options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
-                attributes: attrs,
-                context: nil,
-            )
-        }
+        let text = !displayed.isEmpty ? KeyNotation.pretty(displayed) : (isArmed ? "Press a shortcut…" : "Click to record")
+        // Monospace is for the captured notation -- something the user could type into their
+        // config. The instructional placeholder is prose and takes the system face, the same
+        // split the colour below already makes.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: displayed.isEmpty ? Self.promptFont : Self.notationFont,
+            .foregroundColor: displayed.isEmpty ? NSColor.placeholderTextColor : NSColor.labelColor,
+            .paragraphStyle: paragraph,
+        ]
+        let size = (text as NSString).size(withAttributes: attrs)
+        let inset: CGFloat = 8
+        let rect = NSRect(x: inset, y: (bounds.height - size.height) / 2,
+                          width: max(0, bounds.width - inset * 2), height: size.height)
+        // `draw(with:options:attributes:context:)`, not `draw(in:withAttributes:)`: the latter
+        // ignores `paragraph.lineBreakMode` entirely and hard-clips at the rect edge mid-glyph
+        // with no ellipsis, so a binding like `alt-shift-leftSquareBracket` sheared off instead
+        // of truncating. This overload honours the paragraph style. The 3-arg sibling without
+        // `context:` does too, but is in `NSStringDrawingDeprecated`.
+        (text as NSString).draw(
+            with: rect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: attrs,
+            context: nil,
+        )
     }
 }
 
 enum KeyNotation {
-    /// Build aerospork key notation (`alt-shift-h`) from a real key event.
-    static func from(event: NSEvent) -> String? {
+    /// Build aerospork key notation (`alt-shift-h`) from a real key event, naming the key the way
+    /// `keys` (the effective `key-mapping`) reads it back.
+    static func from(event: NSEvent, keys: KeyMapping = KeyMapping()) -> String? {
         var parts: [String] = []
         let flags = event.modifierFlags
         if flags.contains(.control) { parts.append("ctrl") }
         if flags.contains(.option) { parts.append("alt") }
         if flags.contains(.shift) { parts.append("shift") }
         if flags.contains(.command) { parts.append("cmd") }
-        guard let key = keyName(for: event) else { return nil }
+        guard let key = keyName(keyCode: event.keyCode, keys: keys) else { return nil }
         parts.append(key)
         return parts.joined(separator: "-")
     }
 
-    private static func keyName(for event: NSEvent) -> String? {
-        // Named keys first; charactersIgnoringModifiers is empty or unhelpful for these.
-        switch Int(event.keyCode) {
-            case 36: return "enter"
-            case 48: return "tab"
-            case 49: return "space"
-            case 51: return "backspace"
-            case 53: return "esc"
-            case 123: return "left"
-            case 124: return "right"
-            case 125: return "down"
-            case 126: return "up"
-            default: break
-        }
-        guard let chars = event.charactersIgnoringModifiers?.lowercased(), let first = chars.first else { return nil }
-        switch first {
-            case "-": return "minus"
-            case "=": return "equal"
-            case ".": return "period"
-            case ",": return "comma"
-            case "/": return "slash"
-            case "\\": return "backslash"
-            case "'": return "quote"
-            case ";": return "semicolon"
-            case "`": return "backtick"
-            case "[": return "leftSquareBracket"
-            case "]": return "rightSquareBracket"
-            default: return first.isLetter || first.isNumber ? String(first) : nil
-        }
+    /// The physical key code through the inverse of `KeyMapping.resolve()`, which is also what the
+    /// Carbon hotkey fires on. Characters were wrong here: `charactersIgnoringModifiers` still
+    /// applies Shift (⌥⇧1 gave `!`, so nothing was recorded), ignores the preset, and gave letters
+    /// such as `ö` that the parser rejects. Several names can share a key: the preset's own name
+    /// wins over a custom alias, then the alphabetically first, so the choice is stable.
+    private static func keyName(keyCode: UInt16, keys: KeyMapping) -> String? {
+        let preset = getKeysPreset(KeyMapping.Preset(rawValue: keys.presetName) ?? .qwerty)
+        return keys.resolve()
+            .filter { $0.value.carbonKeyCode == UInt32(keyCode) }
+            .min { a, b in
+                let (aOwn, bOwn) = (preset[a.key] == a.value, preset[b.key] == b.value)
+                return aOwn != bOwn ? aOwn : a.key < b.key
+            }?.key
     }
 
     /// Render notation with real modifier glyphs. Only the leading modifier tokens are replaced, so
