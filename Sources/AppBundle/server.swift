@@ -64,10 +64,14 @@ var releaseServerSocketPath: String {
     return "/tmp/\(aeroSporkAppId.dropLast(".debug".count))-\(unixUserName).sock"
 }
 
-func sendCommandToReleaseServer(args: [String]) {
+/// Best effort. It runs on the main actor at launch, before this build's own socket exists, and again at
+/// quit, so a release server that is running but wedged must not hang the debug build: after `timeout`
+/// it gives up.
+func sendCommandToReleaseServer(args: [String], socketPath: String = releaseServerSocketPath, timeout: Duration = .seconds(2)) {
     check(isDebug)
-    guard let socket = UnixSocketConnection.connect(to: releaseServerSocketPath) else { return } // release server not running
+    guard let socket = UnixSocketConnection.connect(to: socketPath) else { return } // release server not running
     defer { socket.close() }
+    socket.setFrameTimeout(timeout)
     guard let data = try? JSONEncoder().encode(ClientRequest(args: args, stdin: "")) else { return }
     socket.sendMessage(data)
     _ = try? socket.recvMessage()
