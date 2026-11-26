@@ -33,7 +33,7 @@ struct WorkspacesMonitorsTab: View {
                     viewModel.scheduleAutoSave()
                     selection = nil
                 },
-                hint: "Hardware fingerprints already in your config are preserved — they show up here under the monitor's name. A workspace named here stays available even with no windows on it.",
+                hint: "Hardware fingerprints already in your config are preserved, and show up here under the monitor's name. A workspace named here stays available even with no windows on it.",
             )
         }
         .onAppear { autoSelectIfNeeded() }
@@ -55,10 +55,22 @@ struct WorkspacesMonitorsTab: View {
 
     private var monitors: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PanelHeader("Connected monitors", "display.2")
+            HStack(alignment: .firstTextBaseline) {
+                PanelHeader("Connected monitors", "display.2")
+                Spacer()
+                if !viewModel.liveMonitors.isEmpty {
+                    Button("Identify") {
+                        MonitorIdentifyOverlay.show(viewModel.liveMonitors)
+                        settingsAnnounce(MonitorIdentifyOverlay.announcement(for: viewModel.liveMonitors))
+                    }
+                    .controlSize(.small)
+                    .help("Show each monitor's position number on its screen")
+                    .padding(.trailing, 16)
+                }
+            }
 
             if viewModel.liveMonitors.isEmpty {
-                SettingsHint("No monitors reported yet — they appear as soon as macOS reports one, and their UUIDs are what pins a workspace to a physical panel.")
+                SettingsHint("No monitors reported yet. They appear as soon as macOS reports one, and their UUIDs are what pins a workspace to a physical panel.")
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
             } else {
@@ -93,10 +105,12 @@ struct WorkspacesMonitorsTab: View {
                             .fontWeight(.medium)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Text(monitor.resolution)
+                        // With its unit here only: the schematic box has no room for one.
+                        Text("\(monitor.resolution) pt")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                            .accessibilityLabel("\(monitor.resolution) points")
                     }
                     .accessibilityElement(children: .combine)
 
@@ -189,7 +203,7 @@ struct WorkspacesMonitorsTab: View {
             }
             if !movable.isEmpty {
                 if !unpinned.isEmpty { Divider() }
-                Section("Pinned elsewhere — move here") {
+                Section("Pinned elsewhere: move here") {
                     ForEach(movable) { assignment in
                         Button(assignment.workspace) {
                             selection = viewModel.setAssignment(workspace: assignment.workspace, monitorToken: token)
@@ -202,7 +216,7 @@ struct WorkspacesMonitorsTab: View {
                 let id = viewModel.addAssignment(monitorToken: token)
                 selection = id
                 focusedWorkspaceField = id
-                settingsAnnounce("Empty assignment added — type a workspace name")
+                settingsAnnounce("Empty assignment added. Type a workspace name.")
             }
         }
         .menuStyle(.button)
@@ -292,7 +306,7 @@ struct WorkspacesMonitorsTab: View {
                             if row.isComplex {
                                 Badge(
                                     "complex",
-                                    help: "Written with more detail than this editor can show — use Raw TOML to change its fallback list or hardware fingerprint.",
+                                    help: "Written with more detail than this editor can show. Use Raw TOML to change its fallback list or hardware fingerprint.",
                                 )
                             }
                             Spacer(minLength: 0)
@@ -477,7 +491,7 @@ private struct MonitorBox: View {
         // No pointing-hand cursor: macOS buttons do not use one, and a box torn down while
         // hovered (routine on a display hotplug) never popped it.
         .onHover { isHovered = $0 }
-        .accessibilityLabel("Position \(monitor.position), \(monitor.name), \(monitor.resolution)\(monitor.isMain ? ", main display" : "")")
+        .accessibilityLabel("Position \(monitor.position), \(monitor.name), \(monitor.resolution) points\(monitor.isMain ? ", main display" : "")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

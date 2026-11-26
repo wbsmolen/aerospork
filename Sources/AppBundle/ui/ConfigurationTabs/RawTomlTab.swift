@@ -68,6 +68,12 @@ struct RawTomlTab: View {
             validationDiagnostic = ConfigurationWriter.diagnostic(raw.text)
             validationPending = false
         }
+        // "Show config error…" in the menu. A `@Published` publisher replays its value on subscribe,
+        // so a line set before this pane appeared is taken when it does.
+        .onReceive(viewModel.$pendingJumpLine.compactMap { $0 }) { line in
+            viewModel.pendingJumpLine = nil
+            jump(to: line)
+        }
         .task {
             // Touches the file system. The pane re-renders on every keystroke, so leaving it in a
             // computed view property turned typing into repeated directory scans.
@@ -108,7 +114,7 @@ struct RawTomlTab: View {
                 viewModel.openConfigInEditor()
             }
             .buttonStyle(.borderless)
-            .help("External edits are picked up automatically — the config file is watched")
+            .help("External edits are picked up automatically: the config file is watched")
 
             // Kept only because the watcher cannot arm on a file that does not exist yet: someone
             // who creates their first config entirely outside the app has no other way in.
@@ -124,7 +130,7 @@ struct RawTomlTab: View {
                 .disabled(viewModel.rawTomlEdited)
                 .help(viewModel.rawTomlEdited
                     ? "Apply or revert your edits first"
-                    : "Only needed for a config file created outside the app — every other edit is picked up on save.")
+                    : "Only needed for a config file created outside the app. Every other edit is picked up on save.")
             }
         }
         .padding(.horizontal, 14)
@@ -192,7 +198,7 @@ struct RawTomlTab: View {
                 }
             }
         } else if viewModel.rawTomlEdited {
-            StatusLabel("Valid — press Apply (⌘S) to write it", kind: .ok)
+            StatusLabel("Valid. Press Apply (⌘S) to write it.", kind: .ok)
         } else {
             StatusLabel("Matches the file on disk", kind: .neutral)
         }

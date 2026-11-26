@@ -230,7 +230,7 @@ struct KeyBindingsTab: View {
                             Section {
                                 ForEach(categoryRows) { row($0) }
                             } header: {
-                                Label("\(category.title) — \(categoryRows.count)", systemImage: category.icon)
+                                Label("\(category.title) (\(categoryRows.count))", systemImage: category.icon)
                             }
                         }
                     }
@@ -241,7 +241,7 @@ struct KeyBindingsTab: View {
                         }
                     }
                     if !others.isEmpty {
-                        Section("In other modes — \(others.count)") {
+                        Section("In other modes (\(others.count))") {
                             ForEach(others) { otherModeRow($0) }
                         }
                     }
@@ -464,7 +464,7 @@ struct KeyBindingsTab: View {
         parts.append("\(allRows.count { $0.origin == .explicit }) written in your config")
         let separator = ConfigurationViewModel.commandSeparator.trimmingCharacters(in: .whitespaces)
         return parts.joined(separator: ", ") +
-            (generated > 0 ? ". Generated bindings have no line to edit — Override copies one here first." : "") +
+            (generated > 0 ? ". Generated bindings have no line to edit: Override copies one here first." : "") +
             " Chain commands with `\(separator)`. A workspace named by a binding stays available even with no windows."
     }
 

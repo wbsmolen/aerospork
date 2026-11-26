@@ -3,6 +3,9 @@ import SwiftUI
 
 struct GeneralSettingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
+    /// Sparkle's setting is not observable, so the toggle shows this copy. Not read in a build that
+    /// cannot check: that would create the updater for nothing.
+    @State private var checksAutomatically = Updater.shared.isEnabled && Updater.shared.automaticallyChecksForUpdates
 
     var body: some View {
         Form {
@@ -96,6 +99,20 @@ struct GeneralSettingsTab: View {
                             .lineLimit(1)
                             .textSelection(.enabled)
                         CopyButton(value: viewModel.configPath, help: "Copy path")
+                    }
+                }
+                // Only in a build that has a feed to check, like the menu's row. Not a config key, so
+                // the writer is not involved.
+                if Updater.shared.isEnabled {
+                    Toggle("Automatically check for updates", isOn: Binding(
+                        get: { checksAutomatically },
+                        set: {
+                            checksAutomatically = $0
+                            Updater.shared.automaticallyChecksForUpdates = $0
+                        },
+                    ))
+                    LabeledContent("Updates") {
+                        Button("Check for updates…") { Updater.shared.checkForUpdates() }
                     }
                 }
             } header: {

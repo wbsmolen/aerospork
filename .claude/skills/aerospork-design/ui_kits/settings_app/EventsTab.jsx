@@ -6,7 +6,7 @@ function CommandRows({ title, sf, footer, list, onChange, placeholder }) {
   return (
     <FormSection header={<SectionLabel title={title} sf={sf} />} footer={footer}>
       {rows.map((c, i) => (c === null
-        ? <span key="empty" style={{ fontSize: 'var(--text-callout)', color: 'var(--label-tertiary)' }}>Nothing here yet. Anything you add runs every time this event fires — exec-and-forget for a shell command, or an aerospork command directly.</span>
+        ? <span key="empty" style={{ fontSize: 'var(--text-callout)', color: 'var(--label-tertiary)' }}>Nothing here yet. Anything you add runs every time this event fires: exec-and-forget for a shell command, or an aerospork command directly.</span>
         : <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <TextField mono value={c} placeholder={placeholder} onChange={(v) => set(i, v)} style={{ flex: 1 }} />
             <IconButton systemImage="minus.circle" role="destructive"
@@ -35,7 +35,7 @@ function EventsTab({ events, setEvents, env, setEnv, inherit, setInherit }) {
         footer="Only when focus moves to a different monitor." />
       <CommandRows title="Focus changed" sf="scope" list={events.focusChanged} onChange={set('focusChanged')}
         placeholder="move-mouse window-lazy-center"
-        footer="Any focus change at all: window, workspace or monitor. Fires the most often — keep it cheap." />
+        footer="Any focus change at all: window, workspace or monitor. Fires the most often, so keep it cheap." />
       <FormSection header={<SectionLabel title="Environment for exec commands" sf="terminal" />}
         footer="`exec-and-forget` and every command above run with this environment. `PATH` is the one people usually need. Commands with a window or workspace target also get `AEROSPORK_WINDOW_ID` or `AEROSPORK_WORKSPACE`, and workspace-change commands get `AEROSPORK_FOCUSED_WORKSPACE` and `AEROSPORK_PREV_WORKSPACE`. `aerospork list-exec-env-vars` shows the environment they all start from.">
         <Toggle label="Inherit AeroSpork's environment" checked={inherit} onChange={setInherit} />

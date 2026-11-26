@@ -75,7 +75,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
     ...(movable.length > 0
       ? [
           ...(unpinned.length > 0 ? [{ divider: true }] : []),
-          { label: 'Pinned elsewhere — move here', disabled: true },
+          { label: 'Pinned elsewhere: move here', disabled: true },
           ...movable.map((a) => ({ label: a.workspace, mono: true, onClick: () => { pin(a.workspace, pinToken); setPinMenuOpen(false); } })),
         ]
       : []),
@@ -91,7 +91,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
           <div className="card-surface monitors-surface">
             {monitors.length === 0 ? (
               <ContentUnavailable sf="display" title="No monitors detected"
-                message="Monitors appear here as soon as macOS reports one — their UUIDs are what pins a workspace to a physical panel." />
+                message="Monitors appear here as soon as macOS reports one. Their UUIDs are what pins a workspace to a physical panel." />
             ) : (
               <>
                 <div className="monitor-diagram-wrap">
@@ -157,7 +157,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
                 { key: 'monitor', title: 'Monitor', render: (r) => (
                   <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <Select value={r.monitor} options={monitorOptions(r.monitor)} onChange={(v) => update(r.id, { monitor: v })} />
-                    {r.complex && <Badge help="Written with more detail than this editor can show — a fallback list of monitors, or a fingerprint keyed on more than its UUID. Any structured save in this window is refused until this changes; edit it in Raw TOML.">complex</Badge>}
+                    {r.complex && <Badge help="Written with more detail than this editor can show: a fallback list of monitors, or a fingerprint keyed on more than its UUID. Any structured save in this window is refused until this changes; edit it in Raw TOML.">complex</Badge>}
                   </span>
                 ) },
               ]}
@@ -167,7 +167,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
                 actionTitle="Add assignment" onAction={() => add()} />} />
             <ListActionBar addHelp="Pin a workspace to a monitor" removeHelp="Remove the selected assignment"
               onAdd={() => add()} onRemove={selected ? remove : null}
-              hint="Hardware fingerprints already in your config are preserved — they show up here under the monitor's name. A workspace named here stays available even with no windows on it." />
+              hint="Hardware fingerprints already in your config are preserved, and show up here under the monitor's name. A workspace named here stays available even with no windows on it." />
           </div>
         </section>
       </div>

@@ -148,7 +148,7 @@ function RulesTab({ rules, setRules }) {
         <div className="hairline" />
         {rules.length === 0 ? (
           <ContentUnavailable sf="macwindow" title="No window rules"
-            message="Rules run once, when a window first appears — pick an app and AeroSpork remembers what to do with it every time."
+            message="Rules run once, when a window first appears: pick an app and AeroSpork remembers what to do with it every time."
             actionTitle="Add rule" onAction={() => openPicker('new')} />
         ) : (
           <div className="rule-list">

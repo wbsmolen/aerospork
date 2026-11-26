@@ -232,6 +232,23 @@ final class UISettingsTest: XCTestCase {
         assertFalse(RawTomlTab.needsValidation(edited: false, fallback: false))
     }
 
+    /// "Show config error…" lands on Raw TOML at the line the pane's own diagnostic names. A request
+    /// is taken once; without one, a load moves nothing.
+    func testShowConfigErrorPublishesTheDiagnosticLine() {
+        let broken = "accordion-padding = 30\n[gaps\ninner.horizontal = 8\n"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: broken)
+        vm.takeErrorJumpRequest()
+        XCTAssertNil(vm.pendingJumpLine, "no request, no jump")
+
+        ConfigurationViewModel.errorJumpRequested = true
+        vm.takeErrorJumpRequest()
+        let expected = ConfigurationWriter.diagnostic(broken)?.line
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(vm.pendingJumpLine, expected)
+        XCTAssertFalse(ConfigurationViewModel.errorJumpRequested, "the request is spent")
+    }
+
     func testRawTomlSectionNavigationKeepsDocumentOrder() {
         let headers = RawTomlTab.sections(in: """
             title = '[not-a-header]'
@@ -315,6 +332,26 @@ final class UISettingsTest: XCTestCase {
         )
     }
 
+    /// A flag on the move used to show as the workspace (`--focus-follows-window W`), and a second
+    /// move would have been dropped by the next guided edit. Both are custom, kept verbatim.
+    func testGuidedWindowRuleActionsTreatFlagsAndRepeatedMovesAsCustom() {
+        for command in [
+            "move-node-to-workspace --focus-follows-window W",
+            "layout floating ; move-node-to-workspace --focus-follows-window W",
+            "move-node-to-workspace 1 ; move-node-to-workspace 2",
+        ] {
+            let action = parseGuidedWindowAction(command)
+            XCTAssertTrue(action.isCustom, command)
+            XCTAssertFalse(action.workspace.hasPrefix("-"), "a flag is not a workspace name: \(command)")
+            XCTAssertEqual(
+                Set(composeGuidedWindowAction(action).components(separatedBy: " ; ")),
+                Set(command.components(separatedBy: " ; ")),
+                "every command must survive composition: \(command)",
+            )
+        }
+        XCTAssertEqual(parseGuidedWindowAction("move-node-to-workspace W").workspace, "W")
+    }
+
     func testLinkedGapSettersUpdateEveryEdgeAndAvoidNoOpSaves() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
@@ -352,6 +389,22 @@ final class UISettingsTest: XCTestCase {
         vm.definedWorkspaces = ["1", "2", "2", "3"]
         vm.settings.assignments = [.init(workspace: "2", monitor: "main")]
         XCTAssertEqual(vm.unpinnedDefinedWorkspaces, ["1", "3"], "dedupe, config order, assigned excluded")
+    }
+
+    /// Identify shows one overlay per connected monitor, numbered as the schematic numbers it, in the
+    /// middle of that monitor's AppKit frame (whose y axis goes up from the main screen's bottom).
+    func testIdentifyHasOneOverlayPerMonitorNumberedByPosition() {
+        let rows = Self.twoMonitors()
+        let entries = MonitorIdentifyOverlay.entries(for: rows, mainScreenHeight: 1440)
+        XCTAssertEqual(entries.count, rows.count)
+        XCTAssertEqual(entries.map(\.position), [1, 2])
+        XCTAssertEqual(entries.map(\.name), rows.map(\.name))
+        XCTAssertEqual(entries[0].screenFrame, CGRect(x: 0, y: 0, width: 2560, height: 1440))
+        XCTAssertEqual(entries[1].screenFrame, CGRect(x: 2560, y: 360, width: 1920, height: 1080))
+        XCTAssertEqual(
+            MonitorIdentifyOverlay.announcement(for: rows),
+            "Position 1: DELL U3223QE (1), main display. Position 2: LG HDR 4K.",
+        )
     }
 
     private static func twoMonitors() -> [ConfigurationViewModel.MonitorRow] {

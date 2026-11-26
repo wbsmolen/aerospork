@@ -41,6 +41,13 @@ final class Updater {
         controller.startUpdater()
     }
 
+    /// Sparkle asks once whether to check automatically (`SUEnableAutomaticChecks` is absent on
+    /// purpose, `project.yml`). Settings ▸ General ▸ About is where that answer can be changed later.
+    var automaticallyChecksForUpdates: Bool {
+        get { controller.updater.automaticallyChecksForUpdates }
+        set { controller.updater.automaticallyChecksForUpdates = newValue }
+    }
+
     /// Explicit check, from the menu bar or Settings. Shows progress and "you are up to date",
     /// which a background check deliberately does not.
     func checkForUpdates() {

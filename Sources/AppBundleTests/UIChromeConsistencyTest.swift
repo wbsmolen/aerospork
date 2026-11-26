@@ -157,6 +157,40 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertFalse(strip.contains("selectedPane"), "the error strip is hidden on some pane: \(strip)")
     }
 
+    /// The product voice keeps the em dash for the rare interruption nothing else handles
+    /// (`.claude/skills/aerospork-design/readme.md`), and the panes had 17 of them in their copy. A
+    /// colon, a comma or a full stop says each of these better. Comments are not copy.
+    func testUiCopyHasNoEmDashes() throws {
+        var offenders: [String] = []
+        try forEachCodeLine { path, line, code in
+            // The odd segments between quotes are the string literals on the line.
+            let literals = code.split(separator: "\"", omittingEmptySubsequences: false).enumerated().filter { $0.offset % 2 == 1 }
+            if literals.contains(where: { $0.element.contains("—") }) { offenders.append("\(path):\(line)") }
+        }
+        XCTAssertEqual(offenders, [], "rewrite with a colon, a comma or a full stop")
+    }
+
+    /// A debug build has no feed, so an update control there is a permanent dead control. The test
+    /// process runs with the updater disabled, so a render cannot see the gate: this reads the source.
+    func testUpdateControlsAreGatedOnTheUpdaterBeingEnabled() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs/GeneralSettingsTab.swift"),
+            encoding: .utf8,
+        ))
+        let gate = try XCTUnwrap(source.range(of: "if Updater.shared.isEnabled {"), "the update gate moved: update this test")
+        // The gate's block, up to its matching brace.
+        var depth = 1
+        let end = source[gate.upperBound...].firstIndex { char in
+            if char == "{" { depth += 1 } else if char == "}" { depth -= 1 }
+            return depth == 0
+        } ?? source.endIndex
+        let gated = source[gate.upperBound ..< end]
+        for control in ["Toggle(\"Automatically check for updates\"", "Button(\"Check for updates…\")"] {
+            XCTAssertTrue(gated.contains(control), "\(control) is missing from the isEnabled gate")
+            XCTAssertEqual(source.components(separatedBy: control).count, 2, "\(control) also appears outside the gate")
+        }
+    }
+
     /// Reload replaces the Raw TOML buffer with the file, which threw away unapplied typing with no
     /// warning. A headless render cannot tell whether a button is disabled, so this reads the source.
     func testRawTomlReloadIsDisabledWhileThereAreUnappliedEdits() throws {
