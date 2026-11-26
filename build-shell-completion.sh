@@ -11,9 +11,10 @@ source ./script/setup.sh
 # So: run this script by hand after editing the grammar, and commit the result. build-release.sh
 # just copies ./shell-completion.
 #
-# TRADEOFF: drift between the grammar and the vendored output is caught by a human, not CI --
-# CI would have to `cargo install --git` complgen on every run. Add a cached CI job if it ever
-# actually drifts.
+# Drift is caught by hash, not by running complgen in the tests: this script records the grammar's
+# SHA-256 in shell-completion/.grammar-sha256, and ShellCompletionGrammarTest fails when the grammar
+# no longer matches it. Only a regeneration writes the hash. A hand edit of the vendored files is
+# not caught.
 
 ./script/install-dep.sh --complgen
 
@@ -26,6 +27,7 @@ rm -rf shell-completion && mkdir -p \
     --zsh-script shell-completion/zsh/_aerospork \
     --fish-script shell-completion/fish/aerospork.fish \
     --bash-script shell-completion/bash/aerospork
+shasum -a 256 grammar/commands-bnf-grammar.txt > shell-completion/.grammar-sha256
 
 # Syntax-check with whatever shells are actually present. A missing shell is a skip, not a failure:
 # the generated file is still correct, it just can't be checked here. Previously a missing fish or

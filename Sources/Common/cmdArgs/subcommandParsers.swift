@@ -9,6 +9,9 @@ extension SubCommandParserProtocol {
     func parse(args: [String]) -> ParsedCmd<any CmdArgs> {
         _parse(args).map { $0 }
     }
+
+    var info: CmdStaticInfo { T.info }
+    var optionNames: [String] { T.parser.options.keys.sorted() }
 }
 
 struct SubCommandParser<T: CmdArgs>: SubCommandParserProtocol, Sendable {
