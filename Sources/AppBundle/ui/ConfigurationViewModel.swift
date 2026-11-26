@@ -390,11 +390,10 @@ final class ConfigurationViewModel: ObservableObject {
             // and alternate monitor implementations and also performed a needless runtime cast per
             // display whenever Settings reloaded.
             let fingerprint = monitor.fingerprint
-            let width = fingerprint?.widthPixels ?? Int(monitor.width)
-            let height = fingerprint?.heightPixels ?? Int(monitor.height)
             return MonitorRow(
                 name: monitor.name,
-                resolution: "\(width)×\(height)",
+                // Points, the unit of fingerprint `width` (which is the screen frame, so the same value).
+                resolution: "\(Int(monitor.width))×\(Int(monitor.height))",
                 uuid: fingerprint?.displayUUID,
                 position: offset + 1,
                 isMain: monitor.rect.topLeftCorner == .zero,

@@ -93,10 +93,12 @@ struct WorkspacesMonitorsTab: View {
                             .fontWeight(.medium)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Text(monitor.resolution)
+                        // With its unit here only: the schematic box has no room for one.
+                        Text("\(monitor.resolution) pt")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                            .accessibilityLabel("\(monitor.resolution) points")
                     }
                     .accessibilityElement(children: .combine)
 
@@ -477,7 +479,7 @@ private struct MonitorBox: View {
         // No pointing-hand cursor: macOS buttons do not use one, and a box torn down while
         // hovered (routine on a display hotplug) never popped it.
         .onHover { isHovered = $0 }
-        .accessibilityLabel("Position \(monitor.position), \(monitor.name), \(monitor.resolution)\(monitor.isMain ? ", main display" : "")")
+        .accessibilityLabel("Position \(monitor.position), \(monitor.name), \(monitor.resolution) points\(monitor.isMain ? ", main display" : "")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
