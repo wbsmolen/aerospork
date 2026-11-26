@@ -57,6 +57,19 @@ final class MigrationTrapsTest: XCTestCase {
         XCTAssertFalse(warnings.contains { $0.contains("Line 1") }, "a comment warned: \(warnings)")
     }
 
+    /// One warning per matching line all went into the Settings banner.
+    func testRepeatedUpstreamNamesGiveOneWarningPerKind() {
+        let warnings = upstreamNameWarnings("""
+            exec-on-workspace-change = ['/bin/bash', '-c', 'echo $AEROSPACE_FOCUSED_WORKSPACE']
+            after-startup-command = ['exec-and-forget aerospace list-workspaces --all']
+            # aerospace reload-config -- a comment must not count
+            on-focus-changed = ['exec-and-forget aerospace list-windows --focused', 'exec-and-forget echo $AEROSPACE_PREV_WORKSPACE']
+            """).map(\.description)
+        assertEquals(warnings.count, 2, additionalMsg: "\(warnings)")
+        XCTAssertTrue(warnings.contains { $0.hasPrefix("Lines 1, 4: AEROSPACE_*") }, "\(warnings)")
+        XCTAssertTrue(warnings.contains { $0.hasPrefix("Lines 2, 4: runs `aerospace`") }, "\(warnings)")
+    }
+
     func testAnAppIdContainingAerospaceIsNotACliCall() {
         XCTAssertTrue(upstreamNameWarnings("[on-window]\n'bobko.aerospace' = 'layout floating'\n").isEmpty)
     }
