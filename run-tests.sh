@@ -29,7 +29,10 @@ shellcheck -S warning ./*.sh script/*.sh
 PYTHONPYCACHEPREFIX=.build/pycache python3 -m py_compile script/*.py
 python3 script/release-notes-html.py --self-check
 
-./build-debug.sh
+./build-debug.sh 2>&1 | tee "$log"
+# Counted, not fatal: beta SDK deprecations would break the gate. An incremental build reports only
+# the files it recompiled.
+echo "Build warnings: $(grep -cE '^/[^ ]+: .*warning:' "$log" || true)"
 
 ./.debug/aerospork -h > /dev/null
 ./.debug/aerospork --help > /dev/null

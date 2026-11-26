@@ -55,6 +55,8 @@ private final class UpdateReminder: NSObject, SPUStandardUserDriverDelegate {
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
-        if handleShowingUpdate, !state.userInitiated { NSApp.activate(ignoringOtherApps: true) }
+        // The standard user driver calls this from the main thread (SPUUserDriver.h), so this is
+        // the same synchronous activation, stated in terms Swift 6 checks.
+        if handleShowingUpdate, !state.userInitiated { MainActor.assumeIsolated { NSApp.activate(ignoringOtherApps: true) } }
     }
 }
