@@ -179,8 +179,10 @@ private func compactRanges(_ names: [String]) -> [String] {
 /// and regexes are not), and because the comparison has to be deterministic -- dictionaries are
 /// flattened to sorted lines before anything is compared.
 ///
-/// Regex matchers in `on-window-detected` are NOT compared: `Regex` has no equality, and migration
-/// copies those tables across byte for byte, so there is nothing there to get wrong.
+/// Regex matchers in `on-window-detected` are compared only by presence: `Regex` has no equality and
+/// keeps no source text, and migration copies those tables across byte for byte.
+/// `ConfigV2MigrationTest.testEquivalenceCoversEveryConfigField` fails when a `Config` field is neither
+/// compared here nor exempted there.
 @MainActor func configsAreEquivalent(_ a: Config, _ b: Config) -> Bool {
     func cmds(_ commands: [any Command]) -> [String] { commands.map { $0.args.description } }
     func bindings(_ modes: [String: Mode]) -> [String] {
@@ -192,7 +194,11 @@ private func compactRanges(_ names: [String]) -> [String] {
         assignment.map { "\($0.key)\t\($0.value.map(\.humanDescription).joined(separator: ","))" }.sorted()
     }
     func windows(_ callbacks: [WindowDetectedCallback]) -> [String] {
-        callbacks.map { "\($0.matcher.appId ?? "")\t\($0.matcher.workspace ?? "")\t\($0.matcher.duringAeroSporkStartup?.description ?? "")\t\($0.checkFurtherCallbacks)\t\(cmds($0.run).joined(separator: " ; "))" }
+        callbacks.map {
+            let m = $0.matcher
+            let regexes = "\(m.appNameRegexSubstring != nil)\t\(m.windowTitleRegexSubstring != nil)"
+            return "\(m.appId ?? "")\t\(m.workspace ?? "")\t\(m.duringAeroSporkStartup?.description ?? "")\t\(regexes)\t\($0.checkFurtherCallbacks)\t\(cmds($0.run).joined(separator: " ; "))"
+        }
     }
 
     return a.enableNormalizationFlattenContainers == b.enableNormalizationFlattenContainers &&
@@ -203,6 +209,8 @@ private func compactRanges(_ names: [String]) -> [String] {
         a.automaticallyUnhideMacosHiddenApps == b.automaticallyUnhideMacosHiddenApps &&
         a.accordionPadding == b.accordionPadding &&
         a.autoMoveWorkspacesOnMonitorConnect == b.autoMoveWorkspacesOnMonitorConnect &&
+        a.showMenuBarIcon == b.showMenuBarIcon &&
+        a.showDockIcon == b.showDockIcon &&
         a.gaps == b.gaps &&
         a.keyMapping == b.keyMapping &&
         a.execConfig == b.execConfig &&

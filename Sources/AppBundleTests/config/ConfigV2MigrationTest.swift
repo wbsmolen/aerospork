@@ -125,6 +125,62 @@ final class ConfigV2MigrationTest: XCTestCase {
 
     // MARK: - The real thing
 
+    // MARK: - The oracle
+
+    /// The migration rewrites the user's file, and `configsAreEquivalent` is its only safety net. It
+    /// compared fields by hand, and skipped the two icon fields: a field added to `Config` escaped it
+    /// with no word. Each field must make two configs differ, or be exempt here with its reason.
+    func testEquivalenceCoversEveryConfigField() {
+        let focus = parseCommand("focus left").cmdOrDie
+        let changes: [String: (inout Config) -> Void] = [
+            "afterStartupCommand": { $0.afterStartupCommand = [focus] },
+            "enableNormalizationFlattenContainers": { $0.enableNormalizationFlattenContainers.toggle() },
+            "defaultRootContainerLayout": { $0.defaultRootContainerLayout = .accordion },
+            "defaultRootContainerOrientation": { $0.defaultRootContainerOrientation = .horizontal },
+            "startAtLogin": { $0.startAtLogin.toggle() },
+            "automaticallyUnhideMacosHiddenApps": { $0.automaticallyUnhideMacosHiddenApps.toggle() },
+            "accordionPadding": { $0.accordionPadding += 1 },
+            "enableNormalizationOppositeOrientationForNestedContainers": { $0.enableNormalizationOppositeOrientationForNestedContainers.toggle() },
+            "execOnWorkspaceChange": { $0.execOnWorkspaceChange = ["/bin/echo"] },
+            "keyMapping": { $0.keyMapping = KeyMapping(preset: .dvorak) },
+            "execConfig": { $0.execConfig.envVariables = [:] },
+            "onFocusChanged": { $0.onFocusChanged = [focus] },
+            "onFocusedWorkspaceChanged": { $0.onFocusedWorkspaceChanged = [focus] },
+            "onFocusedMonitorChanged": { $0.onFocusedMonitorChanged = [focus] },
+            "gaps": { $0.gaps.inner = .init(vertical: 1, horizontal: 1) },
+            "workspaceToMonitorForceAssignment": { $0.workspaceToMonitorForceAssignment = ["1": [.main]] },
+            "modes": { $0.modes = self.parsed("[mode.main.binding]\nalt-h = 'focus left'").modes },
+            "onWindowDetected": { $0.onWindowDetected = [WindowDetectedCallback(rawRun: [parseCommand("layout floating").cmdOrDie])] },
+            "preservedWorkspaceNames": { $0.preservedWorkspaceNames = ["z"] },
+            "autoMoveWorkspacesOnMonitorConnect": { $0.autoMoveWorkspacesOnMonitorConnect.toggle() },
+            "showMenuBarIcon": { $0.showMenuBarIcon.toggle() },
+            "showDockIcon": { $0.showDockIcon.toggle() },
+        ]
+        let exempt: [String: String] = [
+            "_deprecatedNoOp": "a Void sink for keys the table walker must not write; it holds nothing",
+            "persistentWorkspaces": "folding alt-1..9 into `workspaces` makes them persistent, deliberately",
+        ]
+        let fields = Mirror(reflecting: Config()).children.compactMap(\.label)
+        assertEquals(Set(fields), Set(changes.keys).union(exempt.keys))
+
+        let base = Config()
+        XCTAssertTrue(configsAreEquivalent(base, base))
+        for (field, change) in changes {
+            var changed = base
+            change(&changed)
+            XCTAssertFalse(configsAreEquivalent(base, changed), "configsAreEquivalent does not compare \(field)")
+        }
+
+        // A rule that gains a regex matcher is a different rule.
+        var rule = WindowDetectedCallback(rawRun: [parseCommand("layout floating").cmdOrDie])
+        var plain = base
+        plain.onWindowDetected = [rule]
+        rule.matcher.windowTitleRegexSubstring = try? Regex("x")
+        var matched = base
+        matched.onWindowDetected = [rule]
+        XCTAssertFalse(configsAreEquivalent(plain, matched))
+    }
+
     // MARK: - The file migration
 
     private static let v1 = "[mode.main.binding]\nalt-h = 'focus left'\n"
