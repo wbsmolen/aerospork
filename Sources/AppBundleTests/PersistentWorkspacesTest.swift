@@ -114,6 +114,21 @@ final class PersistentWorkspacesTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: "gone"))
     }
 
+    /// A sticky window that follows the switch leaves its workspace empty, and an undeclared empty workspace
+    /// goes in the same refresh. A declared one stays.
+    func testAWorkspaceWhoseOnlyWindowWasStickyIsReleased() {
+        config.persistentWorkspaces = ["kept"]
+        for (id, name): (UInt32, String) in [(1, "left"), (2, "kept")] {
+            XCTAssertTrue(Workspace.get(byName: name).focusWorkspace())
+            TestWindow.new(id: id, parent: Workspace.get(byName: name)).isSticky = true
+            XCTAssertTrue(Workspace.get(byName: "elsewhere").focusWorkspace())
+            refreshModel()
+        }
+        XCTAssertNil(Workspace.existing(byName: "left"), "the workspace the sticky window left was kept alive")
+        XCTAssertNotNil(Workspace.existing(byName: "kept"))
+        assertEquals(Workspace.get(byName: "elsewhere").floatingWindows.count, 2)
+    }
+
     /// The issue's `cmd-left`/`cmd-right = 'workspace --wrap-around prev/next'` walked only the
     /// workspaces that happened to hold windows.
     func testNextAndPrevWalkThroughEmptyDeclaredWorkspaces() {

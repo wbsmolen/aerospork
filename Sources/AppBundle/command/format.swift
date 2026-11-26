@@ -77,6 +77,7 @@ enum FormatVar: Equatable {
     enum WindowFormatVar: String, Equatable, CaseIterable {
         case windowId = "window-id"
         case windowIsFullscreen = "window-is-fullscreen"
+        case windowIsSticky = "window-is-sticky"
         case windowTitle = "window-title"
     }
 
@@ -175,6 +176,7 @@ extension String {
                 return switch f {
                     case .windowId: .success(.uint32(w.windowId))
                     case .windowIsFullscreen: .success(.bool(w.isFullscreen))
+                    case .windowIsSticky: .success(.bool(w.isSticky))
                     case .windowTitle: .success(.string(title))
                 }
             case (.workspace(let w), .workspace(let f)):

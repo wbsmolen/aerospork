@@ -255,6 +255,16 @@ include::aerospork-macos-native-minimize.adoc[tags=purpose]
 
 include::aerospork-macos-native-minimize.adoc[tags=body]
 
+[#sticky]
+=== sticky
+----
+include::aerospork-sticky.adoc[tags=synopsis]
+----
+include::aerospork-sticky.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-sticky.adoc[tags=body]
+
 [#binding-mode-commands]
 == Binding modes
 

@@ -181,7 +181,7 @@ Other differences:
 * `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` have no
   AeroSpork equivalent. AeroSpork reports these keys and ignores them. It does not reject the file.
   A saved config always reloads by itself.
-* A window rule can run only `layout floating`, `layout tiling` and `move-node-to-workspace`.
+* A window rule can run only the commands that <<window-rule-commands>> lists.
 * `persistent-workspaces` works as it does in AeroSpace, and so does `workspaces`. See
   <<persistent-workspaces>>.
 * The first time AeroSpork starts with a config in the v1 spelling (bindings under
@@ -278,6 +278,35 @@ To do the same in the Settings window:
 . Set what the rule does: the workspace to move the window to, or Float or Tile.
 
 To match by app name, window title or workspace, see <<on-window-detected-callback>>.
+
+[#sticky-windows]
+=== Keep a window on every workspace
+
+A window belongs to one workspace, so a video call or a picture-in-picture video goes off screen when
+you switch away from its workspace. A sticky window follows the workspace that its monitor shows: on
+each switch it moves to the new workspace, and stays where it is on the screen.
+
+To make the focused window sticky, run xref:commands.adoc#sticky[sticky], or bind it to a key:
+
+[source,toml]
+----
+[keys]
+alt-shift-s = 'sticky'  # Toggles
+----
+
+To make the windows of an app sticky when they open, write a window rule that says `sticky on`. This
+rule matches the picture-in-picture windows of Chrome and Firefox by their title:
+
+[source,toml]
+----
+[[on-window-detected]]
+    if.window-title-regex-substring = '^picture.in.picture$'
+    run = 'sticky on'
+----
+
+A sticky window is a floating window. Tile it, or move it with `move-node-to-workspace` or
+`move-node-to-monitor`, and it stops being sticky. A minimized sticky window, or one of a hidden app,
+stays on its workspace until it comes back.
 
 [#binding-modes]
 === Add a binding mode
@@ -608,7 +637,7 @@ When AeroSpork restarts, it puts back the whole layout:
 * The workspace of each window, and the monitor of each workspace.
 * The workspace that each monitor showed.
 * The tree of each workspace, with its split sizes and layouts.
-* The place of each floating, fullscreen and minimized window.
+* The place of each floating, fullscreen and minimized window, and which windows are sticky.
 
 AeroSpork knows a window by the ID that the macOS window server gives it. The memory lasts as long
 as the window server does. A restart of AeroSpork keeps it: an update, a crash, `killall`, or Quit
@@ -1317,6 +1346,7 @@ A rule with no condition matches every new window.
 * The Window Rules pane of the Settings window edits both forms. It writes `[on-window]` when every
   rule fits the short form, and `\[[on-window-detected]]` otherwise.
 
+[#window-rule-commands]
 ==== What a rule can run
 
 `run` accepts these commands, and AeroSpork rejects a rule with any other:
@@ -1324,6 +1354,7 @@ A rule with no condition matches every new window.
 * `layout floating` and `layout tiling`. AeroSpork rejects other `layout` arguments here.
 * `fullscreen on`. A rule must say `on`: a bare `fullscreen` toggles, so the window would leave
   fullscreen if the rule ran again. See xref:commands.adoc#fullscreen[fullscreen].
+* `sticky on`, for the same reason. See <<sticky-windows>>.
 * xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] and
   xref:commands.adoc#move-node-to-monitor[move-node-to-monitor]. A rule moves its window at most
   once, with one of the two, and the move is the last command in the list. A move takes the window

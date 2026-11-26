@@ -343,6 +343,7 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
     private static let ruleCommandFragments: [String] = [
         "[[on-window-detected]]\nif.app-id = 'com.example.tv'\nrun = ['fullscreen on --no-outer-gaps', 'move-node-to-monitor --focus-follows-window next']",
         "[on-window]\n'com.example.chat' = 'move-node-to-monitor main'",
+        "[[on-window-detected]]\nif.window-title-regex-substring = '^picture.in.picture$'\nrun = 'sticky on'",
     ]
 
     /// Values that span lines, and lines inside them that look like a header or a key. Several

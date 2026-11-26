@@ -105,14 +105,15 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     // - 'exec' is prohibited because command-subject isn't yet supported in "exec session"
     // - Commands that take focus are prohibited because the design isn't yet clear. The one way in
     //   is `--focus-follows-window`, which both move commands accept or neither does.
-    // - `fullscreen` only with an explicit `on`: a rule that toggles undoes itself on a second run.
+    // - `fullscreen` and `sticky` only with an explicit `on`: a rule that toggles undoes itself on a second run.
     if !run.allSatisfy({
         let layoutArg = ($0 as? LayoutCommand)?.args.toggleBetween.val.singleOrNil()
-        return layoutArg == .floating || layoutArg == .tiling || ($0 as? FullscreenCommand)?.args.toggle == .on || isWindowRuleMove($0)
+        return layoutArg == .floating || layoutArg == .tiling || ($0 as? FullscreenCommand)?.args.toggle == .on ||
+            ($0 as? StickyCommand)?.args.toggle == .on || isWindowRuleMove($0)
     }) {
         myErrors.append(.semantic(
             backtrace,
-            "For now, 'layout floating', 'layout tiling', 'fullscreen on', 'move-node-to-workspace' and 'move-node-to-monitor' are the only commands that are supported in 'on-window-detected'. " +
+            "For now, 'layout floating', 'layout tiling', 'fullscreen on', 'sticky on', 'move-node-to-workspace' and 'move-node-to-monitor' are the only commands that are supported in 'on-window-detected'. " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }

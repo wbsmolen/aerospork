@@ -67,6 +67,7 @@ enum WorkspaceMemory {
         var parkedAt: CGPoint? = nil
         var isFullscreen: Bool? = nil
         var noOuterGapsInFullscreen: Bool? = nil
+        var isSticky: Bool? = nil
     }
 
     struct State: Codable, Equatable, Sendable {
@@ -242,6 +243,7 @@ enum WorkspaceMemory {
         guard let entry = placements[String(window.windowId)] else { return }
         window.isFullscreen = entry.isFullscreen == true
         window.noOuterGapsInFullscreen = entry.noOuterGapsInFullscreen == true
+        window.isSticky = entry.isSticky == true
         if let parkedAt = entry.parkedAt { (window as? MacWindow)?.parkedPosition = parkedAt }
     }
 
@@ -363,6 +365,7 @@ enum WorkspaceMemory {
                 parkedAt: window.isFloating ? window.parkedPosition : nil,
                 isFullscreen: window.isFullscreen ? true : nil,
                 noOuterGapsInFullscreen: window.noOuterGapsInFullscreen ? true : nil,
+                isSticky: window.isSticky ? true : nil,
             )
             if workspaceScreens[name] == nil, let workspace = Workspace.existing(byName: name) {
                 workspaceScreens[name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId

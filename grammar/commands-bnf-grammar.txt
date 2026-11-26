@@ -66,6 +66,9 @@ aerospork -h;
 
     | split [--window-id <window_id>] (horizontal|vertical|opposite) [--window-id <window_id>]
 
+    | sticky [--window-id <window_id>]
+    | sticky [--fail-if-noop|--window-id <window_id>]... (on|off) [--fail-if-noop|--window-id <window_id>]...
+
     | summon-workspace [--fail-if-noop] <workspace> [--fail-if-noop]
 
     | swap [--window-id <window_id>|--swap-focus|--wrap-around]... (left|down|up|right|dfs-next|dfs-prev) [--window-id <window_id>|--swap-focus|--wrap-around]...

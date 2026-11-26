@@ -32,7 +32,7 @@ struct KeyBindingsTab: View {
             id: "layout", title: "Layout & resize", icon: "rectangle.split.2x1",
             commandPrefixes: [
                 "balance-sizes", "flatten-workspace-tree", "fullscreen", "join-with", "layout",
-                "macos-native-fullscreen", "macos-native-minimize", "resize", "split",
+                "macos-native-fullscreen", "macos-native-minimize", "resize", "split", "sticky",
             ],
         ),
         BindingCategory(

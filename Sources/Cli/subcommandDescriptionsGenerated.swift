@@ -33,6 +33,7 @@ let subcommandDescriptions = [
     ["  reload-config", "Read the config again and apply it"],
     ["  resize", "Resize the focused window"],
     ["  split", "Split the focused window, as i3 does"],
+    ["  sticky", "Keep a floating window on screen when its monitor switches workspace"],
     ["  summon-workspace", "Bring a workspace to the focused monitor"],
     ["  swap", "Swap the focused window with another window and keep the layout"],
     ["  trigger-binding", "Run a binding as if you pressed its keys"],
