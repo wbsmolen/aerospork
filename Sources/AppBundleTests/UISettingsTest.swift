@@ -1,5 +1,6 @@
 @testable import AppBundle
 import AppKit
+import Combine
 import Common
 import Foundation
 import XCTest
@@ -205,6 +206,26 @@ final class UISettingsTest: XCTestCase {
 
     /// In fallback mode Raw TOML holds the file that failed to load. It said "Matches the file on
     /// disk", with no error line, until the user typed.
+    /// Every pane and the window observe the view model, so a keystroke that published there re-ran
+    /// all seven pane bodies. Only the buffer may announce a change, and edit detection still works.
+    func testRawTomlTypingPublishesOnTheBufferAlone() {
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: "accordion-padding = 30\n")
+        var viewModelChanges = 0
+        var bufferChanges = 0
+        let subscriptions = [
+            vm.objectWillChange.sink { viewModelChanges += 1 },
+            vm.raw.objectWillChange.sink { bufferChanges += 1 },
+        ]
+        defer { subscriptions.forEach { $0.cancel() } }
+
+        XCTAssertFalse(vm.rawTomlEdited)
+        vm.rawToml = "accordion-padding = 7\n"
+        XCTAssertEqual(viewModelChanges, 0, "a keystroke must not re-render every pane")
+        XCTAssertEqual(bufferChanges, 1)
+        XCTAssertTrue(vm.rawTomlEdited)
+    }
+
     func testRawTomlValidatesTheBrokenFileInFallbackMode() {
         assertTrue(RawTomlTab.needsValidation(edited: false, fallback: true))
         assertTrue(RawTomlTab.needsValidation(edited: true, fallback: false))
@@ -389,6 +410,34 @@ final class UISettingsTest: XCTestCase {
         XCTAssertNil(vm.monitorRow(forToken: "secondary"))
     }
 
+    /// A screen-change notification fires for each DisplayLink connect step and Dock frame change.
+    /// Rows that came back with new identities tore down every monitor box (focus, hover) and
+    /// re-rendered every pane for a list that had not changed.
+    func testMonitorRowsKeepTheirIdentityAndAnUnchangedListDoesNotPublish() {
+        let vm = ConfigurationViewModel()
+        let first = vm.loadMonitors()
+        let second = vm.loadMonitors()
+        XCTAssertFalse(first.isEmpty)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.map(\.id), second.map(\.id))
+
+        vm.refreshLiveMonitors()
+        var changes = 0
+        let subscription = vm.objectWillChange.sink { changes += 1 }
+        defer { subscription.cancel() }
+        vm.refreshLiveMonitors()
+        XCTAssertEqual(changes, 0, "an unchanged monitor list must not publish")
+    }
+
+    /// General and Raw TOML read the path from here. General used to look it up in its body, which
+    /// ran file-system checks on every Raw TOML keystroke.
+    func testLoadingPublishesTheConfigPath() async {
+        let vm = ConfigurationViewModel()
+        XCTAssertEqual(vm.configPath, "")
+        await vm.loadConfiguration()
+        XCTAssertFalse(vm.configPath.isEmpty)
+    }
+
     func testPinUnpinRoundTripThroughTheMenuFlow() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
@@ -424,6 +473,15 @@ final class UISettingsTest: XCTestCase {
         let workspace = TrayItem(type: .workspace, name: "R", isActive: true)
         XCTAssertNotEqual(mode.id, workspace.id)
         assertEquals(Set([mode, workspace]).count, 2)
+    }
+
+    /// VoiceOver read the tray text's `*` and `│` aloud, and "S" for a mode named "service".
+    func testTraySpokenTextNamesTheModeAndTheFocusedWorkspace() {
+        assertEquals(
+            traySpokenText(mode: "service", workspaces: [("1", true), ("2", false)]),
+            "Service mode. Workspace 1, focused. Workspace 2.",
+        )
+        assertEquals(traySpokenText(mode: nil, workspaces: [("1", true)]), "Workspace 1.")
     }
 
     // MARK: - Branding

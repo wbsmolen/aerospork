@@ -17,7 +17,7 @@ function Card() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ borderRadius: 8, overflow: 'hidden', boxShadow: '0 0 0 0.5px var(--separator)' }}>
-        <Banner kind="error">Your config was not loaded — AeroSpork is running built-in defaults. Fix the errors below and save; the config reloads by itself.</Banner>
+        <Banner kind="error">Your config was not loaded, so AeroSpork is running built-in defaults. Fix the error in Raw TOML or your editor; the config reloads by itself.</Banner>
         <Banner kind="warning">alt-shift-semicolon is bound twice in “main”; the last one wins.</Banner>
       </div>
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>

@@ -94,7 +94,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
         settingsBridged(
             Group {
                 if viewModel.isEnabled {
-                    MenuBarLabel(text: viewModel.trayText, items: viewModel.trayItems)
+                    MenuBarLabel(text: viewModel.trayText, spokenText: viewModel.traySpokenText, items: viewModel.trayItems)
                 } else {
                     Image(systemName: "pause.circle.fill")
                         .resizable()

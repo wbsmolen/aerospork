@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-08-02
 - Enforced by: review only
-- Code: `.background(.bar)` in `SettingsChrome.swift` (`SettingsFooter`, `ListActionBar`), `KeyBindingsTab.swift`, `RawTomlTab.swift` (path bar, action bar)
+- Code: `.background(.bar)` in `SettingsChrome.swift` (`ListActionBar`), `KeyBindingsTab.swift`, `RawTomlTab.swift` (path bar, action bar)
 
 ## Context
 

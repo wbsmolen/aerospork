@@ -18,9 +18,11 @@ import SwiftUI
 struct MenuBarLabel: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Plain-text rendering of the same information. Used verbatim on macOS 13, as the fallback if
-    /// rasterization fails, and as the accessibility label of the image.
+    /// Plain-text rendering of the same information. Used verbatim on macOS 13, and as the fallback
+    /// if rasterization fails.
     let text: String
+    /// What VoiceOver reads, on every path: `traySpokenText`.
+    let spokenText: String
     let items: [TrayItem]
 
     private let height = CGFloat(40)
@@ -39,12 +41,12 @@ struct MenuBarLabel: View {
         } else if #available(macOS 14, *) { // https://github.com/wbsmolen/aerospork/issues/1122
             // Using scale: 1 results in a blurry image for unknown reasons
             if let cgImage = ImageRenderer(content: chips).cgImage {
-                Image(cgImage, scale: 2, label: Text(text))
+                Image(cgImage, scale: 2, label: Text(spokenText))
             } else {
-                Text(text)
+                Text(text).accessibilityLabel(spokenText)
             }
         } else { // macOS 13 and lower
-            Text(text)
+            Text(text).accessibilityLabel(spokenText)
         }
     }
 

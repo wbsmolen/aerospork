@@ -85,18 +85,14 @@ struct GapsSettingsTab: View {
                 } header: {
                     SectionLabel("Around the screen", "rectangle.inset.filled")
                 } footer: {
-                    SettingsHint("The top gap is measured below the menu bar, so 0 is flush with the usable area.")
+                    // With overrides, the Preview footer already says where they live and what an edit
+                    // does to them. Without, this is the only place that says per-monitor gaps exist.
+                    SettingsHint(viewModel.gapsHavePerMonitorOverrides
+                        ? "The top gap is measured below the menu bar, so 0 is flush with the usable area."
+                        : "The top gap is measured below the menu bar, so 0 is flush with the usable area. Per-monitor gaps are set in Raw TOML.")
                 }
             }
             .formStyle(.grouped)
-
-            SettingsFooter(
-                // Reworded so the config key fits in a code span. SwiftUI's markdown parser reads the
-                // `[` of an array inside backticks as the start of a link, fails, and falls back to
-                // the literal text -- backticks and all -- so the previous wording had to spell the
-                // array out in body font, which is the face this window reserves for prose.
-                "Per-monitor gaps, such as a list of values under `outer.top`, survive untouched until you change one of these — editing any gap rewrites the whole gaps section. Use Raw TOML for per-monitor rules.",
-            )
         }
         .task(id: viewModel.loadGeneration) {
             guard viewModel.loadGeneration > 0 else { return }

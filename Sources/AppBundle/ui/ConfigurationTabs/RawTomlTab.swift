@@ -16,14 +16,21 @@ struct RawTomlTab: View {
     }
 
     @ObservedObject var viewModel: ConfigurationViewModel
+    /// Observed here and nowhere else, so typing re-renders this pane alone. `@ObservedObject`, not
+    /// a plain read through `viewModel`: without it `.task(id:)` never sees the new text.
+    @ObservedObject private var raw: RawTomlBuffer
     @State private var validationDiagnostic: ConfigurationWriter.ValidationDiagnostic?
     @State private var validationPending = false
     @State private var cursorLine = 1
     @State private var cursorColumn = 1
     @State private var jumpToLine: Int?
-    @State private var configPath = ""
     @State private var backups: [URL] = []
     @State private var sectionHeaders: [SectionHeader] = []
+
+    init(viewModel: ConfigurationViewModel) {
+        self.viewModel = viewModel
+        raw = viewModel.raw
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +39,7 @@ struct RawTomlTab: View {
             // Not `TextEditor`: it applies macOS text substitutions, and smart quotes turn the `'`
             // in `key = 'focus left'` into `'`, which is not valid TOML.
             CodeEditor(
-                text: $viewModel.rawToml,
+                text: $raw.text,
                 jumpToLine: jumpToLine,
                 errorLine: validationDiagnostic?.line,
             ) { line, column in
@@ -46,25 +53,24 @@ struct RawTomlTab: View {
         // Parsing a full config on every keystroke makes fast typing contend with the main-actor
         // SwiftUI update that produced it. `task(id:)` gives us cancellation for free: only the
         // last buffer in a burst is validated, while Apply remains disabled during the short wait.
-        .task(id: viewModel.rawToml) {
+        .task(id: raw.text) {
             let needsValidation = Self.needsValidation(edited: viewModel.rawTomlEdited, fallback: isRunningFallbackDefaults)
             validationPending = needsValidation
             guard needsValidation else {
                 validationDiagnostic = nil
-                sectionHeaders = Self.sections(in: viewModel.rawToml)
+                sectionHeaders = Self.sections(in: raw.text)
                 return
             }
             validationDiagnostic = nil
             try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled else { return }
-            sectionHeaders = Self.sections(in: viewModel.rawToml)
-            validationDiagnostic = ConfigurationWriter.diagnostic(viewModel.rawToml)
+            sectionHeaders = Self.sections(in: raw.text)
+            validationDiagnostic = ConfigurationWriter.diagnostic(raw.text)
             validationPending = false
         }
         .task {
-            // Both calls touch the file system. Raw TOML publishes on every keystroke, so leaving
-            // them in computed view properties turned typing into repeated directory scans.
-            configPath = (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+            // Touches the file system. The pane re-renders on every keystroke, so leaving it in a
+            // computed view property turned typing into repeated directory scans.
             backups = viewModel.configBackups()
         }
     }
@@ -72,13 +78,13 @@ struct RawTomlTab: View {
     private var pathBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "doc.plaintext").foregroundStyle(.secondary)
-            Text(configPath)
+            Text(viewModel.configPath)
                 .font(.system(.callout, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .textSelection(.enabled)
-            CopyButton(value: configPath, help: "Copy config path")
+            CopyButton(value: viewModel.configPath, help: "Copy config path")
             Spacer(minLength: 12)
             Text("Ln \(cursorLine), Col \(cursorColumn)")
                 .font(.callout)
@@ -99,7 +105,7 @@ struct RawTomlTab: View {
             .help("Jump to a TOML section")
             // Both were permanent menu bar rows. They belong next to the text they act on.
             Button("Open in \(getTextEditorToOpenConfig().deletingPathExtension().lastPathComponent)") {
-                openConfigInExternalEditor()
+                viewModel.openConfigInEditor()
             }
             .buttonStyle(.borderless)
             .help("External edits are picked up automatically — the config file is watched")

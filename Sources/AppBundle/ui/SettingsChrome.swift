@@ -152,27 +152,10 @@ struct SettingsHint: View {
     }
 }
 
-/// A hint pinned to the bottom of a tab that has no action bar of its own to hang it off.
-struct SettingsFooter: View {
-    let text: String
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            SettingsHint(text)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-        }
-        .background(.bar)
-    }
-}
-
 /// The macOS "table with a +/- strip glued to its bottom edge" idiom, once instead of three times.
 ///
-/// The caveat text lives in here rather than in a separate `SettingsFooter` below it, because two
-/// stacked `.bar` strips with two dividers is more chrome than the content it explains.
+/// The caveat text lives in here rather than in a separate strip below it, because two stacked
+/// `.bar` strips with two dividers is more chrome than the content it explains.
 struct ListActionBar: View {
     let addHelp: String
     let removeHelp: String
@@ -335,6 +318,9 @@ struct Badge: View {
     var tone: Tone = .standard
     let help: String
 
+    /// A binding that `mod` and `workspaces` generate. Three rows of the Keys pane show it.
+    static let generated = Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+
     init(_ text: String, tone: Tone = .standard, help: String) {
         self.text = text
         self.tone = tone
@@ -423,10 +409,18 @@ struct Banner: View {
 
     let text: String
     let kind: Kind
+    /// The recovery, on the pane where the banner shows: name the state, then the way out. The title
+    /// says what the button does, including what it throws away.
+    let action: (title: String, run: () -> Void)?
+    /// The edge that meets the content: `.bottom` under the window's top edge, `.top` in the bottom
+    /// inset.
+    let dividerEdge: VerticalEdge
 
-    init(_ text: String, kind: Kind) {
+    init(_ text: String, kind: Kind, action: (title: String, run: () -> Void)? = nil, dividerEdge: VerticalEdge = .bottom) {
         self.text = text
         self.kind = kind
+        self.action = action
+        self.dividerEdge = dividerEdge
     }
 
     var body: some View {
@@ -441,11 +435,15 @@ struct Banner: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let action {
+                Button(action.title, action: action.run)
+                    .fixedSize()
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(kind.tint.opacity(0.13))
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: dividerEdge == .top ? .top : .bottom) { Divider() }
     }
 }
 
@@ -468,23 +466,36 @@ struct Banner: View {
     return editor
 }
 
-/// Opens the user's config in that editor, creating it from the bundled default if it is missing.
-@MainActor func openConfigInExternalEditor() {
-    let editor = getTextEditorToOpenConfig()
-    let fallbackConfig = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
-    switch findCustomConfigUrl() {
-        case .file(let url):
-            url.open(with: editor)
-        case .noCustomConfigExists:
-            _ = try? FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
-            // `ConfigFileWatcher.start()` bails when there is no user config to watch, and it ran at
-            // launch. Without re-arming here, the file we just created is not watched, so the edit
-            // the user is about to make in that editor would never be picked up.
-            ConfigFileWatcher.start()
-            fallbackConfig.open(with: editor)
-        case .ambiguousConfigError:
-            fallbackConfig.open(with: editor)
+/// Opens the config the server reads in that editor, creating it from the bundled default if it is
+/// missing. Returns why it could not, for the pane to show.
+///
+/// The file is `userConfigTargetUrl()`, the one the writer saves to. This used to create
+/// `~/.aerospork.toml` whenever no config existed, so with `--config-path` naming a file not yet
+/// created the user edited a file the server never reads, and a failed copy said nothing.
+/// `target` and `open` are seams for tests.
+@MainActor func openConfigInExternalEditor(
+    target: Result<URL, String> = userConfigTargetUrl(),
+    open: (URL) -> Void = { $0.open(with: getTextEditorToOpenConfig()) },
+) -> String? {
+    let url: URL
+    switch target {
+        case .success(let it): url = it
+        case .failure(let reason): return reason
     }
+    if !FileManager.default.fileExists(atPath: url.path) {
+        do {
+            try FileManager.default.copyItem(at: defaultConfigUrl, to: url)
+        } catch {
+            return "Could not create \(url.path(percentEncoded: false)): \(error.localizedDescription) Check that its folder exists and that you can write to it."
+        }
+        // `ConfigFileWatcher.start()` bails when there is no user config to watch, and it ran at
+        // launch. Without re-arming here, the file just created is not watched, so the edit the user
+        // is about to make in that editor would never be picked up. Not under XCTest, where it would
+        // watch the developer's own config.
+        if !isUnitTest { ConfigFileWatcher.start() }
+    }
+    open(url)
+    return nil
 }
 
 /// Small borderless "copy this string" button. Two tabs need it and they had two different ones.

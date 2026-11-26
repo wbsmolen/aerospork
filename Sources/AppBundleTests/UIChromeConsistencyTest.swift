@@ -197,6 +197,15 @@ final class UIChromeConsistencyTest: XCTestCase {
         )
     }
 
+    /// The window's error strip was a hand-made `Banner`: its tint, its own padding, and no way to
+    /// offer the recovery. A banner wash outside the chrome file is that copy growing back.
+    func testNoPaneMakesItsOwnBanner() throws {
+        let wash = try Regex(#"Banner\.Kind\.\w+\.tint\.opacity\("#)
+        try forEachCodeLine { path, line, code in
+            XCTAssertFalse(code.contains(wash), "\(path):\(line) paints its own banner -- use Banner from SettingsChrome: \(code)")
+        }
+    }
+
     /// macOS buttons do not use a pointing hand, and a hovered view torn down before its pop left the
     /// cursor stack unbalanced.
     func testNoPaneUsesAPointingHandCursor() throws {

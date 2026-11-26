@@ -44,8 +44,10 @@ final class PerfInvariantsTest: XCTestCase {
         let other = Workspace.get(byName: "perf-invariants-other")
         check(other.focusWorkspace())
         check(mainMonitor.setActiveWorkspace(other))
+        let spokenBefore = TrayMenuModel.shared.traySpokenText
         updateTrayText()
         assertTrue(publishes > 0)
+        assertNotEquals(TrayMenuModel.shared.traySpokenText, spokenBefore)
     }
 
     /// `debugLog` is called several times per refresh and once per command parse. The `@autoclosure`

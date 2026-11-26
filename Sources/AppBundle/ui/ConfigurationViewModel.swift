@@ -19,7 +19,7 @@ final class ConfigurationViewModel: ObservableObject {
             object: nil,
             queue: .main,
         ) { [weak self] _ in
-            Task { @MainActor in self?.liveMonitors = self?.loadMonitors() ?? [] }
+            Task { @MainActor in self?.refreshLiveMonitors() }
         }
     }
 
@@ -60,7 +60,15 @@ final class ConfigurationViewModel: ObservableObject {
     @Published var liveMonitors: [MonitorRow] = []
 
     // Raw TOML editor -- the guarantee that nothing in the config is unreachable from the GUI.
-    @Published var rawToml = ""
+    /// Its own observable, so a keystroke re-renders the Raw TOML pane alone. As a `@Published` on
+    /// this view model it re-ran the window body and all seven panes on every key. Only `RawTomlTab`
+    /// observes it; the window must never read it.
+    let raw = RawTomlBuffer()
+    var rawToml: String {
+        get { raw.text }
+        set { raw.text = newValue }
+    }
+
     private var loadedRawToml = ""
     var rawTomlEdited: Bool { rawToml != loadedRawToml }
 
@@ -72,6 +80,9 @@ final class ConfigurationViewModel: ObservableObject {
     var rawTomlApplyRequested = false
 
     @Published var errorMessage: String?
+    /// The config file General and Raw TOML show. Looked up on reload and after "Open in…", never in a
+    /// pane body: the lookup touches the disk, and a body can run on every keystroke.
+    @Published private(set) var configPath = ""
     private var isSaving = false
     /// Changes only after a complete reload. Views with non-persisted presentation state use this
     /// to seed themselves once without recomputing while the user is typing.
@@ -133,8 +144,11 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
-    struct MonitorRow: Identifiable {
-        let id = UUID()
+    /// Equatable with an id that survives a reload, so a screen-change notification that changes
+    /// nothing publishes nothing, and `ForEach` keeps each box (its focus and hover) across one that does.
+    /// A minted `UUID()` tore every box down on each DisplayLink connect step and Dock frame change.
+    struct MonitorRow: Identifiable, Equatable {
+        var id: String { uuid ?? "\(name)#\(position)" }
         var name: String
         var resolution: String
         var uuid: String?
@@ -199,13 +213,17 @@ final class ConfigurationViewModel: ObservableObject {
                 guard let self else { return }
                 if self.hasUnsavedChanges || self.rawTomlEdited {
                     // Don't clobber what the user is in the middle of typing -- tell them instead.
-                    self.errorMessage = "The config file changed on disk. Revert to load it, or apply your changes to overwrite it."
+                    self.errorMessage = Self.diskConflictMessage
                 } else {
                     self.reloadFromConfig()
                 }
             }
         }
     }
+
+    /// Shown with "Discard edits and load from disk", which works on every pane. It used to name Revert
+    /// and Apply, which exist only on Raw TOML.
+    static let diskConflictMessage = "The config file changed on disk while you had unsaved edits."
 
     func revertChanges() {
         reloadFromConfig()
@@ -277,8 +295,26 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
+    /// Assigns only a changed list: the screen notification fires for every connect step and Dock
+    /// or menu bar frame change, and each publish re-renders every pane.
+    func refreshLiveMonitors() {
+        let rows = loadMonitors()
+        if rows != liveMonitors { liveMonitors = rows }
+    }
+
+    /// "Open in…" can create the first config, so the path is read again after it.
+    func openConfigInEditor() {
+        if let reason = openConfigInExternalEditor() { errorMessage = reason }
+        refreshConfigPath()
+    }
+
+    private func refreshConfigPath() {
+        configPath = (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+    }
+
     private func reloadFromConfig() {
-        liveMonitors = loadMonitors()
+        refreshLiveMonitors()
+        refreshConfigPath()
         switch configBaseText() {
             case .success(let text): adopt(text, config)
             // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.
@@ -322,7 +358,7 @@ final class ConfigurationViewModel: ObservableObject {
         loadedRawToml = rawToml
     }
 
-    private func loadMonitors() -> [MonitorRow] {
+    func loadMonitors() -> [MonitorRow] {
         sortedMonitors.enumerated().map { offset, monitor in
             // `fingerprint` is part of the protocol. Downcasting discarded fingerprints from test
             // and alternate monitor implementations and also performed a needless runtime cast per
@@ -652,6 +688,12 @@ final class ConfigurationViewModel: ObservableObject {
         // saved, and calling them saved lost any other rule edit made alongside it.
         if settings.windowRules.contains(where: \.hasNoCommand) { loaded.windowRules = rulesOnDisk }
     }
+}
+
+/// The Raw TOML buffer, apart from the view model that every pane observes.
+@MainActor
+final class RawTomlBuffer: ObservableObject {
+    @Published var text = ""
 }
 
 // MARK: - The snapshot

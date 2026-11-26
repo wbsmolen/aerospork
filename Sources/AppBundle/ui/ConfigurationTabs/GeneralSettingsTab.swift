@@ -4,18 +4,12 @@ import SwiftUI
 struct GeneralSettingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
 
-    private var configPath: String {
-        (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
-    }
-
     var body: some View {
         Form {
             Section {
                 Toggle("Start AeroSpork at login", isOn: viewModel.binding(\.settings.general.startAtLogin))
                 Toggle("Automatically unhide macOS hidden apps", isOn: viewModel.binding(\.settings.general.automaticallyUnhideMacosHiddenApps))
-                    .help("Undo ⌘H automatically, so hidden windows keep tiling")
                 Toggle("Move workspaces to assigned monitors on connect", isOn: viewModel.binding(\.settings.general.autoMoveWorkspacesOnMonitorConnect))
-                    .help("Plug in a dock and your pinned workspaces go back to the monitors you assigned them. Off, they stay wherever they landed when the monitor went away.")
             } header: {
                 SectionLabel("Startup & behaviour", "power")
             } footer: {
@@ -95,13 +89,13 @@ struct GeneralSettingsTab: View {
                 }
                 LabeledContent("Config file") {
                     HStack(spacing: 6) {
-                        Text(configPath)
+                        Text(viewModel.configPath)
                             .font(.system(.callout, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .truncationMode(.head)
                             .lineLimit(1)
                             .textSelection(.enabled)
-                        CopyButton(value: configPath, help: "Copy path")
+                        CopyButton(value: viewModel.configPath, help: "Copy path")
                     }
                 }
             } header: {
