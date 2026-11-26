@@ -156,7 +156,7 @@ public final class UnixSocketConnection: @unchecked Sendable {
 }
 
 /// A listening AF_UNIX stream socket.
-public final class UnixSocketListener: @unchecked Sendable {
+public final class UnixSocketListener: Sendable {
     private let fd: Int32
     private init(fd: Int32) { self.fd = fd }
 
