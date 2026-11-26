@@ -46,7 +46,7 @@ final class UnixSocketTest: XCTestCase {
     func testAcceptsHeaderAtTheLimit() throws {
         let (peerFd, conn) = socketPair()
         defer { Darwin.close(peerFd); conn.close() }
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200))
         writeRawHeader(peerFd, UnixSocketConnection.maxFrameSize)
         // Legal header, so we wait for the (never sent) payload and time out rather than throw.
         assertNil(try conn.recvMessage())
@@ -55,7 +55,7 @@ final class UnixSocketTest: XCTestCase {
     func testReadTimeoutEndsASilentConnection() throws {
         let (peerFd, conn) = socketPair()
         defer { Darwin.close(peerFd); conn.close() }
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200))
         let start = Date()
         assertNil(try conn.recvMessage()) // client connected and never spoke
         assertTrue(Date().timeIntervalSince(start) < 10)
@@ -75,7 +75,7 @@ final class UnixSocketTest: XCTestCase {
         let (peerFd, conn) = socketPair()
         defer { conn.close() }
         _ = UnixSocketConnection(fd: peerFd) // SO_NOSIGPIPE: the last drip lands after we hang up
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200)) // twice the drip interval, so a per-read deadline would never fire
         writeRawHeader(peerFd, 40)
         Thread.detachNewThread {
             var byte: UInt8 = 0
@@ -90,7 +90,7 @@ final class UnixSocketTest: XCTestCase {
     func testSendGivesUpOnAClientThatNeverReads() {
         let (peerFd, conn) = socketPair()
         defer { Darwin.close(peerFd); conn.close() }
-        conn.setFrameTimeout(seconds: 1)
+        conn.setFrameTimeout(.milliseconds(200))
         let gaveUp = expectation(description: "sendMessage returned false")
         Thread.detachNewThread {
             if !conn.sendMessage(Data(count: 4 << 20)) { gaveUp.fulfill() }
