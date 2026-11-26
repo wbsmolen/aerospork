@@ -11,6 +11,7 @@ final class StickyWindowTest: XCTestCase {
 
     override func tearDown() async throws {
         stickyWindowIds = []
+        stickyPlaces = [:]
         testMonitors = [defaultTestMonitor]
         WorkspaceMemory.resetForTests()
     }
@@ -62,6 +63,54 @@ final class StickyWindowTest: XCTestCase {
         refreshModel()
 
         XCTAssertTrue(sticky.parent === left.activeWorkspace, "the sticky window stayed behind on a workspace no monitor shows")
+    }
+
+    /// The workspace goes to the other monitor and stays visible. The window stays on its monitor: left in the
+    /// workspace, the next layout carried it across by proportion.
+    func testStaysOnItsMonitorWhenItsWorkspaceMovesToAnother() async throws {
+        let (left, right) = twoPanels()
+        let typingIn = TestWindow.new(id: 1, parent: Workspace.get(byName: "L").rootTilingContainer)
+        XCTAssertTrue(typingIn.focusWindow())
+        let sticky = TestWindow.new(id: 2, parent: Workspace.get(byName: "L"))
+        sticky.isSticky = true
+        refreshModel() // a pass sees where it is
+
+        assertEquals(try await run("move-workspace-to-monitor right").exitCode, 0)
+
+        XCTAssertTrue(right.activeWorkspace === Workspace.get(byName: "L"), "the test needs the workspace to have moved")
+        XCTAssertTrue(sticky.parent === left.activeWorkspace, "the sticky window went to the other monitor with its workspace")
+        assertEquals(focus.windowOrNil?.windowId, typingIn.windowId, additionalMsg: "the sticky window moved focus")
+    }
+
+    /// `summon-workspace` from the other monitor: the two workspaces trade monitors, and the window stays.
+    func testStaysOnItsMonitorWhenItsWorkspaceIsSummoned() async throws {
+        let (left, right) = twoPanels()
+        let typingIn = TestWindow.new(id: 1, parent: Workspace.get(byName: "R").rootTilingContainer)
+        XCTAssertTrue(typingIn.focusWindow())
+        let sticky = TestWindow.new(id: 2, parent: Workspace.get(byName: "L"))
+        sticky.isSticky = true
+        refreshModel()
+
+        assertEquals(try await run("summon-workspace L").exitCode, 0)
+
+        XCTAssertTrue(right.activeWorkspace === Workspace.get(byName: "L"), "the test needs the workspace to have come over")
+        XCTAssertTrue(sticky.parent === left.activeWorkspace, "the sticky window went to the other monitor with its workspace")
+        XCTAssertTrue(left.activeWorkspace === Workspace.get(byName: "R"))
+        assertEquals(focus.workspace.name, "L", additionalMsg: "the sticky window moved focus")
+        assertEquals(Workspace.get(byName: "R").mostRecentWindowRecursive?.windowId, typingIn.windowId, additionalMsg: "the sticky window took the workspace's focus fallback")
+    }
+
+    /// Something else moved the window to the other monitor's workspace (a drag rebinds it). It stays there.
+    func testAWindowMovedToTheOtherMonitorStaysThere() {
+        let (_, right) = twoPanels()
+        let sticky = TestWindow.new(id: 1, parent: Workspace.get(byName: "L"))
+        sticky.isSticky = true
+        refreshModel()
+
+        sticky.bindAsFloatingWindow(to: Workspace.get(byName: "R"))
+        refreshModel()
+
+        XCTAssertTrue(sticky.parent === right.activeWorkspace, "the sticky window was sent back to the monitor it was dragged off")
     }
 
     func testSurvivesAWorkspaceMemoryRoundTrip() throws {
@@ -176,6 +225,17 @@ final class StickyWindowTest: XCTestCase {
         try Data(#"{"session":"s","windows":{"42":\#(entry)},"workspaceMonitors":{}}"#.utf8).write(to: WorkspaceMemory.fileUrl)
         WorkspaceMemory.load()
         try? FileManager.default.removeItem(at: WorkspaceMemory.fileUrl)
+    }
+
+    /// L shows on the left panel, R on the right.
+    private func twoPanels() -> (left: MonitorImpl, right: MonitorImpl) {
+        let left = panel(id: 1, x: 0)
+        let right = panel(id: 2, x: 1920)
+        testMonitors = [left, right]
+        rearrangeWorkspacesOnMonitors()
+        XCTAssertTrue(left.setActiveWorkspace(Workspace.get(byName: "L")))
+        XCTAssertTrue(right.setActiveWorkspace(Workspace.get(byName: "R")))
+        return (left, right)
     }
 
     private func panel(id: Int, x: CGFloat) -> MonitorImpl {

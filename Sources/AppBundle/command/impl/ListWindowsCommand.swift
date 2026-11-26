@@ -71,16 +71,8 @@ struct ListWindowsCommand: Command {
     }
 }
 
-/// Every title at once, one task per window: each read is a round trip to the app's thread, and status
-/// bars poll this command. Same fan-out as `prefetchNativeStates`.
+/// The apps at once: each read is a round trip to the app's thread, and status bars poll this command.
 @MainActor
 private func fetchTitles(_ windows: [Window]) async throws -> [UInt32: String] {
-    try await withThrowingTaskGroup(of: (UInt32, String).self) { group in
-        for window in windows {
-            group.addTask { @Sendable @MainActor in (window.windowId, try await window.title) }
-        }
-        var result: [UInt32: String] = [:]
-        for try await (id, title) in group { result[id] = title }
-        return result
-    }
+    try await readEachAppInOrder(windows) { try await $0.title }
 }

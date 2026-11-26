@@ -22,8 +22,9 @@ struct RefreshRequest {
 /// An event never cancels a running refresh. It used to, and a 3-20 Hz stream could then kill every
 /// refresh before it finished -- measured with a 400ms refresh under a 10ms stream, 12 started and none
 /// completed -- and only the last event's flags survived. A session still cancels a running refresh, on
-/// purpose: a hotkey must not wait for one. No refresh starts while a session is running or queued; the
-/// session requests one at its end.
+/// purpose: a hotkey must not wait for one. No refresh starts while a session is queued, or while one is
+/// running and has held `sessionGate` for less than `abandonAfter`; the session requests one at its end. A session
+/// past that is dropped, so a refresh can then run alongside a body that is still running.
 @MainActor
 final class RefreshScheduler {
     private let delay: Duration
