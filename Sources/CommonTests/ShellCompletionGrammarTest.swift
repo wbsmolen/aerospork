@@ -10,16 +10,10 @@ import XCTest
 /// and two flags (`--show-secrets`, `--workspace` on `move-workspace-to-monitor`) went missing.
 final class ShellCompletionGrammarTest: XCTestCase {
     private func grammar() throws -> String {
-        var url = URL(filePath: #filePath)
-        while !FileManager.default.fileExists(atPath: url.appending(component: ".git").path) {
-            let parent = url.deletingLastPathComponent()
-            // `deleteLastPathComponent()` does not stop at "/" -- it starts appending "..".
-            guard parent.pathComponents.count < url.pathComponents.count else {
-                XCTFail("no .git ancestor above \(#filePath)"); return ""
-            }
-            url = parent
-        }
-        return try String(contentsOf: url.appending(path: "grammar/commands-bnf-grammar.txt"), encoding: .utf8)
+        // Two levels above `Sources/CommonTests/`, not a `.git` walk, so a tree with no `.git` works too.
+        let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(component: "Package.swift").path), root.path)
+        return try String(contentsOf: root.appending(path: "grammar/commands-bnf-grammar.txt"), encoding: .utf8)
     }
 
     func testEveryCommandIsCompletable() throws {

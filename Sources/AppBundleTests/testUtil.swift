@@ -3,12 +3,12 @@ import Common
 import Foundation
 import XCTest
 
+/// Three levels above `Sources/AppBundleTests/testUtil.swift`. A walk up to `.git` never ended outside a
+/// checkout (a source tarball), because `deleteLastPathComponent()` does not stop at "/".
 let projectRoot: URL = {
-    var url = URL(filePath: #filePath).absoluteURL
-    check(FileManager.default.fileExists(atPath: url.path))
-    while !FileManager.default.fileExists(atPath: url.appending(component: ".git").path) {
-        url.deleteLastPathComponent()
-    }
+    let url = URL(filePath: #filePath).absoluteURL
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    check(FileManager.default.fileExists(atPath: url.appending(component: "Package.swift").path))
     return url
 }()
 

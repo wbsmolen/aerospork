@@ -30,6 +30,11 @@ final class CleanupConfigTest: XCTestCase {
         assertTrue(FileManager.default.fileExists(atPath: root!.appending(component: ".git").path))
     }
 
+    /// The tests' own root comes from `#filePath`, not a `.git` walk, so a tree with no `.git` runs too.
+    func testProjectRootIsThePackageRoot() {
+        assertTrue(FileManager.default.fileExists(atPath: projectRoot.appending(component: "Package.swift").path))
+    }
+
     // MARK: - Branding: `during-aerospork-startup`
 
     private func startupMatcher(_ key: String) -> (Bool?, warnings: [String], errors: [String]) {
