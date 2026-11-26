@@ -7,7 +7,8 @@ import Common
 private let clientFrameTimeoutSec = 30
 
 func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock") {
-    DispatchQueue.global().async {
+    // A thread of its own: the loop never returns, so on `DispatchQueue.global()` it held a pool worker forever.
+    Thread.detachNewThread {
         guard let listener = UnixSocketListener.bind(to: socketFile) else {
             // Not `die`. /tmp is world-writable and sticky, so another account can create this path
             // before us, and then we can neither remove it nor bind it. Dying here would let it stop
@@ -16,11 +17,42 @@ func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUs
             return
         }
         AppLog.server.notice("CLI socket listening on \(socketFile, privacy: .public)")
-        while true {
-            guard let connection = listener.accept() else { continue }
+        acceptConnections({ listener.accept() }) { connection in
             connection.setFrameTimeout(seconds: clientFrameTimeoutSec)
             Task { await newConnection(connection) }
         }
+    }
+}
+
+/// How long the accept loop pauses after `consecutiveFailures` accepts in a row came back empty. nil
+/// means retry at once.
+///
+/// One empty accept is ordinary: a signal (EINTR), or one client run by another user. A streak means
+/// accept keeps failing, usually because the process is out of file descriptors (EMFILE), which no
+/// retry fixes until a connection closes. Without the pause that streak spins a core inside the
+/// window manager. It also slows a flood of connects from another user, which is no loss.
+func acceptBackoff(consecutiveFailures: Int) -> Duration? {
+    consecutiveFailures <= 1 ? nil : .milliseconds(100)
+}
+
+/// The accept loop, with the accept call passed in so a test can hand it one that always fails. It
+/// returns only when its thread is cancelled, which only a test does.
+func acceptConnections(_ accept: () -> UnixSocketConnection?, handle: (UnixSocketConnection) -> Void) {
+    var failures = 0
+    while !Thread.current.isCancelled {
+        guard let connection = accept() else {
+            failures += 1
+            // Once per streak, not per failure: `AppLog` is always on.
+            if failures == 10 {
+                AppLog.server.error("CLI socket: accept failed 10 times in a row (out of file descriptors, or rejected peers); backing off")
+            }
+            if let pause = acceptBackoff(consecutiveFailures: failures) {
+                Thread.sleep(forTimeInterval: Double(pause.components.seconds) + Double(pause.components.attoseconds) / 1e18)
+            }
+            continue
+        }
+        failures = 0
+        handle(connection)
     }
 }
 

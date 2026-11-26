@@ -2,6 +2,7 @@
 import Common
 import Darwin
 import Foundation
+import os
 import XCTest
 
 /// A connected socket pair: the raw fd stands in for a hostile client that writes bytes by hand,
@@ -119,6 +120,30 @@ final class UnixSocketTest: XCTestCase {
         defer { second.close() }
         let accepted = try XCTUnwrap(listener.accept())
         accepted.close()
+    }
+
+    func testAcceptBackoffRetriesOnceAtOnceThenPauses() {
+        assertNil(acceptBackoff(consecutiveFailures: 1)) // EINTR, or one peer run by another user
+        assertEquals(acceptBackoff(consecutiveFailures: 2), .milliseconds(100))
+        assertEquals(acceptBackoff(consecutiveFailures: 1000), .milliseconds(100))
+    }
+
+    /// An accept that always fails stands in for EMFILE. Without the backoff the loop calls it
+    /// millions of times in the window.
+    func testAcceptLoopDoesNotSpinWhenAcceptKeepsFailing() {
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let exited = DispatchSemaphore(value: 0)
+        let loop = Thread {
+            acceptConnections({ calls.withLock { $0 += 1 }; return nil }) { _ in XCTFail("nothing was accepted") }
+            exited.signal()
+        }
+        loop.start()
+        usleep(300_000)
+        let callsIn300ms = calls.withLock { $0 }
+        loop.cancel()
+        assertEquals(exited.wait(timeout: .now() + 2), .success)
+        XCTAssertGreaterThanOrEqual(callsIn300ms, 2, "the first failure retries at once")
+        XCTAssertLessThanOrEqual(callsIn300ms, 10, "accept calls in 300 ms")
     }
 
     private func assertThrowsFrameTooLarge(_ body: () throws -> Data?, file: StaticString = #filePath, line: UInt = #line) {
