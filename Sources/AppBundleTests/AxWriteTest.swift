@@ -57,6 +57,15 @@ final class FakeAxElement: AxUiElementMock {
         }
     }
 
+    /// The batch, recorded as ONE read under its own key. Implemented here rather than inherited, so a
+    /// `getFrame` that is no longer a protocol requirement shows up as two single reads instead.
+    func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
+        reads.append(FakeAxElement.frameRead)
+        return (attrs[Ax.topLeftCornerAttr.key].flatMap(Ax.topLeftCornerAttr.getter), attrs[Ax.sizeAttr.key].flatMap(Ax.sizeAttr.getter))
+    }
+
+    static let frameRead = "getFrame"
+
     func containingWindowId() -> CGWindowID? { 1 }
 
     func resetCounters() {
@@ -131,24 +140,24 @@ final class AxWriteTest: XCTestCase {
         assertEquals(unreadable.writes, [kAXSizeAttribute, kAXPositionAttribute, kAXSizeAttribute])
     }
 
-    /// The guard must stop at the first attribute that already disagrees.
+    /// Both values in one batched read, through the element's OWN `getFrame`.
     ///
-    /// Both reads used to be evaluated and then `&&`ed, so a window that needed moving -- i.e. every
-    /// window on the workspace you just switched to -- paid a second cross-thread AX round trip
-    /// whose answer could not change the outcome. Counted, not timed.
-    func testGuardStopsReadingAtFirstDisagreement() {
-        let wrongSize = window(size: CGSize(width: 10, height: 10))
-        assertFalse(isFrameSatisfied(wrongSize, targetTopLeft, targetSize))
-        assertEquals(wrongSize.reads, [kAXSizeAttribute])
-
-        // ...and when the size does match, the position still has to be checked.
-        let wrongPosition = window(topLeft: .zero)
-        assertFalse(isFrameSatisfied(wrongPosition, targetTopLeft, targetSize))
-        assertEquals(wrongPosition.reads, [kAXSizeAttribute, kAXPositionAttribute])
+    /// `getFrame` must stay a protocol requirement. As an extension-only method, the generic
+    /// `isFrameSatisfied`/`parkAxWindow` would dispatch statically to the two-read default, and production's
+    /// `AXUIElement` batch would never run. This fake implements the batch itself, so that regression reads as
+    /// two single reads here. Counted, not timed.
+    func testGuardReadsTheFrameOnceThroughTheElementsOwnBatch() {
+        for win in [window(), window(size: CGSize(width: 10, height: 10)), window(topLeft: .zero)] {
+            _ = isFrameSatisfied(win, targetTopLeft, targetSize)
+            assertEquals(win.reads, [FakeAxElement.frameRead])
+        }
+        let parked = window()
+        parkAxWindow(parked, app: FakeAxElement()) { _ in targetTopLeft }
+        assertEquals(parked.reads, [FakeAxElement.frameRead])
     }
 
-    /// `hideInCorner` passes a position and no size, for every window of every invisible workspace
-    /// on every refresh. Reading the size there would be pure waste.
+    /// A one-sided guard reads only its side: `setAxTopLeftCorner` asks about the position alone, and
+    /// reading the size there would be pure waste.
     func testGuardOnlyReadsWhatItWasAsked() {
         let posOnly = window()
         _ = isFrameSatisfied(posOnly, targetTopLeft, nil)
@@ -157,6 +166,24 @@ final class AxWriteTest: XCTestCase {
         let sizeOnly = window()
         _ = isFrameSatisfied(sizeOnly, nil, targetSize)
         assertEquals(sizeOnly.reads, [kAXSizeAttribute])
+    }
+
+    /// Parking: the spot comes from the size read in the same batch, a window already there costs no write, and
+    /// a window whose size cannot be read is left alone.
+    func testParkingWritesThePositionOnlyWhenTheWindowIsNotThere() {
+        let spot = { (size: CGSize) in CGPoint(x: -size.width, y: 900) }
+        let there = window(topLeft: spot(targetSize))
+        parkAxWindow(there, app: FakeAxElement(), at: spot)
+        assertEquals(there.writes, [])
+
+        let elsewhere = window()
+        parkAxWindow(elsewhere, app: FakeAxElement(), at: spot)
+        assertEquals(elsewhere.writes, [kAXPositionAttribute])
+        assertEquals(elsewhere.get(Ax.topLeftCornerAttr), spot(targetSize))
+
+        let unreadable = FakeAxElement()
+        parkAxWindow(unreadable, app: FakeAxElement(), at: spot)
+        assertEquals(unreadable.writes, [])
     }
 
     // MARK: write ordering

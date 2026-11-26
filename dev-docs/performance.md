@@ -233,12 +233,21 @@ many alternating trials from a warm process, or Instruments.
 - **`util/RefreshScheduler.swift`.** A session still discards in-flight refresh work when it starts,
   on purpose. Events no longer do, so the reason the max-wait ceiling above could not be re-added is
   gone. Add it only with a measurement showing starvation actually happens.
-- **Batching AX attribute reads.** `AXUIElementCopyMultipleAttributeValues` is the right primitive
-  and is not used. A previous attempt (`AxBatchFetcher`) was deleted rather than wired in: it was
-  broken (`as? CGPoint` on an `AXValue` is always nil) and its `.stopOnError` mode would have been a
-  pessimization: one absent attribute such as `AXFullScreen` falls back to eight individual reads,
-  slower than not batching at all. `normalizeLayoutReason` now takes one round trip per window
-  rather than two, which captured most of the available win without the batching API.
+- **Batching AX attribute reads.** `AXUIElementCopyMultipleAttributeValues` is the right primitive.
+  A previous attempt (`AxBatchFetcher`) was deleted rather than wired in: it was broken (`as? CGPoint`
+  on an `AXValue` is always nil) and its `.stopOnError` mode would have been a pessimization: one
+  absent attribute such as `AXFullScreen` falls back to eight individual reads, slower than not
+  batching at all. `normalizeLayoutReason` now takes one round trip per window rather than two,
+  which captured most of the available win without the batching API.
+
+  It is now used for position plus size only: `AxUiElementMock.getFrame()` with options `[]`, never
+  `.stopOnError`, behind the two-sided `isFrameSatisfied`, the parking guard (`parkAxWindow`) and
+  `axRect`. A probe measured one batched read at the cost of one single read (41-131 µs against
+  35-135 µs). A failed slot decodes to nil through the existing getters. `getFrame` must stay a
+  protocol requirement, or the generic guards dispatch statically to the two-read default
+  (`AxWriteTest.testGuardReadsTheFrameOnceThroughTheElementsOwnBatch`). The batch is signposted as
+  `get(_:)`, so to measure it, count `get(_:)` intervals per workspace switch before and after: a
+  parked window should go from two to one per layout. **Not measured end to end.**
 - **Regression coverage is structural, not timing-based.** `PerfInvariantsTest` pins the algorithmic
   properties (workspace GC, the tray publish guard, `aliveWindowIds` being a `Set`, the `debugLog`
   autoclosure) and `AxWriteTest` counts AX operations through the mock. Neither measures wall clock,

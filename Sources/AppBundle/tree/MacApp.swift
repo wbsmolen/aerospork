@@ -345,14 +345,7 @@ final class MacApp: AbstractApp {
     func hideAxWindow(_ windowId: UInt32, at spot: @escaping @Sendable (CGSize) -> CGPoint) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
-            guard let size = window.get(Ax.sizeAttr) else { return }
-            let point = spot(size)
-            // This runs for every window of every invisible workspace on every refresh; without the
-            // guard that was an unconditional AX position write per hidden window, forever.
-            if isFrameSatisfied(window, point, nil) { return }
-            disableAnimations(app: axApp.threadGuarded) {
-                _ = window.set(Ax.topLeftCornerAttr, point)
-            }
+            parkAxWindow(window, app: axApp.threadGuarded, at: spot)
         }
     }
 
@@ -683,7 +676,8 @@ private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?) -> [Window
 }
 
 private func axRect(_ window: AXUIElement) -> Rect? {
-    guard let topLeftCorner = window.get(Ax.topLeftCornerAttr), let size = window.get(Ax.sizeAttr) else { return nil }
+    let frame = window.getFrame()
+    guard let topLeftCorner = frame.topLeft, let size = frame.size else { return nil }
     return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
 }
 
@@ -789,22 +783,41 @@ extension [UInt32: AxWindow] {
 /// an app that ignores, clamps or times out its writes. Every caller passes a concrete
 /// `AXUIElement`, so the generic specializes to exactly the previous code.
 func isFrameSatisfied(_ window: some AxUiElementMock, _ topLeft: CGPoint?, _ size: CGSize?) -> Bool {
-    let tolerance = 1.0
-    // Bail on the first disagreement. Each `get` is a cross-thread AX round trip, and the two used
-    // to be evaluated unconditionally before being `&&`ed -- so every window that actually needed
-    // moving (i.e. every window on the workspace you just switched to) paid a position read whose
-    // answer could not change the outcome. See AxWriteTest.testGuardStopsReadingAtFirstDisagreement.
-    if let size {
-        guard let actual = window.get(Ax.sizeAttr),
-              abs(actual.width - size.width) < tolerance, abs(actual.height - size.height) < tolerance
-        else { return false }
+    // Each read is a cross-thread AX round trip. Both values come in one batched read, which costs what one
+    // single read does; a one-sided guard reads only the value it was asked about. See AxWriteTest.
+    switch (topLeft, size) {
+        case (nil, nil): return true
+        case (let topLeft?, nil): return isAt(window.get(Ax.topLeftCornerAttr), topLeft)
+        case (nil, let size?): return isSized(window.get(Ax.sizeAttr), size)
+        case (let topLeft?, let size?):
+            let actual = window.getFrame()
+            return isSized(actual.size, size) && isAt(actual.topLeft, topLeft)
     }
-    if let topLeft {
-        guard let actual = window.get(Ax.topLeftCornerAttr),
-              abs(actual.x - topLeft.x) < tolerance, abs(actual.y - topLeft.y) < tolerance
-        else { return false }
+}
+
+/// AX rounds, so within a point is at the target. Unreadable is never satisfied: "unknown" means "write it".
+private func isAt(_ actual: CGPoint?, _ target: CGPoint) -> Bool {
+    guard let actual else { return false }
+    return abs(actual.x - target.x) < 1 && abs(actual.y - target.y) < 1
+}
+
+private func isSized(_ actual: CGSize?, _ target: CGSize) -> Bool {
+    guard let actual else { return false }
+    return abs(actual.width - target.width) < 1 && abs(actual.height - target.height) < 1
+}
+
+/// The `hideAxWindow` body, generic so the tests can drive it. The spot depends on the size, and both come
+/// from one batched read.
+func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at spot: (CGSize) -> CGPoint) {
+    let actual = window.getFrame()
+    guard let size = actual.size else { return }
+    let point = spot(size)
+    // This runs for every window of every invisible workspace on every refresh; without the
+    // guard that was an unconditional AX position write per hidden window, forever.
+    if isAt(actual.topLeft, point) { return }
+    disableAnimations(app: app) {
+        _ = window.set(Ax.topLeftCornerAttr, point)
     }
-    return true
 }
 
 /// The AX writes that hand focus to a window. Extracted from `MacApp.nativeFocus` so the sequence is
