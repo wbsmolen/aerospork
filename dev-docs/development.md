@@ -54,7 +54,7 @@ Some scripts need tools that `install-dep.sh` does not install:
 | Rust (`cargo`), bash, fish | `build-shell-completion.sh` | [rustup](https://www.rust-lang.org/tools/install), then `brew install bash fish` |
 | xcbeautify (optional) | `build-release.sh`, for a readable Xcode log | `brew install xcbeautify` |
 | swiftly (optional) | `script/setup.sh`, only when `AEROSPORK_SWIFT=swiftly` | `brew install swiftly` |
-| `gh`, `swa`, `az`, `node` | `script/publish-release.sh` | Homebrew or npm |
+| `gh`, `gcloud`, `python3` | `script/publish-release.sh`, and `script/deploy-site.sh` (`gcloud`, `python3`) | `brew install gh`, `brew install --cask gcloud-cli`, then `gcloud auth login`. `python3` comes with Xcode |
 
 `script/setup.sh` replaces `PATH` with `.deps/bin:/bin:/usr/bin` so that a build cannot use whatever
 else is installed. It links each tool in this table into `.deps/bin` when it finds the tool.
@@ -219,7 +219,7 @@ syspolicy_check distribution .release/AeroSpork.app
 
 `script/publish-release.sh` builds, tags and publishes a release, signs the appcast, deploys the site
 and updates the Homebrew tap. It needs a Developer ID certificate, a notary profile, and the `gh`,
-`swa`, `az` and `node` tools.
+`gcloud` and `python3` tools.
 
 1. Write the release notes under `## Unreleased` in `CHANGELOG.md`, then rename that heading to
    `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. Put
