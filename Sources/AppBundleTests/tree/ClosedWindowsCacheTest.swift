@@ -41,6 +41,24 @@ final class ClosedWindowsCacheTest: XCTestCase {
         XCTAssertFalse(restoreWouldFind(4444))
     }
 
+    /// A snapshot leaves the tree as it found it: it used to create an empty fullscreen and an empty
+    /// hidden-apps container in every workspace it walked.
+    func testTakingASnapshotCreatesNoContainer() {
+        let workspace = Workspace.get(byName: "cache-test-4")
+        let window = TestWindow.new(id: 4545, parent: workspace.rootTilingContainer)
+        let before = workspace.children.count
+        cacheClosedWindowIfNeeded(window: window)
+        assertEquals(workspace.children.count, before)
+    }
+
+    /// A window macOS holds in an existing hidden-apps or fullscreen container is still captured.
+    func testWindowsInExistingUnconventionalContainersAreCaptured() {
+        let workspace = Workspace.get(byName: "cache-test-5")
+        TestWindow.new(id: 4646, parent: workspace.macOsNativeHiddenAppsWindowsContainer)
+        TestWindow.new(id: 4747, parent: workspace.macOsNativeFullscreenWindowsContainer)
+        assertEquals(FrozenWorkspace(workspace).macosUnconventionalWindows.map(\.id), [4646, 4747])
+    }
+
     /// Asks the cache the same question `restoreClosedWindowsCacheIfNeeded` asks, without needing a
     /// real AX window to restore onto.
     private func restoreWouldFind(_ id: UInt32) -> Bool {

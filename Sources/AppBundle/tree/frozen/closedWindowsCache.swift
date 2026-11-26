@@ -31,10 +31,16 @@ struct FrozenWorkspace: Sendable {
         monitor = FrozenMonitor(workspace.workspaceMonitor)
         rootTilingNode = FrozenContainer(workspace.rootTilingContainer)
         floatingWindows = workspace.floatingWindows.map(FrozenWindow.init)
+        // Found among the children, not through the `macOsNative...WindowsContainer` getters: those create and
+        // bind the container when there is none, and a snapshot must not change the tree it takes.
         macosUnconventionalWindows =
-            workspace.macOsNativeHiddenAppsWindowsContainer.children.map { FrozenWindow($0 as! Window) } +
-            workspace.macOsNativeFullscreenWindowsContainer.children.map { FrozenWindow($0 as! Window) }
+            unconventionalWindows(in: MacosHiddenAppsWindowsContainer.self, of: workspace) +
+            unconventionalWindows(in: MacosFullscreenWindowsContainer.self, of: workspace)
     }
+}
+
+@MainActor private func unconventionalWindows(in kind: (some TreeNode).Type, of workspace: Workspace) -> [FrozenWindow] {
+    (workspace.children.filterIsInstance(of: kind).first?.children ?? []).filterIsInstance(of: Window.self).map(FrozenWindow.init)
 }
 
 @MainActor func cacheClosedWindowIfNeeded(window: Window) {
