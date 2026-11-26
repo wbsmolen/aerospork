@@ -185,65 +185,9 @@ cp updates-site/appcast.xml "$appcast_workdir/appcast.xml"
 # Release notes, so the update dialog is not blank -- without them Sparkle shows an empty pane while
 # perfectly good notes sit on the GitHub release doing nothing.
 #
-# HTML, not Markdown. `generate_appcast` picks up a file named after the archive, but a `.md` beside
-# it is silently ignored: only `.html` (without DOCTYPE or body tags) is embedded as CDATA. Tested
-# both -- the Markdown run produced an item with no <description> at all and said nothing about it.
+# HTML, not Markdown: see the comment at the top of the converter.
 notes_html="$appcast_workdir/AeroSpork-$build_version.html"
-python3 - "$notes_file" > "$notes_html" <<'PYEOF'
-import html, re, sys
-
-# Deliberately not a Markdown library: these notes use headings, bullets, links, inline code and
-# fenced blocks, and pulling in a dependency to render five constructs for a dialog nobody reads
-# twice is not worth it.
-lines = open(sys.argv[1]).read().split("\n")
-out, in_list, in_code = [], False, False
-para: list[str] = []
-
-def flush():
-    if para:
-        out.append(f"<p>{inline(' '.join(para))}</p>")
-        para.clear()
-
-def inline(text: str) -> str:
-    text = html.escape(text)
-    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
-    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", text)
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
-    return text
-
-for line in lines:
-    if line.startswith("```"):
-        flush()
-        if in_list: out.append("</ul>"); in_list = False
-        out.append("</pre>" if in_code else "<pre>")
-        in_code = not in_code
-        continue
-    if in_code:
-        out.append(html.escape(line))
-        continue
-    stripped = line.strip()
-    if stripped.startswith("- "):
-        flush()
-        if not in_list: out.append("<ul>"); in_list = True
-        out.append(f"<li>{inline(stripped[2:])}</li>")
-        continue
-    if in_list: out.append("</ul>"); in_list = False
-    if stripped.startswith("#"):
-        flush()
-        level = min(len(stripped) - len(stripped.lstrip("#")), 6)
-        out.append(f"<h{level}>{inline(stripped.lstrip('#').strip())}</h{level}>")
-    elif stripped:
-        # Accumulated, not emitted per line: these notes are hard-wrapped, and one <p> per source
-        # line renders as a column of one-sentence fragments.
-        para.append(stripped)
-    else:
-        flush()
-flush()
-if in_list: out.append("</ul>")
-if in_code: out.append("</pre>")
-print("\n".join(out))
-PYEOF
+python3 script/release-notes-html.py "$notes_file" > "$notes_html"
 # Sparkle's update dialog shows the notes of the newest item only, so someone who skipped versions
 # would never see the upgrade notes in between. Point them at the whole history.
 echo "<p><a href=\"$changelog_url\">Changes in earlier versions</a></p>" >> "$notes_html"

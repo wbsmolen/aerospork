@@ -28,6 +28,9 @@ swift test --skip-build
 
 command -v shellcheck > /dev/null || { echo "!!! Install shellcheck first: brew install shellcheck"; exit 1; }
 shellcheck -S warning ./*.sh script/*.sh
+# A cache prefix under .build, so the check leaves no __pycache__ in script/ to fail the tree check.
+PYTHONPYCACHEPREFIX=.build/pycache python3 -m py_compile script/*.py
+python3 script/release-notes-html.py --self-check
 
 ./generate.sh --all
 if test "$status_before" != "$(git status --porcelain)"; then

@@ -91,8 +91,9 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 1. `build-debug.sh`.
 2. `swift test --skip-build`, which runs `AppBundleTests` and `CommonTests` from the build of step 1.
 3. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
-4. `swiftformat --lint`, `swiftlint lint` and `shellcheck -S warning ./*.sh script/*.sh`. None of
-   them rewrites a file.
+4. `swiftformat --lint`, `swiftlint lint`, `shellcheck -S warning ./*.sh script/*.sh`,
+   `py_compile` of `script/*.py`, and the self-check of `script/release-notes-html.py`. None of them
+   rewrites a file.
 5. `generate.sh --all`. The script records `git status` before step 1 and compares it after step 5.
    If the run changed the tree, the generated files are out of date and the script fails. Local
    work and untracked files do not fail it.
@@ -222,10 +223,9 @@ and updates the Homebrew tap. It needs a Developer ID certificate, a notary prof
 `gcloud` and `python3` tools.
 
 1. Write the release notes under `## Unreleased` in `CHANGELOG.md`, then rename that heading to
-   `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. Put
-   each bullet on one line.
-   The script converts the notes to HTML for the update dialog, and its converter turns the second
-   line of a wrapped bullet into a separate paragraph.
+   `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. It
+   converts the notes to HTML for the update dialog with `script/release-notes-html.py`. To wrap a
+   bullet, indent its next lines.
 2. Merge the changelog to `main`, and switch to a clean, up-to-date `main`. Before it builds, the
    script refuses a tree with uncommitted or untracked files, a HEAD that is not `origin/main`, an
    `updates-site/appcast.xml` that differs from the live feed (the previous release's appcast PR has
