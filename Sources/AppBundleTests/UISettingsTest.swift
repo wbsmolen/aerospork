@@ -163,6 +163,46 @@ final class UISettingsTest: XCTestCase {
 
     // MARK: - Raw TOML editor
 
+    /// Supplies the undo manager a window would, so the text view registers real undo steps.
+    @MainActor private final class UndoHost: NSObject, NSTextViewDelegate {
+        let undo: UndoManager = {
+            let undo = UndoManager()
+            undo.groupsByEvent = false // no run loop here to close the groups
+            return undo
+        }()
+
+        func undoManager(for view: NSTextView) -> UndoManager? { undo }
+    }
+
+    /// Revert, Restore, a reload and every structured save replace the buffer. Assigning `string`
+    /// left the typing steps on the stack, recorded against the old text: undo then cut a run out
+    /// of a longer new text, or raised `NSRangeException` on a shorter one.
+    func testRawTomlReplacementIsOneUndoableStep() {
+        let typed = "[gaps]\ninner.horizontal = 8\nouter.left = 4\n"
+        for replacement in ["x = 1\n", typed + "[mode.main.binding]\nalt-h = 'focus left'\nalt-j = 'focus down'\n"] {
+            let host = UndoHost()
+            let textView = NSTextView()
+            textView.allowsUndo = true
+            textView.delegate = host
+            for line in typed.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                host.undo.beginUndoGrouping()
+                textView.insertText((line.offset == 0 ? "" : "\n") + line.element, replacementRange: textView.selectedRange())
+                host.undo.endUndoGrouping()
+            }
+            assertEquals(textView.string, typed)
+
+            host.undo.beginUndoGrouping()
+            CodeEditor.replaceText(in: textView, with: replacement)
+            host.undo.endUndoGrouping()
+            assertEquals(textView.string, replacement)
+
+            host.undo.undo()
+            assertEquals(textView.string, typed)
+            host.undo.redo()
+            assertEquals(textView.string, replacement)
+        }
+    }
+
     func testRawTomlSectionNavigationKeepsDocumentOrder() {
         let headers = RawTomlTab.sections(in: """
             title = '[not-a-header]'

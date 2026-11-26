@@ -334,9 +334,13 @@ struct CodeEditor: NSViewRepresentable {
         context.coordinator.onSelectionChange = onSelectionChange
         guard let textView = scroll.documentView as? NSTextView else { return }
         if textView.string != text {
-            // Only on an external change (Revert / Restore backup): assigning `string` resets the
-            // insertion point, which would fight the user on every keystroke if done unconditionally.
-            textView.string = text
+            // Only on an external change (Revert, Restore, a reload, a structured save): replacing
+            // the text resets the insertion point, which would fight the user on every keystroke if
+            // done unconditionally. The flag keeps `textDidChange` from writing the binding back
+            // in the middle of this view update.
+            context.coordinator.isApplyingExternalText = true
+            Self.replaceText(in: textView, with: text)
+            context.coordinator.isApplyingExternalText = false
             TomlSyntaxHighlighter.apply(to: textView)
             context.coordinator.ruler?.refreshLineStarts()
         }
@@ -348,6 +352,25 @@ struct CodeEditor: NSViewRepresentable {
                 // the selection and first responder synchronously here re-enters AppKit mid-render.
                 Task { @MainActor in Self.select(line: jumpToLine, in: textView) }
             }
+        }
+    }
+
+    /// Replaces the whole buffer as one undoable edit, so ⌘Z brings back what the user typed.
+    /// Assigning `string` registered no undo step and left the typing steps on the window's stack,
+    /// recorded against ranges of the old text: undo then cut a run out of the middle of a longer
+    /// new text, or raised `NSRangeException` on a shorter one. A corrupted buffer that still
+    /// parsed was one Apply away from the file.
+    static func replaceText(in textView: NSTextView, with text: String) {
+        guard let storage = textView.textStorage else { return }
+        let whole = NSRange(location: 0, length: storage.length)
+        textView.breakUndoCoalescing()
+        if textView.shouldChangeText(in: whole, replacementString: text) {
+            storage.replaceCharacters(in: whole, with: text)
+            textView.didChangeText()
+        } else {
+            // Refused, so there is no step to undo into: drop the steps that no longer fit instead.
+            storage.replaceCharacters(in: whole, with: text)
+            textView.undoManager?.removeAllActions(withTarget: storage)
         }
     }
 
@@ -372,6 +395,8 @@ struct CodeEditor: NSViewRepresentable {
         var onSelectionChange: ((Int, Int) -> Void)?
         fileprivate weak var ruler: LineNumberRulerView?
         var lastJumpToLine: Int?
+        /// Set while `updateNSView` replaces the text with the binding's own value.
+        var isApplyingExternalText = false
         private var highlightTask: Task<Void, Never>?
 
         init(text: Binding<String>, onSelectionChange: ((Int, Int) -> Void)?) {
@@ -380,7 +405,7 @@ struct CodeEditor: NSViewRepresentable {
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
+            guard !isApplyingExternalText, let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
             highlightTask?.cancel()
             highlightTask = Task { @MainActor [weak textView, weak self] in
