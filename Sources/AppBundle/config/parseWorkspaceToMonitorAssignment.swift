@@ -111,7 +111,7 @@ private func parseFingerprintPattern(_ table: TOMLTable, _ backtrace: TomlBacktr
                 }
                 displayUUID = string
             default:
-                return .failure(unknownKeyError(keyBacktrace))
+                return .failure(unknownKeyError(keyBacktrace, key, among: ["vendor", "model", "serial", "name", "width", "height", "uuid"]))
         }
     }
 

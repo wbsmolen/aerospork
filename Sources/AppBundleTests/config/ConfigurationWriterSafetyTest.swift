@@ -246,6 +246,21 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         assertEquals(withoutRow, base.replacingOccurrences(of: "1 = \"main\"\n", with: ""))
     }
 
+    /// `[monitors]` wins in the parser, so the edit goes there. Editing the v1 line left the winner
+    /// saying the old monitor, and `refusal` blocked the save.
+    func testEditOfDuplicatePinTargetsTheWinningSpelling() {
+        let base = """
+            [workspace-to-monitor-force-assignment]
+            1 = 'built-in'
+
+            [monitors]
+            1 = 'main'
+            """
+        let (refusal, out) = save(base) { $0.setAssignment(workspace: "1", monitorToken: "secondary") }
+        assertNil(refusal)
+        assertEquals(out, base.replacingOccurrences(of: "1 = 'main'", with: "1 = 'secondary'"))
+    }
+
     func testRenamingAWorkspaceMovesItsPin() {
         let base = "[monitors]\n1 = 'main'\n"
         let (refusal, out) = save(base) { $0.settings.assignments[0].workspace = "web" }

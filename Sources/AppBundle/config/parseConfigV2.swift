@@ -89,10 +89,19 @@ func workspaceKeyNotation(_ name: String) -> String? {
     if let generated = generatedModeV2(rawTable, workspaceNames, mapping, &errors) {
         modes[mainModeId] = generated
     }
-    for (name, mode) in rawTable["keys"].map({ parseKeysTable($0, .rootKey("keys"), &errors, mapping) }) ?? [:] {
+    let keysModes = rawTable["keys"].map { parseKeysTable($0, .rootKey("keys"), &errors, mapping) } ?? [:]
+    for (name, mode) in keysModes {
         modes[name] = merging(modes[name], mode.bindings)
     }
     for (name, mode) in config.modes {
+        // A warning, not an error: the file loads, but one of the two lines does nothing.
+        for (code, binding) in keysModes[name]?.bindings ?? [:] where mode.bindings[code] != nil {
+            let section = name == mainModeId ? TomlBacktrace.rootKey("keys") : .rootKey("keys") + .key(name)
+            errors.append(.deprecation(
+                section + .key(binding.descriptionWithKeyNotation),
+                "Also bound in [mode.\(name).binding], which wins. Keep one.",
+            ))
+        }
         modes[name] = merging(modes[name], mode.bindings)
     }
     // v2 always HAS a main mode -- it is `[keys]`, plus whatever `mod` generated. Requiring the user
@@ -101,8 +110,14 @@ func workspaceKeyNotation(_ name: String) -> String? {
     config.modes = modes
 
     if let raw = rawTable["monitors"] {
-        config.workspaceToMonitorForceAssignment = config.workspaceToMonitorForceAssignment
-            + parseWorkspaceToMonitorAssignment(raw, .rootKey("monitors"), &errors)
+        let monitors = parseWorkspaceToMonitorAssignment(raw, .rootKey("monitors"), &errors)
+        for name in monitors.keys.sorted() where config.workspaceToMonitorForceAssignment[name] != nil {
+            errors.append(.deprecation(
+                .rootKey("workspace-to-monitor-force-assignment") + .key(name),
+                "Also pinned in [monitors], which wins. Keep one.",
+            ))
+        }
+        config.workspaceToMonitorForceAssignment = config.workspaceToMonitorForceAssignment + monitors
     }
 
     if let raw = rawTable["on-window"] {
@@ -124,7 +139,7 @@ func workspaceKeyNotation(_ name: String) -> String? {
     guard let mod = parseString(rawMod, backtrace).getOrNil(appendErrorTo: &errors) else { return nil }
     let unknown = mod.split(separator: "-").filter { modifiersMap[String($0)] == nil }
     if !unknown.isEmpty {
-        errors.append(.semantic(backtrace, "'\(unknown.joined(separator: "-"))' is not a modifier. Use cmd, alt, ctrl or shift"))
+        errors.append(.semantic(backtrace, modifierError(unknown.joined(separator: "-"))))
         return nil
     }
     let generated = TOMLTable()
@@ -198,7 +213,15 @@ func parseWorkspaceNames(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace
         errors.append(expectedActualTypeError(expected: [.string, .int, .array], actual: raw.type, backtrace))
         return []
     }
-    return (expandWorkspaceRange(token) ?? [token]).filter { name in
+    let names: [String]
+    switch expandWorkspaceRange(token) {
+        case nil: names = [token]
+        case .success(let range): names = range
+        case .failure(let message):
+            errors.append(.semantic(backtrace, message))
+            return []
+    }
+    return names.filter { name in
         switch WorkspaceName.parse(name) {
             case .success: return true
             case .failure(let message):
@@ -209,12 +232,27 @@ func parseWorkspaceNames(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace
 }
 
 /// `"1-9"` -> `["1", ..., "9"]`. nil when the token is not a range.
-func expandWorkspaceRange(_ token: String) -> [String]? {
+///
+/// A failure, not nil, for a range that leaves its class: `A-z` runs through `[`, `^` and `_`, and nil
+/// would quietly declare one workspace literally named `A-z`.
+func expandWorkspaceRange(_ token: String) -> Parsed<[String]>? {
     let parts = token.split(separator: "-", omittingEmptySubsequences: false)
     guard parts.count == 2, parts[0].count == 1, parts[1].count == 1 else { return nil }
     guard let from = parts[0].unicodeScalars.first, let to = parts[1].unicodeScalars.first,
-          from.properties.isAlphabetic || ("0" ... "9").contains(from),
+          let kind = rangeClass(from),
           from.value <= to.value
     else { return nil }
-    return (from.value ... to.value).compactMap { Unicode.Scalar($0).map { String(Character($0)) } }
+    let scalars = (from.value ... to.value).compactMap(Unicode.Scalar.init)
+    guard scalars.allSatisfy({ rangeClass($0) == kind }) else {
+        return .failure("'\(token)': a range stays within digits, lower-case or upper-case letters")
+    }
+    return .success(scalars.map { String(Character($0)) })
+}
+
+private func rangeClass(_ scalar: Unicode.Scalar) -> String? {
+    if ("0" ... "9").contains(scalar) { return "digit" }
+    if scalar.properties.isLowercase { return "lower" }
+    if scalar.properties.isUppercase { return "upper" }
+    if scalar.properties.isAlphabetic { return "letter" } // a script without case
+    return nil
 }

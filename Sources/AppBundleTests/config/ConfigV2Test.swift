@@ -98,7 +98,13 @@ final class ConfigV2Test: XCTestCase {
     }
 
     func testUnknownModifierIsReported() {
-        XCTAssertTrue(errors("mod = 'meta'").contains { $0.contains("is not a modifier") })
+        assertEquals(errors("mod = 'meta'"), ["mod: 'meta' is not a modifier. Use cmd, alt, ctrl or shift"])
+    }
+
+    /// `A-z` runs through `[`, `^` and `_`. Neither punctuation workspaces nor one named `A-z`.
+    func testCrossClassRangeIsReported() {
+        assertEquals(errors("workspaces = 'A-z'"), ["workspaces: 'A-z': a range stays within digits, lower-case or upper-case letters"])
+        assertEquals(errors("workspaces = ['1-3', 'a-c', 'A-C']"), [])
     }
 
     /// No `mod` means no generation. Without this, migrating a config whose bindings do NOT match
@@ -167,6 +173,21 @@ final class ConfigV2Test: XCTestCase {
             config.workspaceToMonitorForceAssignment["2"]?.map(\.humanDescription),
             ["fingerprint(uuid AAAAAAAA-0000-4000-8000-000000000001)"],
         )
+    }
+
+    /// Both spellings of one pin load, with a warning that names the one that does nothing.
+    func testAPinInBothSpellingsWarns() {
+        var warnings: [TomlParseError] = []
+        let config = try! parseConfig("[monitors]\n1 = 'main'\n[workspace-to-monitor-force-assignment]\n1 = 'secondary'", warnings: &warnings).get()
+        assertEquals(config.workspaceToMonitorForceAssignment["1"]?.map(\.humanDescription), ["main"])
+        assertEquals(warnings.descriptions, ["workspace-to-monitor-force-assignment.1: Also pinned in [monitors], which wins. Keep one."])
+    }
+
+    func testABindingInBothSpellingsWarns() {
+        var warnings: [TomlParseError] = []
+        let config = try! parseConfig("[keys]\nalt-h = 'close'\n[mode.main.binding]\nalt-h = 'fullscreen'", warnings: &warnings).get()
+        assertEquals(bindings(config)["alt-h"], "fullscreen")
+        assertEquals(warnings.descriptions, ["keys.alt-h: Also bound in [mode.main.binding], which wins. Keep one."])
     }
 
     /// The v1 `{ fingerprint = { … } }` wrapper still parses -- the settings GUI writes it.

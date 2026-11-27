@@ -180,15 +180,22 @@ func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ er
     return result
 }
 
+/// The one message for a word that is not a modifier, in a binding and in `mod`.
+func modifierError(_ segment: String) -> String {
+    "'\(segment)' is not a modifier. Use cmd, alt, ctrl or shift"
+}
+
 func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String: Key]) -> ParsedToml<(NSEvent.ModifierFlags, Key)> {
     let rawKeys = raw.split(separator: "-")
     let modifiers: ParsedToml<NSEvent.ModifierFlags> = rawKeys.dropLast()
         .mapAllOrFailure {
-            modifiersMap[String($0)].orFailure(.semantic(backtrace, "Can't parse modifiers in '\(raw)' binding"))
+            modifiersMap[String($0)].orFailure(.semantic(backtrace, modifierError(String($0))))
         }
         .map { NSEvent.ModifierFlags($0) }
-    let key: ParsedToml<Key> = rawKeys.last.flatMap { mapping[String($0)] }
-        .orFailure(.semantic(backtrace, "Can't parse the key in '\(raw)' binding"))
+    let last = rawKeys.last.map(String.init) ?? ""
+    // Single characters are left out of the hint: every word starts with one, so `escape` would get `e`.
+    let hint = last.isEmpty ? "" : didYouMeanSuffix(last, from: mapping.keys.filter { $0.count > 1 }.sorted())
+    let key: ParsedToml<Key> = mapping[last].orFailure(.semantic(backtrace, "Can't parse the key in '\(raw)' binding" + hint))
     return modifiers.flatMap { modifiers -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
         key.flatMap { key -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
             .success((modifiers, key))
