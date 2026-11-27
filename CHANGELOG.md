@@ -19,6 +19,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 ### Fixed
 
+- Windows on hidden workspaces are no longer moved again on every refresh. macOS keeps a title bar on screen, so a window parked at the bottom edge never sat exactly where AeroSpork put it, and AeroSpork moved it again each time. A workspace switch now takes about 5 ms instead of 13 ms on a typical setup.
 - Turning off Accessibility access for AeroSpork while it runs no longer makes it forget every window's place and workspace.
 
 ## 1.4.0 (2026-11-27)

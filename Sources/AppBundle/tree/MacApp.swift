@@ -387,10 +387,11 @@ final class MacApp: AbstractApp {
     /// awaits nothing: the spot depends on it because a parked window must not reach another monitor.
     func hideAxWindow(_ windowId: UInt32, at spot: @escaping @Sendable (CGSize) -> CGPoint) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp, bundleId] window, job in
-            let check = parkAxWindow(window, app: axApp.threadGuarded, at: spot)
+        setFrameJobs[windowId] = thread?.runInLoopAsync { [windows, axApp, bundleId] job in
+            guard let window = windows.threadGuarded[windowId] else { return }
+            let check = parkAxWindow(window.ax, app: axApp.threadGuarded, at: spot, settled: &window.parkedSpot)
             if isDebugLoggingEnabled, let check { traceParkCheck(windowId, bundleId, check) }
-        }
+        } ?? .cancelled
     }
 
     @MainActor
@@ -810,6 +811,8 @@ private class AxWindow {
     let windowId: UInt32
     let ax: AXUIElement
     private let axSubscription: AxSubscription // keep the subscription in memory
+    /// Where macOS let this window settle the last time it was parked. See `ParkedSpot`.
+    var parkedSpot: ParkedSpot?
 
     private init(windowId: UInt32, _ ax: AXUIElement, _ axSubscription: AxSubscription) {
         self.windowId = windowId
@@ -880,19 +883,55 @@ private func isSized(_ actual: CGSize?, _ target: CGSize) -> Bool {
     return abs(actual.width - target.width) < 1 && abs(actual.height - target.height) < 1
 }
 
+/// Where macOS put a window that was parked at `spot`.
+///
+/// macOS keeps a window's title bar on screen, so a spot near the bottom edge of a display is clamped
+/// upwards, by the height of that app's title bar (41 points for Chrome, 32 for Discord, on macOS 27).
+/// Compared with the spot alone, a clamped window never looked parked, and every refresh wrote its
+/// position again: one AX write per parked window per refresh, forever.
+struct ParkedSpot: Equatable {
+    var spot: CGPoint
+    var settled: CGPoint
+
+    /// A clamp moves a window by about a title bar. A write that did not take leaves it where it was,
+    /// much further away, and must not be remembered as parked.
+    static let maxClamp: CGFloat = 150
+
+    init?(spot: CGPoint, settled: CGPoint?) {
+        guard let settled, abs(settled.x - spot.x) <= Self.maxClamp, abs(settled.y - spot.y) <= Self.maxClamp else { return nil }
+        self.spot = spot
+        self.settled = settled
+    }
+}
+
 /// The `hideAxWindow` body, generic so the tests can drive it. The spot depends on the size, and both come
-/// from one batched read. Returns the spot and where the window was before any write, nil if unreadable.
+/// from one batched read. Returns where the window should now be (the spot, or where macOS clamped it) and
+/// where it was before any write, nil if unreadable.
 @discardableResult
 func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at spot: (CGSize) -> CGPoint) -> (spot: CGPoint, actual: CGPoint?)? {
+    var settled: ParkedSpot?
+    return parkAxWindow(window, app: app, at: spot, settled: &settled)
+}
+
+@discardableResult
+func parkAxWindow(
+    _ window: some AxUiElementMock,
+    app: some AxUiElementMock,
+    at spot: (CGSize) -> CGPoint,
+    settled: inout ParkedSpot?,
+) -> (spot: CGPoint, actual: CGPoint?)? {
     let actual = window.getFrame()
     guard let size = actual.size else { return nil }
     let point = spot(size)
     // This runs for every window of every invisible workspace on every refresh; without the
     // guard that was an unconditional AX position write per hidden window, forever.
     if isAt(actual.topLeft, point) { return (point, actual.topLeft) }
+    if let settled, settled.spot == point, isAt(actual.topLeft, settled.settled) { return (settled.settled, actual.topLeft) }
     disableAnimations(app: app) {
         _ = window.set(Ax.topLeftCornerAttr, point)
     }
+    // One read per park, not per refresh.
+    settled = ParkedSpot(spot: point, settled: window.get(Ax.topLeftCornerAttr))
     return (point, actual.topLeft)
 }
 

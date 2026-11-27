@@ -66,6 +66,12 @@ window. The attribute names in release signposts are private, so only counts and
 | plain | 27 | 15: 7.2 reads, 4.0 writes | 13.3 ms median, p90 17.1, max 21.4 | 11.3 ms median, about 27 reads |
 | a two-tab Finder group open | 22 | 13.5: 7.5 reads, 5.4 writes | 13.0 ms median, p90 14.8 | 17.7 ms median, max 94, about 40 reads |
 
+The same 30 switches after parked windows stopped being moved again on every refresh (debug build,
+so if anything slower than the release): 0 AX writes per refresh instead of 2 or 3, switch 5.0 ms median
+(p90 6.0), refresh 7.4 ms median. macOS keeps a window's title bar on screen, so a window parked at
+the bottom edge settles 32 to 41 points above the spot, and the old check, against the spot alone,
+never saw it as parked. `ParkedSpot` remembers where it settled.
+
 A tab group adds about 13 reads and 6 ms to the background refresh, and nothing to the switch itself.
 That is why the tab-grouping cache and the floating-window prefetch were not built.
 
