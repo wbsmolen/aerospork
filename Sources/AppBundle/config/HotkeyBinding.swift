@@ -111,7 +111,29 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
             AppLog.config.error("Hotkey \(binding.descriptionWithKeyNotation, privacy: .public) not registered (status \(status, privacy: .public))")
         }
     }
+    let previous = activeMode
     activeMode = targetMode
+    // nil is `enable off`, and the reload at startup activates the mode already active: neither fires.
+    // A mode change made by an `on-mode-changed` callback does not fire again, or two callbacks that
+    // switch A -> B -> A would loop forever.
+    if let previous, let targetMode, previous != targetMode, !config.onModeChanged.isEmpty,
+       refreshSessionEvent?.isOnModeChanged != true
+    {
+        runOnModeChanged(previous, targetMode)
+    }
+}
+
+/// Runs `on-mode-changed` in a session of its own. Detached: `activateMode` runs inside a session,
+/// and a session must not wait for another (#refresh-and-layout). A test swaps it, because a real
+/// session cannot run headlessly.
+@MainActor var runOnModeChanged: @MainActor (_ from: String, _ to: String) -> Void = { from, to in
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    let commands = config.onModeChanged
+    runDetached("onModeChangedCallbacks") {
+        try await runSession(.onModeChanged, token) {
+            _ = try await commands.runCmdSeq(CmdEnv.defaultEnv.copy(\.modeChange, (from: from, to: to)), .emptyStdin)
+        }
+    }
 }
 
 /// The registrations to drop and the bindings to register, to go from `current` (Carbon id to binding

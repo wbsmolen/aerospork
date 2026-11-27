@@ -20,9 +20,9 @@ aerospork list-exec-env-vars [-h|--help] [--show-secrets]
 `list-exec-env-vars` prints the environment that each of these starts from, one `NAME=value` line for each variable:
 
 * The `exec-and-forget` command.
-* The `on-focus-changed`, `on-focused-workspace-changed` and `on-focused-monitor-changed` callbacks.
+* The `on-focus-changed`, `on-focused-workspace-changed`, `on-focused-monitor-changed` and `on-mode-changed` callbacks.
 
-AeroSpork adds `AEROSPORK_WINDOW_ID`, `AEROSPORK_WORKSPACE`, `AEROSPORK_FOCUSED_WORKSPACE` and `AEROSPORK_PREV_WORKSPACE` for each command, from what triggered it.
+AeroSpork adds `AEROSPORK_WINDOW_ID`, `AEROSPORK_WORKSPACE`, `AEROSPORK_FOCUSED_WORKSPACE`, `AEROSPORK_PREV_WORKSPACE`, `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` for each command, from what triggered it.
 Those variables are not in this list.
 
 By default, the command hides the value of each variable whose name looks like a secret: a name that contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `PRIVATE`.

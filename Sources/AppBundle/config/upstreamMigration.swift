@@ -35,8 +35,6 @@ let upstreamOnlyKeyParsers: [String: any ParserProtocol<Config>] = [
         "config-version is an AeroSpace setting. AeroSpork has one config schema and ignores it.")),
     "auto-reload-config": Parser(\._handledElsewhere, ignored(
         "auto-reload-config is an AeroSpace setting. AeroSpork always reloads a saved config, so it is ignored.")),
-    "on-mode-changed": Parser(\._handledElsewhere, ignored(
-        "on-mode-changed is an AeroSpace callback AeroSpork does not have. It is ignored.")),
     "focus-follows-mouse": Parser(\._handledElsewhere, ignored(
         "focus-follows-mouse is an AeroSpace setting AeroSpork does not support. It is ignored.")),
 ]

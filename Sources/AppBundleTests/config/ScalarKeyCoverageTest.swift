@@ -17,6 +17,7 @@ final class ScalarKeyCoverageTest: XCTestCase {
         "workspace-to-monitor-force-assignment": "the Monitors pane",
         "on-window-detected": "the Window rules pane",
         "persistent-workspaces": "a set of names, the Workspaces pane",
+        "on-mode-changed": "Raw TOML only: the Events pane does not show it yet, and the writer keeps its line as it is",
         // The v2 spelling, desugared into the sections above.
         "mod": "v2 spelling of the bindings",
         "workspaces": "v2 spelling of persistent workspaces and their monitors",

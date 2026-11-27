@@ -28,6 +28,13 @@ final class ExecEnvTest: XCTestCase {
         assertEquals(env, workspaceChangeEnvVars(config.execConfig.envVariables, from: "1", to: "2"))
     }
 
+    func testOnModeChangedSeesTheModeAndThePreviousOne() {
+        let env = execAndForgetProcess("true", CmdEnv.defaultEnv.copy(\.modeChange, (from: "main", to: "resize"))).environment ?? [:]
+        assertEquals(env["AEROSPORK_MODE"], "resize")
+        assertEquals(env["AEROSPORK_PREV_MODE"], "main")
+        assertNil(execAndForgetProcess("true", .defaultEnv).environment?["AEROSPORK_MODE"])
+    }
+
     func testTheConfiguredEnvironmentStillReachesTheChild() {
         config.execConfig = ExecConfig(envVariables: ["PATH": "/opt/bin"])
         assertEquals(execAndForgetProcess("true", .defaultEnv).environment?["PATH"], "/opt/bin")

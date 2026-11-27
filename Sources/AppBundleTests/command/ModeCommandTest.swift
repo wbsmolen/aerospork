@@ -8,12 +8,63 @@ import XCTest
 /// registered with the system.
 @MainActor
 final class ModeCommandTest: XCTestCase {
+    private var fired: [String] = []
+    private var realRunOnModeChanged: (@MainActor (String, String) -> Void)?
+
     override func setUp() async throws {
         setUpWorkspacesForTests()
         activateMode(mainModeId)
+        realRunOnModeChanged = runOnModeChanged
+        fired = []
+        runOnModeChanged = { [unowned self] from, to in fired.append("\(from)->\(to)") }
     }
 
-    override func tearDown() async throws { activateMode(mainModeId) }
+    override func tearDown() async throws {
+        activateMode(mainModeId)
+        if let realRunOnModeChanged { runOnModeChanged = realRunOnModeChanged }
+    }
+
+    private func withOnModeChanged() {
+        config.modes["resize"] = .zero
+        config.onModeChanged = [parseCommand("mode main").cmdOrDie]
+    }
+
+    func testOnModeChangedFiresOnceOnARealChange() async throws {
+        withOnModeChanged()
+        _ = try await parseCommand("mode resize").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(fired, ["main->resize"])
+    }
+
+    func testOnModeChangedDoesNotFireForTheModeYouAreIn() async throws {
+        withOnModeChanged()
+        _ = try await parseCommand("mode main").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(fired, [])
+    }
+
+    /// `enable off` is the nil mode, not a mode change, and `enable on` comes back from it.
+    func testOnModeChangedDoesNotFireForEnable() {
+        withOnModeChanged()
+        activateMode(nil)
+        activateMode(mainModeId)
+        assertEquals(fired, [])
+    }
+
+    func testAReloadThatDropsTheModeFiresMain() {
+        withOnModeChanged()
+        activateMode("resize")
+        fired = []
+        config.modes["resize"] = nil
+        activateMode(activeMode) // what `reloadConfig` does
+        assertEquals(fired, ["resize->main"])
+    }
+
+    /// Two callbacks switching A -> B -> A would otherwise loop forever.
+    func testAModeChangeInsideTheCallbackDoesNotFireAgain() async {
+        withOnModeChanged()
+        await $refreshSessionEvent.withValue(.onModeChanged) { activateMode("resize") }
+        assertEquals(fired, [])
+        assertEquals(activeMode, "resize")
+    }
 
     func testSwitchingToAMissingModeFailsAndStaysPut() async throws {
         let result = try await parseCommand("mode no-such-mode").cmdOrDie.run(.defaultEnv, .emptyStdin)

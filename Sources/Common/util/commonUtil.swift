@@ -115,9 +115,14 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
     case onFocusedMonitorChanged
     case onFocusedWorkspaceChanged
     case onFocusChanged
+    case onModeChanged
 
     public var isStartup: Bool {
         if case .startup = self { return true } else { return false }
+    }
+
+    public var isOnModeChanged: Bool {
+        if case .onModeChanged = self { return true } else { return false }
     }
 
     /// Did a person ask for this session, or did the world just move?
@@ -137,7 +142,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .hotkeyBinding, .socketServer, .menuBarButton, .globalObserverLeftMouseUp,
                  .resetManipulatedWithMouse, .ax: true
             case .globalObserver, .startup,
-                 .onFocusedMonitorChanged, .onFocusedWorkspaceChanged, .onFocusChanged: false
+                 .onFocusedMonitorChanged, .onFocusedWorkspaceChanged, .onFocusChanged, .onModeChanged: false
         }
     }
 
@@ -154,6 +159,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .onFocusedMonitorChanged: "onFocusedMonitorChanged"
             case .onFocusedWorkspaceChanged: "onFocusedWorkspaceChanged"
             case .onFocusChanged: "onFocusChanged"
+            case .onModeChanged: "onModeChanged"
         }
     }
 }

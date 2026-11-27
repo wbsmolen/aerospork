@@ -14,6 +14,8 @@ struct CmdEnv: ConvenienceCopyable {
     /// The switch that fired `on-focused-workspace-changed`, exported exactly as
     /// `exec-on-workspace-change` exports it. Nil for every other command.
     var workspaceChange: (from: String, to: String)?
+    /// The switch that fired `on-mode-changed`. Nil for every other command.
+    var modeChange: (from: String, to: String)?
 
     static var defaultEnv: CmdEnv { CmdEnv(windowId: nil, workspaceName: nil, pwd: nil) }
     init(windowId: UInt32?, workspaceName: String?, pwd: String?) {
@@ -43,6 +45,10 @@ struct CmdEnv: ConvenienceCopyable {
         }
         if let workspaceChange {
             result = workspaceChangeEnvVars(result, from: workspaceChange.from, to: workspaceChange.to)
+        }
+        if let modeChange {
+            result["AEROSPORK_MODE"] = modeChange.to
+            result["AEROSPORK_PREV_MODE"] = modeChange.from
         }
         return result
     }

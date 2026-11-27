@@ -178,9 +178,11 @@ shows no message, so the only sign is the default keymap.
 
 Other differences:
 
-* `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` have no
-  AeroSpork equivalent. AeroSpork reports these keys and ignores them. It does not reject the file.
-  A saved config always reloads by itself.
+* `config-version`, `auto-reload-config` and `focus-follows-mouse` have no AeroSpork equivalent.
+  AeroSpork reports these keys and ignores them. It does not reject the file. A saved config always
+  reloads by itself.
+* AeroSpork runs `on-mode-changed`, and sets `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` for its
+  commands. See <<on-mode-changed-callback>>.
 * A window rule can run only the commands that <<window-rule-commands>> lists.
 * `persistent-workspaces` works as it does in AeroSpace, and so does `workspaces`. See
   <<persistent-workspaces>>.
@@ -1021,7 +1023,7 @@ The other built-in defaults:
 |===
 
 `after-startup-command`, `on-focus-changed`, `on-focused-workspace-changed`,
-`on-focused-monitor-changed`, `on-window-detected`, `persistent-workspaces` and
+`on-focused-monitor-changed`, `on-mode-changed`, `on-window-detected`, `persistent-workspaces` and
 `workspace-to-monitor-force-assignment` are empty by default.
 
 [#config-v2]
@@ -1469,6 +1471,24 @@ that you switched to, and `AEROSPORK_PREV_WORKSPACE`, the workspace that you swi
 * The order in which AeroSpork runs the callbacks can change between versions. Do not depend on it.
 * A focus change inside a callback does not start the callback again. A change of focus inside these
   callbacks is not a supported pattern, and its handling can change in a later version.
+
+[#on-mode-changed-callback]
+==== on-mode-changed
+
+`on-mode-changed` runs each time the binding mode changes: after `mode <name>`, after you leave a mode
+from the menu, and after a reload that drops the mode you were in, which puts you back in `main`. It
+does not run at startup, for `mode` with the mode you are already in, or for `enable`.
+
+A command run by `on-mode-changed` gets `AEROSPORK_MODE`, the mode that you switched to, and
+`AEROSPORK_PREV_MODE`, the mode that you switched from. A status bar can show the mode without asking
+`list-modes --current` again and again:
+
+[source,toml]
+----
+on-mode-changed = ['exec-and-forget sketchybar --trigger aerospork_mode_change MODE=$AEROSPORK_MODE']
+----
+
+A `mode` command inside the callback changes the mode, but does not start the callback again.
 
 [#exec-on-workspace-change-callback]
 ==== exec-on-workspace-change (deprecated)

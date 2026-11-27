@@ -37,7 +37,7 @@ final class ConfigIntrospectionTest: XCTestCase {
                 "'\(key)' is not reachable",
             )
         }
-        for key in ["after-startup-command", "on-focus-changed", "on-focused-workspace-changed", "on-focused-monitor-changed"] {
+        for key in ["after-startup-command", "on-focus-changed", "on-focused-workspace-changed", "on-focused-monitor-changed", "on-mode-changed"] {
             XCTAssertNotNil(
                 buildConfigMap().find(keyPath: [key]).getOrNil(),
                 "callback '\(key)' is not reachable",

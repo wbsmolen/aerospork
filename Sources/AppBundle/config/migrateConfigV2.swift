@@ -218,6 +218,7 @@ private func compactRanges(_ names: [String]) -> [String] {
         cmds(a.onFocusChanged) == cmds(b.onFocusChanged) &&
         cmds(a.onFocusedWorkspaceChanged) == cmds(b.onFocusedWorkspaceChanged) &&
         cmds(a.onFocusedMonitorChanged) == cmds(b.onFocusedMonitorChanged) &&
+        cmds(a.onModeChanged) == cmds(b.onModeChanged) &&
         a.preservedWorkspaceNames.sorted() == b.preservedWorkspaceNames.sorted() &&
         // `persistentWorkspaces` is deliberately NOT compared. Folding a v1 keymap's `alt-1..9` pairs
         // into `workspaces` makes those workspaces persistent, which is a change -- but the one that

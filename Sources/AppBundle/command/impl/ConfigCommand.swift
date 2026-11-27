@@ -207,6 +207,7 @@ extension [Command] {
         "on-focus-changed": commands(config.onFocusChanged),
         "on-focused-workspace-changed": commands(config.onFocusedWorkspaceChanged),
         "on-focused-monitor-changed": commands(config.onFocusedMonitorChanged),
+        "on-mode-changed": commands(config.onModeChanged),
 
         "gaps": .dict([
             "inner": .dict(["horizontal": gap(config.gaps.inner.horizontal), "vertical": gap(config.gaps.inner.vertical)]),
