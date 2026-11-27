@@ -436,16 +436,6 @@ enum WorkspaceMemory {
         return restored?.windows.filter { UInt32($0.key).map(alive.contains) == true } ?? [:]
     }
 
-    /// Only when something changed, like the rest of `fullState`. Empty under test, where a real window's
-    /// id could match a made-up one. `nil` when the read fails: WindowServer always lists some window (the
-    /// menu bar, the Dock), so an empty list is a failed read too.
-    private static func windowServerWindowIds() -> Set<UInt32>? {
-        if isUnitTest { return [] }
-        guard let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[CFString: Any]] else { return nil }
-        let ids = Set(list.compactMap { ($0[kCGWindowNumber] as? Int).map(UInt32.init) })
-        return ids.isEmpty ? nil : ids
-    }
-
     /// The fingerprint of each named workspace's monitor.
     ///
     /// Separate from `fullState` so it can be tested without a real window tree: a headless suite

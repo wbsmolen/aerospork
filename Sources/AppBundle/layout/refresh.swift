@@ -223,6 +223,7 @@ private func refresh() async throws {
     if shouldResetMouseManipulation(flag: currentlyManipulatedWithMouseWindowId != nil, buttonDown: isLeftMouseButtonDown) {
         try await resetManipulatedWithMouseIfPossible()
     }
+    let pendingDead = MacApp.pendingDead
     let mapping = try await MacApp.refreshAllAndGetAliveWindowIds(frontmostAppBundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
     // Set, not Array: this is membership-tested once per window below, so an Array made it O(W^2).
     let aliveWindowIds = Set(mapping.values.flatMap { $0 })
@@ -230,10 +231,16 @@ private func refresh() async throws {
     var collected = 0
     for window in MacWindow.allWindows {
         if !aliveWindowIds.contains(window.windowId) {
+            if MacApp.pendingDead.contains(window.windowId) { // here, not in the filter: the listed loop can re-add an id
+                let app = window.macApp
+                AppLog.session.notice("window \(window.windowId, privacy: .public) of \(app.bundleId ?? "?", privacy: .public) (\(app.pid, privacy: .public)) is gone from WindowServer; removing its tile; process gone: \(processIsGone(app.pid), privacy: .public)")
+            }
             window.garbageCollect(skipClosedWindowsCache: false)
             collected += 1
         }
     }
+    // Settled: collected, or listed by an app that answers. A later sweep finds any the lock screen kept from the filter.
+    MacApp.pendingDead.subtract(pendingDead)
     // Whether lock-aware GC is needed at all: one record if windows die while the screen is locked. A query,
     // not a flag kept from notifications, which one missed unlock would leave stuck. About 0.3 ms, so only here.
     if collected > 0, (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] != nil {

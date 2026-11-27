@@ -38,6 +38,11 @@ final class MacApp: AbstractApp {
     /// the rest of the pass skips the app. Cleared when a pass starts, so an app that recovers is asked
     /// again at once.
     @MainActor static var timedOutThisPass: Set<pid_t> = []
+    /// Registered windows the sweep found gone from WindowServer, for the next pass to collect wherever AX
+    /// cannot say so: an unreaped zombie, or an element whose remote end died while its app lives. The
+    /// `.cannotComplete` such an element answers means "unanswered", not "destroyed" (#39), so only
+    /// WindowServer can tell. Ids are never reused, so carrying them to a later pass is safe.
+    @MainActor static var pendingDead: Set<UInt32> = []
     /// Since when each app's window list has gone unanswered, and whether that episode has its record yet.
     /// `timedOutThisPass` forgets every pass, so a stopped app left no trace in the logs.
     @MainActor private(set) static var unansweredSince: [pid_t: (since: Date, logged: Bool)] = [:]
@@ -533,10 +538,20 @@ final class MacApp: AbstractApp {
                     let anyGone = allAppsMap.values.contains { $0.nsApp.isGone }
                     // Nothing else says Accessibility was granted again, and refreshes skipped until then.
                     let trustBack = noteTrustRegained(isTrusted: AXIsProcessTrusted())
-                    if noteRegularApps(regular) || anyGone || trustBack { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
+                    let deadWindows = noteWindowsGoneFromWindowServer()
+                    if noteRegularApps(regular) || anyGone || deadWindows || trustBack { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
                 }
             }
         }
+    }
+
+    /// Adds the registered windows WindowServer no longer has to `pendingDead`, and says whether there were any.
+    /// One WindowServer read per sweep, never per refresh. In healthy operation nothing is found and no refresh runs.
+    @MainActor static func noteWindowsGoneFromWindowServer() -> Bool {
+        let registered = Set(MacWindow.allWindowsMap.keys) // first: then every id in it predates the read below
+        let dead = windowsGoneFromWindowServer(registered: registered, alive: windowServerWindowIds(), backgroundTabs: backgroundTabs)
+        pendingDead.formUnion(dead)
+        return !dead.isEmpty
     }
 
     /// One app launched, activated, unhid or terminated.
@@ -591,6 +606,7 @@ final class MacApp: AbstractApp {
         }
         guard let thread else { return [] }
         let previousTabs = backgroundTabsSeen
+        let pendingDead = MacApp.pendingDead
         let outcome = try await thread.runInLoop { [axObserver, windows, axApp, bundleId] (job) -> (ids: [UInt32], tabs: [UInt32: UInt32], timedOut: Bool) in
             var result: [UInt32: AxWindow] = windows.threadGuarded
             let listStart = DispatchTime.now()
@@ -604,6 +620,9 @@ final class MacApp: AbstractApp {
                 let listedIds = Set(listed.map(\.windowId))
                 result = try result.filter {
                     try job.checkCancellation()
+                    // Before the timeout shortcut, which keeps everything: WindowServer answers where the app
+                    // cannot. An app that answers and lists the window wins.
+                    if pendingDead.contains($0.key) && !listedIds.contains($0.key) { return false }
                     if timedOut { return true }
                     // Listed means alive, so one read answers for most windows. The list leaves out
                     // windows on other macOS Spaces, which is why the rest get asked individually.
