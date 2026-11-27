@@ -177,7 +177,7 @@ extension TreeNode {
                     return mostRecentChild?.findFocusTargetRecursive(snappedTo: direction)
                 }
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
-                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
+                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .scratchpadContainer:
                 die("Impossible")
         }
     }

@@ -51,7 +51,8 @@ struct FrozenContainer: Sendable, Codable, Equatable {
                      .macosMinimizedWindowsContainer,
                      .macosHiddenAppsWindowsContainer,
                      .macosFullscreenWindowsContainer,
-                     .macosPopupWindowsContainer:
+                     .macosPopupWindowsContainer,
+                     .scratchpadContainer:
                     illegalChildParentRelation(child: node, parent: container)
             }
         }

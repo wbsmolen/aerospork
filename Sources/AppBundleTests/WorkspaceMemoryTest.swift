@@ -548,7 +548,7 @@ final class WorkspaceMemoryTest: XCTestCase {
             the remembered workspace is not the value bound to the window -- location is being used
             regardless, so the memory is computed and thrown away.
             """
-        let lookup = try XCTUnwrap(body.range(of: "let remembered = WorkspaceMemory.restoredWorkspace("), message)
+        let lookup = try XCTUnwrap(body.range(of: "let remembered = toScratchpad ? nil : WorkspaceMemory.restoredWorkspace("), message)
         let preferred = try XCTUnwrap(body.range(of: "let workspace = remembered ??"), message)
         let bound = try XCTUnwrap(body.range(of: "unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace,"), message)
         XCTAssertLessThan(lookup.lowerBound, preferred.lowerBound, message)
@@ -567,6 +567,12 @@ final class WorkspaceMemoryTest: XCTestCase {
             "registration takes the workspace name without its monitor -- that collapses every "
                 + "restored workspace onto the main display",
         )
+        // A window going back into the scratchpad restores no workspace at all, so it is asked first.
+        let body = try sourceBody("static func getOrRegister(", in: "Sources/AppBundle/tree/MacWindow.swift")
+        let scratchpad = try XCTUnwrap(body.range(of: "WorkspaceMemory.returnsToScratchpad("), "registration forgot the scratchpad")
+        let workspace = try XCTUnwrap(body.range(of: "WorkspaceMemory.restoredWorkspace("))
+        XCTAssertLessThan(scratchpad.lowerBound, workspace.lowerBound)
+        XCTAssertTrue(body.contains("toScratchpad ? nil : WorkspaceMemory.restoredWorkspace("), "a window in the scratchpad also restored a workspace")
     }
 
     /// `load()` must be called, and before anything can register a window.

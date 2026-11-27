@@ -53,6 +53,13 @@ final class TestWindow: Window, CustomStringConvertible {
     @MainActor var transparent = false
     @MainActor override var isTransparent: Bool { transparent }
 
+    /// The last frame a command asked for, which a later read answers, as the app would once it moved there.
+    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        guard let topLeft, let size else { return }
+        _rect = Rect(topLeftX: topLeft.x, topLeftY: topLeft.y, width: size.width, height: size.height)
+    }
+    @MainActor override func getAxSize() async throws -> CGSize? { _rect?.size }
+
     @MainActor var axRectFails = false
     @MainActor override func getAxRect() async throws -> Rect? {
         if axRectFails { throw CancellationError() }

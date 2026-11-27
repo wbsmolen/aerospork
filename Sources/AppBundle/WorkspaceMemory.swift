@@ -68,6 +68,9 @@ enum WorkspaceMemory {
         var isFullscreen: Bool? = nil
         var noOuterGapsInFullscreen: Bool? = nil
         var isSticky: Bool? = nil
+        /// A scratchpad window. One in the scratchpad has no workspace, so `workspace` is the one focused when it
+        /// was written, which is only where a version without the scratchpad puts it.
+        var isScratchpad: Bool? = nil
     }
 
     struct State: Codable, Equatable, Sendable {
@@ -204,6 +207,8 @@ enum WorkspaceMemory {
         restored = state
         placements = state.windows
         trees = state.trees ?? [:]
+        // Before any registration, which is what reads the set: see `returnsToScratchpad`.
+        scratchpadWindowIds.formUnion(state.windows.compactMap { $0.value.isScratchpad == true ? UInt32($0.key) : nil })
         debugLog("WorkspaceMemory: restored \(state.windows.count) windows")
     }
 
@@ -226,6 +231,15 @@ enum WorkspaceMemory {
         let workspace = Workspace.get(byName: name)
         restoreMonitor(of: workspace)
         return workspace
+    }
+
+    /// Whether a window goes back into the scratchpad as it registers: it is a scratchpad window, and not one the
+    /// file remembers floating on a workspace. That covers the lock screen, which collects live windows, and a restart.
+    /// Spends the entry, as `restoredWorkspace` does. Neither half of a workspace is restored, so neither is half done.
+    static func returnsToScratchpad(windowId id: UInt32) -> Bool {
+        guard scratchpadWindowIds.contains(id), restored?.windows[String(id)]?.isFloating != true else { return false }
+        restored?.windows.removeValue(forKey: String(id))
+        return true
     }
 
     /// Where a remembered window binds: floating if it was, or the place it kept, or `default`. Not a window
@@ -347,6 +361,22 @@ enum WorkspaceMemory {
         let trees: [String: FrozenContainer]
     }
 
+    /// What the file says about `window`, under the workspace it names.
+    static func entry(for window: Window) -> (workspace: String, entry: WindowEntry)? {
+        let inScratchpad = window.parent is ScratchpadContainer
+        guard let name = inScratchpad ? focus.workspace.name : rememberedWorkspaceName(of: window) else { return nil }
+        return (name, WindowEntry(
+            workspace: name,
+            bundleId: window.app.bundleId,
+            isFloating: window.isFloating ? true : nil,
+            parkedAt: window.isFloating ? (window as? MacWindow)?.parkedPosition : nil,
+            isFullscreen: window.isFullscreen ? true : nil,
+            noOuterGapsInFullscreen: window.noOuterGapsInFullscreen ? true : nil,
+            isSticky: window.isSticky ? true : nil,
+            isScratchpad: window.isScratchpad ? true : nil,
+        ))
+    }
+
     private static func cheapKey() -> CheapKey {
         var windows: [String: WindowEntry] = [:]
         var workspaceScreens: [String: Int] = [:]
@@ -357,16 +387,8 @@ enum WorkspaceMemory {
             if !tree.allWindowIds.isEmpty { trees[workspace.name] = tree }
         }
         for window in MacWindow.allWindows {
-            guard let name = rememberedWorkspaceName(of: window) else { continue }
-            windows[String(window.windowId)] = WindowEntry(
-                workspace: name,
-                bundleId: window.macApp.bundleId,
-                isFloating: window.isFloating ? true : nil,
-                parkedAt: window.isFloating ? window.parkedPosition : nil,
-                isFullscreen: window.isFullscreen ? true : nil,
-                noOuterGapsInFullscreen: window.noOuterGapsInFullscreen ? true : nil,
-                isSticky: window.isSticky ? true : nil,
-            )
+            guard let (name, entry) = entry(for: window) else { continue }
+            windows[String(window.windowId)] = entry
             if workspaceScreens[name] == nil, let workspace = Workspace.existing(byName: name) {
                 workspaceScreens[name] = workspace.workspaceMonitor.monitorAppKitNsScreenScreensId
             }

@@ -34,8 +34,8 @@ func moveWithMouse(_ window: Window) async throws {
         case .tilingContainer:
             moveTilingWindow(window)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
-             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
-            return // Unconventional windows can't be moved with mouse
+             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .scratchpadContainer:
+            return // Unconventional windows can't be moved with mouse, and the scratchpad's are parked
     }
 }
 

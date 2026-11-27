@@ -104,6 +104,8 @@ func setUpWorkspacesForTests() {
     config.preservedWorkspaceNames = []
     config.persistentWorkspaces = [] // the bundled default declares 1-9, which would otherwise always exist
     stickyWindowIds = [] // test windows reuse ids, so one left sticky would follow the screen in the next test
+    scratchpadWindowIds = [] // the same, for a window left in the scratchpad
+    for child in scratchpadContainer.children { child.unbindFromParent() }
 
     for workspace in Workspace.all {
         for child in workspace.children {

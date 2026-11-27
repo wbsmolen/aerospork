@@ -46,7 +46,7 @@ func resizeWithMouse(_ window: Window) async throws {
     guard let parent = window.parent else { return }
     switch parent.cases {
         case .workspace, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
-             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
+             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .scratchpadContainer:
             return // Nothing to do for floating, or unconventional windows
         case .tilingContainer:
             guard let rect = try await window.getAxRect() else { return }

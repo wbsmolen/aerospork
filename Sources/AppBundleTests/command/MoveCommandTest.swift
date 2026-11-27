@@ -311,6 +311,7 @@ extension TreeNode {
             case .macosFullscreenWindowsContainer: .macosFullscreen
             case .macosHiddenAppsWindowsContainer: .macosHiddeAppWindow
             case .macosPopupWindowsContainer: .macosPopupWindowsContainer
+            case .scratchpadContainer: .scratchpad
             case .tilingContainer(let container):
                 switch container.layout {
                     case .tiles:
@@ -337,4 +338,5 @@ enum LayoutDescription: Equatable {
     case macosMinimized
     case macosHiddeAppWindow
     case macosFullscreen
+    case scratchpad
 }
