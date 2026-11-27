@@ -46,7 +46,7 @@ final class UISettingsTest: XCTestCase {
     }
 
     /// `ignoringModifiers` defaults to `chars`, but a real event differs: Shift still applies to
-    /// `charactersIgnoringModifiers`, which is how passing one string for both hid UI-1.
+    /// `charactersIgnoringModifiers`, which is how passing one string for both hid the Shift-digit bug.
     private func keyEvent(
         _ chars: String,
         keyCode: UInt16,

@@ -258,8 +258,8 @@ Work eliminations counted through the mocks and pinned by tests, not timed. Each
     `_AXUIElementGetWindow` on every move or resize event while the button was down. A window's
     notifications now carry its id as the refcon (`axRefcon`): the number, never a pointer to the
     `AxWindow`, so a notification AX had queued before the subscription went away cannot reach a
-    freed object. Parked windows are still re-read on every layout; skipping clean ones (PERF-6
-    part 3) waits for a measurement that `kAXMoved` is reliable. Measure: `containingWindowId`
+    freed object. Parked windows are still re-read on every layout; skipping clean ones
+    waits for a measurement that `kAXMoved` is reliable. Measure: `containingWindowId`
     intervals during a one-second drag; expect zero instead of about 60.
 
 The runtime refresh cancellation policy was audited but deliberately left unchanged. It is a
@@ -326,7 +326,7 @@ many alternating trials from a warm process, or Instruments.
   skip, so only its answer stays (fullscreen is never minimized). Item 4's fresh re-read before a
   mutation is unchanged and is the same batched read. Measure: `get(_:)` intervals tagged
   `AXFullScreen+AXMinimized` per refresh; expect one per window where an ordinary window used to
-  cost two. Moving the read into the enumeration job (PERF-3 step 2) waits for a measurement that
+  cost two. Moving the read into the enumeration job waits for a measurement that
   shows the per-window hops matter after this.
 - **Regression coverage is structural, not timing-based.** `PerfInvariantsTest` pins the algorithmic
   properties (workspace GC, the tray publish guard, `aliveWindowIds` being a `Set`, the `debugLog`
