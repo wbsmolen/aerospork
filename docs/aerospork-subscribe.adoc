@@ -89,7 +89,8 @@ A window came to or left a workspace: it opened, closed, moved or was minimized.
 One event for each workspace that changed.
 Fields: `workspace`, `windows` (all the windows the workspace has now).
 
-The focus events fire when the `on-focus-changed`, `on-focused-workspace-changed` and `on-focused-monitor-changed` callbacks would, and `mode-changed` when `on-mode-changed` would.
+The focus events fire when the `on-focus-changed`, `on-focused-workspace-changed` and `on-focused-monitor-changed` callbacks would.
+`mode-changed` fires on every change of binding mode, including one that an `on-mode-changed` callback makes, which does not run that callback again.
 They do not depend on whether the config sets those callbacks.
 
 AeroSpork keeps up to 16 subscribers.

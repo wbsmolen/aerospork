@@ -217,8 +217,12 @@ func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String:
         .map { NSEvent.ModifierFlags($0) }
     let last = rawKeys.last.map(String.init) ?? ""
     // Single characters are left out of the hint: every word starts with one, so `escape` would get `e`.
-    let hint = last.isEmpty ? "" : didYouMeanSuffix(last, from: mapping.keys.filter { $0.count > 1 }.sorted())
-    let key: ParsedToml<Key> = mapping[last].orFailure(.semantic(backtrace, "Can't parse the key in '\(raw)' binding" + hint))
+    // Built only on failure: `orFailure` takes an autoclosure, and every binding of every load parses here.
+    let key: ParsedToml<Key> = mapping[last].orFailure(.semantic(
+        backtrace,
+        "Can't parse the key in '\(raw)' binding"
+            + (last.isEmpty ? "" : didYouMeanSuffix(last, from: mapping.keys.filter { $0.count > 1 }.sorted())),
+    ))
     return modifiers.flatMap { modifiers -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
         key.flatMap { key -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
             .success((modifiers, key))
