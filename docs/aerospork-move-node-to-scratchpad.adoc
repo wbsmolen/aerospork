@@ -57,7 +57,7 @@ include::util/conditional-examples-header.adoc[]
 ----
 [keys]
 alt-shift-minus = 'move-node-to-scratchpad'
-alt-minus = 'scratchpad'
+alt-backtick = 'scratchpad'
 ----
 
 * Put every new window of an app in the scratchpad when it opens:

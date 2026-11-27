@@ -324,7 +324,7 @@ commands by default, so bind them to keys:
 ----
 [keys]
 alt-shift-minus = 'move-node-to-scratchpad'
-alt-minus = 'scratchpad'  # Shows the window you put away last, or puts the focused one back
+alt-backtick = 'scratchpad'  # Shows the window you put away last, or puts the focused one back
 ----
 
 With `--app-bundle-id`, a binding calls up the windows of one app. Together with a window rule that
@@ -333,12 +333,14 @@ puts the app's windows in the scratchpad when they open, that makes a dropdown t
 [source,toml]
 ----
 [keys]
-alt-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
+alt-shift-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
 
 [[on-window-detected]]
     if.app-id = 'com.apple.Terminal'
     run = 'move-node-to-scratchpad'
 ----
+
+Switching to the app of a window in the scratchpad, for example with cmd-tab, also calls the window up.
 
 A window that you called up stays on that workspace, like any floating window, until you put it back.
 Move it with `move-node-to-workspace` or `move-node-to-monitor`, tile it, or make it sticky, and it

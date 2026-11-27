@@ -53,7 +53,7 @@ include::util/conditional-examples-header.adoc[]
 ----
 [keys]
 alt-shift-minus = 'move-node-to-scratchpad'
-alt-minus = 'scratchpad'
+alt-backtick = 'scratchpad'
 ----
 
 * A dropdown terminal: one binding for Terminal, which a window rule puts in the scratchpad when it opens:
@@ -61,7 +61,7 @@ alt-minus = 'scratchpad'
 [source,toml]
 ----
 [keys]
-alt-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
+alt-shift-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
 
 [[on-window-detected]]
     if.app-id = 'com.apple.Terminal'
