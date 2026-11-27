@@ -119,7 +119,8 @@ class GlobalObserver {
         }
 
         // Run a refresh session to update monitor state
-        runRefreshSession(.globalObserver("didChangeScreenParameters"), screenIsDefinitelyUnlocked: true)
+        // DisplayLink panels drop while the displays sleep, which can be behind the lock screen.
+        runRefreshSession(.globalObserver("didChangeScreenParameters"), screenIsDefinitelyUnlocked: !screenIsLocked())
 
         // Rebalance only when the monitor set changed (count or arrangement) — e.g. reconnecting
         // identical DisplayLink panels in a different layout. Never rebalance when nothing changed.

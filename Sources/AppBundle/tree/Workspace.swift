@@ -19,8 +19,10 @@ private func getStubWorkspace(forPoint point: CGPoint) -> Workspace {
     {
         return prev
     }
+    // Not one kept for a panel that is away: another panel at that point would take it by position.
+    let keptForAbsentPanels = Set(lastVisibleWorkspaceByUuid.values)
     if let candidate = Workspace.all
-        .first(where: { !$0.isVisible && $0.workspaceMonitor.rect.topLeftCorner == point })
+        .first(where: { !$0.isVisible && $0.workspaceMonitor.rect.topLeftCorner == point && !keptForAbsentPanels.contains($0.name) })
     {
         return candidate
     }
@@ -305,12 +307,16 @@ extension CGPoint {
 
 /// The stable id of the panel at each screen point, as of the last rearrange. See `matchMonitors`.
 @MainActor private var screenPointToMonitorUuid: [CGPoint: String] = [:]
+/// What each panel that left showed, by UUID, so it gets that workspace back when it returns at any origin.
+/// Keyed by UUID, never by point: a different panel can sit at the old point by then.
+@MainActor private var lastVisibleWorkspaceByUuid: [String: String] = [:]
 
 /// Forgets which workspace each screen point showed before and which panel was at it, so a test's stub
 /// workspace is never a name an earlier test left behind. Production never calls it.
 @MainActor func resetWorkspaceScreensForTests() {
     screenPointToPrevVisibleWorkspace = [:]
     screenPointToMonitorUuid = [:]
+    lastVisibleWorkspaceByUuid = [:]
 }
 
 /// Which old screen each new screen continues: the same panel by UUID, then the same position, then the
@@ -353,6 +359,9 @@ func rearrangeWorkspacesOnMonitors() {
         oldUuids: screenPointToMonitorUuid,
     )
     let oldScreenToNewScreen = Dictionary(newScreenToOldScreenMapping.map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+    for (oldScreen, workspace) in screenPointToVisibleWorkspace where oldScreenToNewScreen[oldScreen] == nil {
+        if let uuid = screenPointToMonitorUuid[oldScreen] { lastVisibleWorkspaceByUuid[uuid] = workspace.name }
+    }
     screenPointToMonitorUuid = Dictionary(zip(newScreens, newUuids).compactMap { point, uuid in uuid.map { (point, $0) } }, uniquingKeysWith: { first, _ in first })
     // Hidden workspaces follow their panel too; the visible ones get it from `setActiveWorkspace` below.
     for workspace in Workspace.all {
@@ -363,9 +372,16 @@ func rearrangeWorkspacesOnMonitors() {
     screenPointToVisibleWorkspace = [:]
     visibleWorkspaceToScreenPoint = [:]
 
-    for newScreen in newScreens {
+    for (newScreen, uuid) in zip(newScreens, newUuids) {
         if let existingVisibleWorkspace = newScreenToOldScreenMapping[newScreen].flatMap({ oldScreenPointToVisibleWorkspace[$0] }),
            newScreen.setActiveWorkspace(existingVisibleWorkspace)
+        {
+            continue
+        }
+        // A panel back from away, wherever it now sits, unless its workspace went on screen elsewhere meanwhile.
+        if let name = uuid.flatMap({ lastVisibleWorkspaceByUuid.removeValue(forKey: $0) }),
+           let kept = Workspace.all.first(where: { $0.name == name }),
+           !kept.isVisible, newScreen.setActiveWorkspace(kept)
         {
             continue
         }

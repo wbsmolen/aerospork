@@ -197,6 +197,48 @@ final class MonitorIdentityTest: XCTestCase {
         assertEquals(left.activeWorkspace.name, "belongs-anywhere")
     }
 
+    // MARK: - A panel that leaves and comes back
+
+    /// A DisplayLink panel that drops and returns can come back at another origin, and position alone then gave its
+    /// workspace to whichever screen sat nearest the old spot.
+    func testAPanelBackAtANewOriginGetsItsWorkspaceBack() {
+        setUpWorkspacesForTests()
+        let a = panel(id: 1, x: 0, uuid: "AAAAAAAA-0000-0000-0000-000000000001")
+        let b = panel(id: 2, x: 1920, uuid: "BBBBBBBB-0000-0000-0000-000000000002")
+        let c = panel(id: 3, x: 3840, uuid: "CCCCCCCC-0000-0000-0000-000000000003")
+        testMonitors = [a, b, c]
+        gcMonitors()
+        check(b.setActiveWorkspace(Workspace.get(byName: "on-b")))
+        _ = TestWindow.new(id: 1, parent: Workspace.get(byName: "on-b").rootTilingContainer) // not collected while away
+
+        testMonitors = [a, c]
+        rearrangeWorkspacesOnMonitors()
+        testMonitors = [a, c, panel(id: 2, x: 5760, uuid: "BBBBBBBB-0000-0000-0000-000000000002")]
+        rearrangeWorkspacesOnMonitors()
+
+        assertEquals(sortedMonitors.first { $0.rect.topLeftX == 5760 }?.activeWorkspace.name, "on-b")
+    }
+
+    /// The counter-check: another panel at the spot the first one left does not take the workspace kept for it.
+    func testAnotherPanelAtTheOldSpotDoesNotTakeTheWorkspace() {
+        setUpWorkspacesForTests()
+        let a = panel(id: 1, x: 0, uuid: "AAAAAAAA-0000-0000-0000-000000000001")
+        let b = panel(id: 2, x: 1920, uuid: "BBBBBBBB-0000-0000-0000-000000000002")
+        testMonitors = [a, b]
+        gcMonitors()
+        check(b.setActiveWorkspace(Workspace.get(byName: "on-b")))
+        _ = TestWindow.new(id: 1, parent: Workspace.get(byName: "on-b").rootTilingContainer)
+
+        check(a.setActiveWorkspace(Workspace.get(byName: "1"))) // what the spot showed before is on screen elsewhere
+
+        testMonitors = [a]
+        rearrangeWorkspacesOnMonitors()
+        testMonitors = [a, panel(id: 4, x: 1920, uuid: "DDDDDDDD-0000-0000-0000-000000000004")]
+        rearrangeWorkspacesOnMonitors()
+
+        assertNotEquals(sortedMonitors[1].activeWorkspace.name, "on-b")
+    }
+
     // MARK: - Helpers
 
     private func resolve(_ description: MonitorDescription) -> Monitor? {

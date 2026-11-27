@@ -191,12 +191,12 @@ final class PerfInvariantsTest: XCTestCase {
         XCTAssertFalse(gc.contains("AppLog"), "a record on every refresh")
     }
 
-    /// The session query costs about 0.3 ms, so it runs only when a refresh did collect a window.
-    func testTheLockedQueryRunsOnlyWhenWindowsWereCollected() throws {
+    /// The session query costs about 0.3 ms, so a refresh asks it only when some window is no longer listed.
+    func testTheLockedQueryRunsOnlyWhenAWindowIsMissing() throws {
         let refresh = try sourceBody("private func refresh() async throws", in: "Sources/AppBundle/layout/refresh.swift")
-        XCTAssertEqual(refresh.components(separatedBy: "CGSessionCopyCurrentDictionary()").count - 1, 1)
-        let line = try XCTUnwrap(refresh.split(separator: "\n").first { $0.contains("CGSessionCopyCurrentDictionary()") })
-        XCTAssertTrue(line.contains("if collected > 0, (CGSessionCopyCurrentDictionary()"), "the query no longer waits for a collection: \(line)")
+        XCTAssertEqual(refresh.components(separatedBy: "screenIsLocked()").count - 1, 1)
+        let line = try XCTUnwrap(refresh.split(separator: "\n").first { $0.contains("screenIsLocked()") })
+        XCTAssertTrue(line.contains("!unlisted.isEmpty && screenIsLocked()"), "the query no longer waits for a missing window: \(line)")
     }
 
     /// In a debug build on macOS 27 a fresh system font was now and then a broken object, and CoreText raised

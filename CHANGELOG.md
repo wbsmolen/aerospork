@@ -17,6 +17,16 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 ## Unreleased
 
+## 1.5.1 (2026-11-27)
+
+Windows keep their places through the lock screen and through a monitor that drops out and comes back.
+
+### Fixed
+
+- A window that macOS stops reporting while the screen is locked keeps its tile and workspace, and is removed only if it really closed.
+- Waking displays behind the lock screen no longer makes AeroSpork forget where windows were.
+- A monitor that disconnects and comes back, as DisplayLink panels do when the displays sleep, shows the workspace it showed before, even when it comes back at a different position. Another monitor in its old position does not take that workspace.
+
 ## 1.5.0 (2026-11-27)
 
 A scratchpad keeps windows out of sight until you call them up, and workspace switches are quicker because hidden windows are no longer moved again on every refresh.
