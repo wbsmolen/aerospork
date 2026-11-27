@@ -96,7 +96,7 @@ aerospork -h;
 
     | list-exec-env-vars [--show-secrets]
 
-    | list-modes [--current]
+    | list-modes [--current | --json]...
 
     | list-monitors [--focused [no] | --mouse [no] | --format <output_format> | --count | --json]...
 

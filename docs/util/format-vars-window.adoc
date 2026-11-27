@@ -2,3 +2,6 @@
 %{window-title}:: String. The window title.
 %{window-is-fullscreen}:: Boolean. True if `aerospork fullscreen` made the window fullscreen.
 %{window-is-sticky}:: Boolean. True if `aerospork sticky` made the window follow the workspace that its monitor shows.
+%{window-is-floating}:: Boolean. True if the window floats instead of taking a tile.
+%{window-layout}:: String. `tiles` or `accordion`, the layout of the container that the window is tiled in, or `floating`. Empty for a window that macOS minimized, hid or made fullscreen.
+%{window-orientation}:: String. `horizontal` or `vertical`, the orientation of the container that the window is tiled in. Empty for a window that is not tiled.
