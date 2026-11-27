@@ -274,6 +274,12 @@ extension CGPoint {
         if !isValidAssignment(workspace: workspace, screen: self) {
             return false
         }
+        // Already shown here, as on every focus change inside a workspace. Going on would record the
+        // workspace as this monitor's previous one, and the monitor would forget what it showed before.
+        if screenPointToVisibleWorkspace[self] == workspace {
+            workspace.assignedMonitorPoint = self
+            return true
+        }
         let prevMonitorPoint = visibleWorkspaceToScreenPoint[workspace]
         if let prevMonitorPoint {
             visibleWorkspaceToScreenPoint.removeValue(forKey: workspace)
