@@ -51,6 +51,7 @@ All anchors are in `dev-docs/architecture.md`.
 | `initAppBundle.swift`, opening Settings | `#aerospork-never-manages-itself` | `OwnWindowsAndSingleInstanceTest`, `OpenSettingsTest` |
 | A new or renamed command | `#add-a-command` | `CliSurfaceTest`, `ShellCompletionGrammarTest` |
 | `server.swift`, `Common/util/UnixSocket.swift` | `#client-and-server` | `UnixSocketTest`, `ServerProtocolTest`, `CliConnectionTest` |
+| `subscribe/EventBroadcaster.swift`, a new event | `#the-subscribe-stream` | `EventBroadcasterTest`, `PerfInvariantsTest.testSubscribeEventsCostNothingWithoutASubscriber` |
 | `AppLog`, `debugLog`, `print` | `#logging` | `PerfInvariantsTest`, `BrandingTest.testLoggersUseTheBuildsOwnBundleId` |
 | Strings that name AeroSpace | `#upstream-names-live-in-one-file` | `BrandingTest` |
 | `ui/Updater.swift`, `project.yml`, `build-release.sh`, `updates-site/` | `#in-app-updates` | `ReleaseFeedTest` |
