@@ -8,14 +8,6 @@ import XCTest
 /// migration used to skip.
 @MainActor
 final class CleanupConfigTest: XCTestCase {
-    private func parse(_ toml: String) -> (Config?, warnings: [String], errors: [String]) {
-        var warnings: [TomlParseError] = []
-        switch parseConfig(toml, warnings: &warnings) {
-            case .success(let config): return (config, warnings.map(\.description), [])
-            case .failure(let errors): return (nil, warnings.map(\.description), errors.map(\.description))
-        }
-    }
-
     // MARK: - Bounded project-root walk
 
     /// `deleteLastPathComponent()` does not stop at "/", so the old `while !exists(.git)` loop spun
@@ -67,7 +59,7 @@ final class CleanupConfigTest: XCTestCase {
     // MARK: - Branding: `during-aerospork-startup`
 
     private func startupMatcher(_ key: String) -> (Bool?, warnings: [String], errors: [String]) {
-        let (config, warnings, errors) = parse(
+        let (config, warnings, errors) = parseWithWarnings(
             """
             [[on-window-detected]]
             if.app-id = 'com.apple.finder'
@@ -101,7 +93,7 @@ final class CleanupConfigTest: XCTestCase {
     /// Severity is carried by the error case, not by a set of deprecated *top-level* names -- the
     /// root key here (`on-window-detected`) is perfectly live.
     func testARealErrorInAWindowRuleIsStillFatal() {
-        let (config, _, errors) = parse(
+        let (config, _, errors) = parseWithWarnings(
             """
             [[on-window-detected]]
             if.app-id = 'com.apple.finder'

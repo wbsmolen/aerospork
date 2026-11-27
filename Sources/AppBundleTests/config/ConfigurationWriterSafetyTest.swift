@@ -9,13 +9,6 @@ import XCTest
 /// saves. They are grouped by the guarantee they defend.
 @MainActor
 final class ConfigurationWriterSafetyTest: XCTestCase {
-    private func errors(_ toml: String) -> [String] {
-        switch parseConfig(toml) {
-            case .success: return []
-            case .failure(let e): return e.map(\.description)
-        }
-    }
-
     /// A view model that believes `base` is what it loaded.
     private func loadedVM() -> ConfigurationViewModel {
         let vm = ConfigurationViewModel()
@@ -166,7 +159,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
     /// The shipped default must stay inside what the writer can edit, or new users hit refusals.
     func testShippedDefaultConfigIsEditable() throws {
         let text = try String(contentsOf: defaultConfigUrl, encoding: .utf8)
-        assertEquals(errors(text), [])
+        assertEquals(parseErrors(text), [])
         let edits: [(String, (ConfigurationViewModel) -> Void)] = [
             ("nothing", { _ in }),
             ("a scalar", editPadding),
@@ -183,7 +176,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         for (name, edit) in edits {
             let (refusal, out) = save(text, edit)
             assertEquals(refusal, nil, additionalMsg: "the shipped default refuses an edit to \(name)")
-            assertEquals(errors(out), [])
+            assertEquals(parseErrors(out), [])
         }
     }
 
@@ -340,7 +333,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         assertNil(refusal)
         for header in ["[keys]", "[keys.resize]", "[monitors]", "[on-window]"] { XCTAssertTrue(out.contains(header), out) }
         for header in ["[mode.", "[workspace-to-monitor-force-assignment]", "[[on-window-detected]]"] { XCTAssertFalse(out.contains(header), out) }
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
     }
 
     /// Editing a v1 section stays in it. The whole-file conversion belongs to the migration, which
@@ -415,7 +408,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         vm.settings = edited
         for key in table { XCTAssertNotEqual(key.literal(edited), key.literal(vm.loaded), "\(key.key) didn't change, so this test proves nothing") }
         let out = ConfigurationWriter.render(baseText: "", from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         assertNil(ConfigurationWriter.refusal(rendered: out, base: "", from: vm))
         vm.load(fromText: out)
         for key in table { assertEquals(key.literal(vm.settings), key.literal(edited), additionalMsg: key.key) }
@@ -437,7 +430,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertTrue(out.contains("focus right"), "rebind was silently dropped:\n\(out)")
         XCTAssertFalse(out.contains("focus left"), "old command survived:\n\(out)")
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
     }
 
     /// Removing one section must not swallow the comments documenting the NEXT one.
@@ -480,7 +473,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         // What must never happen is the matcher disappearing.
         XCTAssertTrue(out.contains("during-aerospork-startup"), "startup matcher dropped:\n\(out)")
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
 
         // ...and it round-trips: reading `out` back must still see a startup-only rule.
         let reloaded = ConfigurationViewModel()
@@ -496,7 +489,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         vm.settings.assignments = [.init(workspace: "my workspace", monitor: "main")]
 
         let out = ConfigurationWriter.render(baseText: "", from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
     }
 
     /// A bare monitor string is parsed as a REGEX, so a literal display name containing regex
@@ -506,7 +499,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         vm.settings.assignments = [.init(workspace: "1", monitor: "ACME Display 32 (1)")]
 
         let out = ConfigurationWriter.render(baseText: "", from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertFalse(
             out.contains("1 = 'ACME Display 32 (1)'"),
             "emitted as a regex that cannot match its own display:\n\(out)",
@@ -529,7 +522,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
 
         XCTAssertNil(ConfigurationWriter.unsupportedShapeReason(base))
         let out = ConfigurationWriter.render(baseText: base, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertEqual(out.components(separatedBy: "[gaps]").count - 1, 1, "duplicated the section:\n\(out)")
         XCTAssertTrue(out.contains("\r\n"), "silently rewrote the file's line endings:\n\(out.debugDescription)")
     }
@@ -595,13 +588,6 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
 /// The damage this guard exists to prevent, taken verbatim from a real config it destroyed.
 @MainActor
 final class MonitorFingerprintNotDegradedTest: XCTestCase {
-    private func errors(_ toml: String) -> [String] {
-        switch parseConfig(toml) {
-            case .success: return []
-            case .failure(let e): return e.map(\.description)
-        }
-    }
-
     /// Two physically identical panels. `display_name` alone cannot tell them apart on reconnect --
     /// the `(1)`/`(2)` suffixes are assigned by connection order -- so the config pins them by
     /// resolution as well. The view model can only hold one token per assignment, and
@@ -625,7 +611,7 @@ final class MonitorFingerprintNotDegradedTest: XCTestCase {
 
         let out = ConfigurationWriter.render(baseText: Self.realConfig, from: vm)
         assertNil(ConfigurationWriter.refusal(rendered: out, base: Self.realConfig, from: vm))
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertTrue(out.hasPrefix(Self.realConfig), "a sibling row was re-spelled:\n\(out)")
     }
 }

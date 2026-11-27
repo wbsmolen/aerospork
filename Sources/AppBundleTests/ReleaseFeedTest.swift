@@ -4,21 +4,17 @@ import XCTest
 /// A build refuses a feed without a valid signature and fails soft, by offering nothing, so each link has
 /// to stay in place. `sign_update --verify` needs the key, so the signature itself is checked at publish.
 final class ReleaseFeedTest: XCTestCase {
-    private func read(_ path: String) throws -> String {
-        try String(contentsOf: projectRoot.appending(path: path), encoding: .utf8)
-    }
-
     func testABuildRequiresASignedFeed() throws {
-        XCTAssertTrue(try read("project.yml").contains("SURequireSignedFeed: true"))
-        XCTAssertTrue(try read("build-release.sh").contains("Print :SURequireSignedFeed"), "nothing asserts it is in the bundle")
+        XCTAssertTrue(try readRepoFile("project.yml").contains("SURequireSignedFeed: true"))
+        XCTAssertTrue(try readRepoFile("build-release.sh").contains("Print :SURequireSignedFeed"), "nothing asserts it is in the bundle")
     }
 
     func testTheFeedInTheRepoIsSigned() throws {
-        XCTAssertTrue(try read("updates-site/appcast.xml").contains("sparkle-signatures"))
+        XCTAssertTrue(try readRepoFile("updates-site/appcast.xml").contains("sparkle-signatures"))
     }
 
     func testPublishingSignsTheFeedAndChecksWhatIsServed() throws {
-        let script = try read("script/publish-release.sh")
+        let script = try readRepoFile("script/publish-release.sh")
         let sign = try XCTUnwrap(script.range(of: #"sign_update" updates-site/appcast.xml"#))
         let deploy = try XCTUnwrap(script.range(of: "./script/deploy-site.sh"))
         let served = try XCTUnwrap(script.range(of: #"--verify "$served_feed""#))
@@ -29,7 +25,7 @@ final class ReleaseFeedTest: XCTestCase {
     /// A release from a stale tree, with a version that is not new, or onto a tag cut from other code must stop
     /// before the 20-minute build. A local feed that is not the live one would also drop the newest live item.
     func testPublishingRefusesAStaleTreeOrVersionBeforeTheBuild() throws {
-        let script = try read("script/publish-release.sh")
+        let script = try readRepoFile("script/publish-release.sh")
         let tests = try XCTUnwrap(script.range(of: "./run-tests.sh"))
         let checks = [
             #"!= "$(git rev-parse origin/main)""#,
@@ -46,7 +42,7 @@ final class ReleaseFeedTest: XCTestCase {
     /// A site deploy from a tree without the newest appcast serves the older, still validly signed feed, and
     /// clients stop being offered the new release. A feed that does not verify makes them offer nothing.
     func testASiteDeployRefusesARolledBackOrUnverifiedFeed() throws {
-        let script = try read("script/deploy-site.sh")
+        let script = try readRepoFile("script/deploy-site.sh")
         let upload = try XCTUnwrap(script.range(of: "firebase-deploy.py"))
         let fetchLive = try XCTUnwrap(script.range(of: "https://aerospork.app/appcast.xml?deploy="))
         let compare = try XCTUnwrap(script.range(of: #"sort -V | tail -1)" != "$local_version""#))

@@ -29,11 +29,33 @@ let projectRoot: URL = {
     return url
 }
 
+/// A file of the checkout, by its path from the project root.
+func readRepoFile(_ relativePath: String) throws -> String {
+    try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
+}
+
+/// The parse errors of `toml` read as a whole config, empty when it loads.
+@MainActor func parseErrors(_ toml: String) -> [String] {
+    switch parseConfig(toml) {
+        case .success: []
+        case .failure(let errors): errors.descriptions
+    }
+}
+
+/// The config `toml` loads to (nil when it does not load), with its warnings and errors.
+@MainActor func parseWithWarnings(_ toml: String) -> (config: Config?, warnings: [String], errors: [String]) {
+    var warnings: [TomlParseError] = []
+    switch parseConfig(toml, warnings: &warnings) {
+        case .success(let config): return (config, warnings.descriptions, [])
+        case .failure(let errors): return (nil, warnings.descriptions, errors.descriptions)
+    }
+}
+
 /// The whole declaration that `declaration` starts, for tests that pin wiring which needs a real
 /// `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment explaining a
 /// fix would satisfy or trip the assertion.
 func sourceBody(_ declaration: String, in relativePath: String) throws -> String {
-    let source = try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
+    let source = try readRepoFile(relativePath)
     return try XCTUnwrap(
         declarationBody(declaration, in: source),
         "\(declaration) was renamed, or no line closes it at its indentation; re-point this test rather than deleting it",

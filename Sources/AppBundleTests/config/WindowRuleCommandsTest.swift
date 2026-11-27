@@ -57,9 +57,6 @@ final class WindowRuleCommandsTest: XCTestCase {
     }
 
     private func errors(_ run: String) -> [String] {
-        switch parseConfig("[[on-window-detected]]\nrun = \(run)") {
-            case .success: []
-            case .failure(let errors): errors.descriptions
-        }
+        parseErrors("[[on-window-detected]]\nrun = \(run)")
     }
 }

@@ -15,10 +15,6 @@ import XCTest
 final class DesignKitParityTest: XCTestCase {
     private var kitRoot: URL { projectRoot.appending(path: ".claude/skills/aerospork-design") }
 
-    private func read(_ relativePath: String) throws -> String {
-        try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
-    }
-
     private func readKit(_ relativePath: String) throws -> String {
         try String(contentsOf: kitRoot.appending(path: relativePath), encoding: .utf8)
     }
@@ -55,7 +51,7 @@ final class DesignKitParityTest: XCTestCase {
     /// is what tells you the kit needs the same change.
     func testTheSharedPhrasesAreStillInTheSwift() throws {
         for entry in shared {
-            let source = try read(entry.swiftFile)
+            let source = try readRepoFile(entry.swiftFile)
             XCTAssertTrue(
                 source.contains(entry.phrase),
                 """

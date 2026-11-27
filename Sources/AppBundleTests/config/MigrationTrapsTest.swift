@@ -9,14 +9,8 @@ import XCTest
 /// the default, and the user gets a keymap they never wrote with nothing to say why.
 @MainActor
 final class MigrationTrapsTest: XCTestCase {
-    private func parse(_ toml: String) -> (result: Result<Config, [TomlParseError]>, warnings: [String]) {
-        var warnings: [TomlParseError] = []
-        let result = parseConfig(toml, warnings: &warnings)
-        return (result, warnings.map(\.description))
-    }
-
     func testAeroSpaceOnlyKeysWarnInsteadOfDiscardingTheConfig() {
-        let (result, warnings) = parse("""
+        let (loaded, warnings, errors) = parseWithWarnings("""
             config-version = 2
             auto-reload-config = true
             accordion-padding = 7
@@ -24,7 +18,7 @@ final class MigrationTrapsTest: XCTestCase {
             [focus-follows-mouse]
             enabled = true
             """)
-        guard case .success(let config) = result else { return XCTFail("the whole config was discarded: \(result)") }
+        guard let config = loaded else { return XCTFail("the whole config was discarded: \(errors)") }
         assertEquals(config.accordionPadding, 7, additionalMsg: "the rest of the config must still apply")
         for key in upstreamOnlyKeyParsers.keys {
             XCTAssertTrue(warnings.contains { $0.hasPrefix(key) }, "no warning for \(key): \(warnings)")
@@ -34,8 +28,8 @@ final class MigrationTrapsTest: XCTestCase {
     /// Reported and ignored until AeroSpork honoured it. A config that carried it now runs it.
     func testOnModeChangedIsHonouredNotIgnored() {
         XCTAssertNil(upstreamOnlyKeyParsers["on-mode-changed"])
-        let (result, warnings) = parse("on-mode-changed = ['exec-and-forget echo $AEROSPORK_MODE']")
-        guard case .success(let config) = result else { return XCTFail("\(result)") }
+        let (loaded, warnings, errors) = parseWithWarnings("on-mode-changed = ['exec-and-forget echo $AEROSPORK_MODE']")
+        guard let config = loaded else { return XCTFail("\(errors)") }
         assertEquals(config.onModeChanged.count, 1)
         assertEquals(warnings, [])
     }
@@ -43,14 +37,14 @@ final class MigrationTrapsTest: XCTestCase {
     /// A binding to a command that does not parse is fatal for the whole config, and `swap` was the one
     /// binding command AeroSpace has that AeroSpork lacked.
     func testABindingToSwapLoadsWithTheRestOfTheConfig() {
-        let (result, _) = parse("""
+        let (loaded, _, errors) = parseWithWarnings("""
             accordion-padding = 7
 
             [mode.main.binding]
             alt-s = 'swap left'
             alt-h = 'focus left'
             """)
-        guard case .success(let config) = result else { return XCTFail("the whole config was discarded: \(result)") }
+        guard let config = loaded else { return XCTFail("the whole config was discarded: \(errors)") }
         assertEquals(config.accordionPadding, 7)
         let commands = config.modes[mainModeId]?.bindings.values.flatMap(\.commands) ?? []
         assertEquals(commands.count, 2)
@@ -60,24 +54,24 @@ final class MigrationTrapsTest: XCTestCase {
 
     /// Still an error -- the rule cannot be honoured -- but one that names the fix.
     func testAStringIfSaysWhatToWriteInstead() {
-        let (result, _) = parse("""
+        let (config, _, errors) = parseWithWarnings("""
             [[on-window-detected]]
             if = 'test %{app-bundle-id} == com.apple.finder'
             run = 'layout floating'
             """)
-        guard case .failure(let errors) = result else { return XCTFail("a string `if` cannot be honoured and must not load") }
-        XCTAssertTrue(errors.contains { $0.description.contains("if.app-id") }, "\(errors.map(\.description))")
+        guard config == nil else { return XCTFail("a string `if` cannot be honoured and must not load") }
+        XCTAssertTrue(errors.contains { $0.contains("if.app-id") }, "\(errors)")
     }
 
     /// `$AEROSPACE_FOCUSED_WORKSPACE` expands to nothing and `aerospace` is not on PATH, so a migrated
     /// status-bar hook runs and does nothing.
     func testAeroSpaceNamesInCommandsWarnButStillLoad() {
-        let (result, warnings) = parse("""
+        let (config, warnings, errors) = parseWithWarnings("""
             # AEROSPACE_FOCUSED_WORKSPACE became AEROSPORK_FOCUSED_WORKSPACE -- a comment must not warn
             exec-on-workspace-change = ['/bin/bash', '-c', 'sketchybar --trigger change FOCUSED=$AEROSPACE_FOCUSED_WORKSPACE']
             after-startup-command = ['exec-and-forget aerospace list-workspaces --all']
             """)
-        if case .failure(let errors) = result { return XCTFail("\(errors.map(\.description))") }
+        if config == nil { return XCTFail("\(errors)") }
         XCTAssertTrue(warnings.contains { $0.contains("Line 2") && $0.contains("AEROSPORK_") }, "\(warnings)")
         XCTAssertTrue(warnings.contains { $0.contains("Line 3") && $0.contains("`aerospork`") }, "\(warnings)")
         XCTAssertFalse(warnings.contains { $0.contains("Line 1") }, "a comment warned: \(warnings)")
