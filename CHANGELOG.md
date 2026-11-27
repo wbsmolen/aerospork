@@ -50,6 +50,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 ### Fixed
 
 - A window of an app that quit while updating itself no longer leaves an empty tile behind.
+- `move-node-to-workspace` and `move-node-to-monitor` refuse a window in macOS fullscreen or of a hidden app, as `move` does, instead of leaving an empty tile for it on the other workspace.
 - AeroSpork no longer quits when every display is asleep or a DisplayLink dock is reconnecting.
 - AeroSpork no longer quits at startup when both `~/.aerospork.toml` and `~/.config/aerospork/aerospork.toml` exist.
 - Saving in Settings keeps a symlinked config a symlink, so a dotfiles manager keeps managing it.
