@@ -39,6 +39,7 @@ stale. Run the suite to see it.
 | Focus taken from macOS (#39) | `InvoluntaryFocusTest`, `FocusCacheTest` |
 | Window rules, retries, declared workspaces (#40) | `WindowDetectionRetryTest`, `PersistentWorkspacesTest` |
 | Workspace memory, away windows, native tabs | `WorkspaceMemoryTest`, `AwayWindowTest`, `NativeTabsTest` |
+| The scratchpad | `ScratchpadTest` |
 | The refresh scheduler and sessions | `RefreshSchedulerTest`, `ConcurrencyTest` |
 | IPC: framing, real `AF_UNIX` sockets, exit codes | `CommonTests/SocketCodecTest`, `UnixSocketTest`, `CliConnectionTest`, `ServerProtocolTest` |
 | CLI argument parsing and the command surface | `CommonTests/CmdArgsParsingTest`, `CliSurfaceTest`, `ShellCompletionGrammarTest` |

@@ -43,6 +43,7 @@ All anchors are in `dev-docs/architecture.md`.
 | `WorkspaceMemory.swift`, `MacWindow.getOrRegister` | `#workspace-memory`, `#both-halves-or-neither` | `WorkspaceMemoryTest` |
 | `TilingContainer.awayWindows`, minimize, hide, fullscreen | `#away-windows` | `AwayWindowTest` |
 | Native tabs, `MacApp.swift` window lists, Finder | `#native-tabs` | `NativeTabsTest` |
+| `ScratchpadContainer.swift`, `move-node-to-scratchpad`, `scratchpad` | `#the-scratchpad` | `ScratchpadTest` |
 | Focus, `getNativeFocusedWindow.swift`, `focus.swift` | `#taking-focus-from-macos` | `InvoluntaryFocusTest`, `FocusCacheTest` |
 | `on-window-detected`, popups, retries | `#window-rules-run-to-the-end` | `WindowDetectionRetryTest` |
 | Workspace creation and garbage collection | `#which-workspaces-exist` | `PersistentWorkspacesTest`, `PerfInvariantsTest` |

@@ -17,6 +17,10 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 ## Unreleased
 
+### Added
+
+- A window can go to the scratchpad, out of sight and on no workspace, and come back on any workspace: `move-node-to-scratchpad` puts it away, `scratchpad` calls it up floating and centred, and puts it away again. `scratchpad --app-bundle-id` calls up the windows of one app, and a window rule can put new windows there.
+
 ## 1.4.0 (2026-11-27)
 
 Status bars can follow AeroSpork with `subscribe`, windows of apps that quit no longer leave empty tiles, and AeroSpork survives several situations that used to stop it.
