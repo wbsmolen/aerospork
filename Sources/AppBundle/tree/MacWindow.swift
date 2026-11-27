@@ -48,7 +48,10 @@ final class MacWindow: Window {
         if let existing = allWindowsMap[windowId] { return existing }
         let isRemembered = remembered != nil
         if isRemembered { data = WorkspaceMemory.restoredBinding(of: windowId, on: workspace, default: data) }
-        if toScratchpad { data = BindingData(parent: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST) }
+        if toScratchpad {
+            data = BindingData(parent: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            scratchpadWindowsPutAwayWhileNamed.insert(windowId) // it was put away already; registering is no request to see it
+        }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
         window.workspaceNameAtRegistration = workspace.name

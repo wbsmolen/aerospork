@@ -31,6 +31,7 @@ extension Window {
         isSticky = false // sticky and scratchpad are exclusive: following the screen would show it again
         isFullscreen = false // it comes back at its floating size
         isScratchpad = true
+        scratchpadWindowsPutAwayWhileNamed.insert(windowId)
         bind(to: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     }
 
@@ -47,6 +48,17 @@ extension Window {
         if let size {
             setAxFrame(centredOnMonitor(visibleRect, size), size)
         }
+    }
+
+    /// Where a window still in the scratchpad goes when AeroSpork stops parking it, at quit or `enable off`: centred
+    /// on the main monitor at its floating size, as `scratchpad` shows it. Not where it was put away: after a crash,
+    /// a forced quit or the lock screen, the window registers again while parked, and its "unparked" spot is the
+    /// corner, which would leave it off screen for good.
+    @MainActor var onScreenFrameOutsideTheScratchpad: (topLeft: CGPoint, size: CGSize)? {
+        guard parent is ScratchpadContainer else { return nil }
+        let visibleRect = mainMonitor.visibleRect
+        let size = lastFloatingSize ?? CGSize(width: visibleRect.width / 2, height: visibleRect.height / 2)
+        return (centredOnMonitor(visibleRect, size), size)
     }
 
     /// The monitor a parked window goes back to: its workspace's. A window in the scratchpad has no workspace, so the

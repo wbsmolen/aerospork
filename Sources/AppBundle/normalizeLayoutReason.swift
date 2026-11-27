@@ -307,8 +307,14 @@ func exitMacOsNativeUnconventionalState(window: Window, prevParentKind: NonLeafT
             } else {
                 try await window.relayoutWindow(on: workspace, forceTile: true)
             }
-        case .scratchpadContainer: // it was put away before macOS took it, so that is where it goes back
-            window.bind(to: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        case .scratchpadContainer:
+            // It was put away before macOS took it, so that is where it goes back. Unless it is no scratchpad window
+            // any more: a tab that left its group while the group was put away is a window of its own.
+            if window.isScratchpad {
+                window.bind(to: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            } else {
+                try await window.relayoutWindow(on: workspace)
+            }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window

@@ -34,19 +34,46 @@ private let nativeFocusGrace: TimeInterval = 1.0
 /// test suite: `lastKnownNativeFocusedWindowId` left over from one test suppresses the adopt in the
 /// next, so the tests would pass or fail depending on their order.
 @MainActor func resetFocusCacheForTests() {
+    scratchpadWindowsPutAwayWhileNamed = []
     lastKnownNativeFocusedWindowId = nil
     pendingNativeFocus = nil
     focusAdoptedAwayFrom = nil
 }
 
-/// Does macOS name a window the scratchpad put away, as news? cmd-tab to an app whose only window is put away
-/// does that. The window must come out, or the keyboard goes to a window nobody can see. Not when macOS still
-/// names the window it named before, which is what it does right after `move-node-to-scratchpad` put the focused
-/// window away, and not while a focus request of ours is in flight.
-@MainActor func macOsFocusedAPutAwayScratchpadWindow(_ nativeFocused: Window?) -> Bool {
-    guard let nativeFocused, nativeFocused.parent is ScratchpadContainer else { return false }
-    if let pending = pendingNativeFocus, Date() < pending.deadline { return false }
-    return nativeFocused.windowId != lastKnownNativeFocusedWindowId
+/// The windows put away since macOS last named some other window. macOS goes on naming the window it had focused
+/// after a rule or `move-node-to-scratchpad` puts it away, and that is no request to see it again.
+@MainActor var scratchpadWindowsPutAwayWhileNamed: Set<UInt32> = []
+
+enum ScratchpadFocus: Equatable {
+    case nothing
+    /// macOS came back to a put-away window, for example by cmd-tab: show it, or the keyboard types into a
+    /// window nobody can see.
+    case show
+    /// macOS still names the window just put away: give the keyboard back to the window AeroSpork focuses, as
+    /// a switch to another workspace does.
+    case focusBack(Window)
+
+    static func == (a: ScratchpadFocus, b: ScratchpadFocus) -> Bool {
+        switch (a, b) {
+            case (.nothing, .nothing), (.show, .show): true
+            case (.focusBack(let x), .focusBack(let y)): x.windowId == y.windowId
+            default: false
+        }
+    }
+}
+
+/// What to do about the window macOS names, when it is a window the scratchpad put away. Nothing while a focus
+/// request of ours is in flight. With no other window to give the keyboard to, nothing either, as for an empty
+/// workspace, so a quick second `scratchpad` does not bounce the window back out.
+@MainActor func scratchpadFocus(for nativeFocused: Window?) -> ScratchpadFocus {
+    guard let nativeFocused, nativeFocused.parent is ScratchpadContainer else {
+        scratchpadWindowsPutAwayWhileNamed = [] // macOS moved on
+        return .nothing
+    }
+    if let pending = pendingNativeFocus, Date() < pending.deadline { return .nothing }
+    guard scratchpadWindowsPutAwayWhileNamed.contains(nativeFocused.windowId) else { return .show }
+    if let back = focus.windowOrNil, back.windowId != nativeFocused.windowId { return .focusBack(back) }
+    return .nothing
 }
 
 /// Called by `MacApp.nativeFocus`. Until macOS reports this window focused, reports of *other*

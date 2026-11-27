@@ -341,9 +341,9 @@ alt-shift-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
 ----
 
 Switching to the app of a window in the scratchpad, for example with cmd-tab, also calls the window up,
-so the keyboard never types into a window you cannot see. For the same reason, an app that opens in
-front of you shows its window even when a rule puts it in the scratchpad. Run `scratchpad` to put it
-away.
+so the keyboard never types into a window you cannot see. A window that a rule puts away as it opens
+stays away, and the keyboard goes back to the window you were using. When AeroSpork quits, or you
+turn it off with `enable off`, the windows in the scratchpad come back centred on the main monitor.
 
 A window that you called up stays on that workspace, like any floating window, until you put it back.
 Move it with `move-node-to-workspace` or `move-node-to-monitor`, tile it, or make it sticky, and it

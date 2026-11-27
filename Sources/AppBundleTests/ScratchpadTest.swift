@@ -127,24 +127,61 @@ final class ScratchpadTest: XCTestCase {
         XCTAssertTrue(away.parent === focus.workspace)
     }
 
-    /// cmd-tab to an app whose only window is put away: macOS names that window, and it must come out, or the
-    /// keyboard goes to a window nobody can see. Not right after it was put away, while macOS still names it.
-    func testAPutAwayWindowMacOsFocusesComesOut() async throws {
+    /// A rule puts a new window away, or `move-node-to-scratchpad` the focused one, and macOS goes on naming it. That
+    /// is no request to see it: the keyboard goes back to the window AeroSpork focuses, and the window stays away.
+    func testMacOsStillNamingAWindowJustPutAwayGivesTheKeyboardBack() async throws {
         resetFocusCacheForTests()
+        appForTests = TestApp.shared
         let a = focus.workspace
-        let away = window(1, on: a)
         let other = window(2, on: a)
-        updateFocusCache(away)
-        try await away.moveToScratchpad()
-        XCTAssertFalse(macOsFocusedAPutAwayScratchpadWindow(away), "macOS still naming the window just put away is not news")
+        XCTAssertTrue(other.focusWindow())
+        let arriving = window(1, on: a)
+        try await arriving.moveToScratchpad() // what the rule does at registration
+        TestApp.shared.focusedWindow = arriving // the app opened in front, so macOS names it
 
-        updateFocusCache(other)
-        XCTAssertTrue(macOsFocusedAPutAwayScratchpadWindow(away))
-        XCTAssertFalse(macOsFocusedAPutAwayScratchpadWindow(other), "a window on a workspace needs nothing")
-        try await away.showFromScratchpad(on: focus.workspace)
-        updateFocusCache(away)
-        assertEquals(focus.windowOrNil?.windowId, 1, additionalMsg: "the shown window could not take focus")
+        try await syncFocusFromMacOs()
+
+        XCTAssertTrue(arriving.parent === scratchpadContainer, "a window a rule put away came straight back out")
+        assertEquals(TestApp.shared.focusedWindow?.windowId, 2, additionalMsg: "the keyboard stayed on a window nobody can see")
+        assertEquals(focus.windowOrNil?.windowId, 2)
+    }
+
+    /// cmd-tab to an app whose only window is put away: macOS names that window after naming another, and it comes
+    /// out, or the keyboard goes to a window nobody can see.
+    func testMacOsComingBackToAPutAwayWindowShowsIt() async throws {
+        resetFocusCacheForTests()
+        appForTests = TestApp.shared
+        let a = focus.workspace
+        let other = window(2, on: a)
+        XCTAssertTrue(other.focusWindow())
+        let away = window(1, on: a)
+        try await away.moveToScratchpad()
+        TestApp.shared.focusedWindow = other
+        try await syncFocusFromMacOs() // macOS moved on
+
+        TestApp.shared.focusedWindow = away
+        try await syncFocusFromMacOs()
+
+        XCTAssertTrue(away.parent is Workspace, "cmd-tab to a put-away window left it parked")
+        assertEquals(focus.windowOrNil?.windowId, 1)
         XCTAssertTrue(away.isScratchpad, "a shown scratchpad window is still a scratchpad window")
+    }
+
+    /// Shown on an empty workspace and put away again at once: with no other window to give the keyboard to, the
+    /// window stays away, as focus on an empty workspace stays where it was.
+    func testAQuickSecondScratchpadOnAnEmptyWorkspaceDoesNotBounce() async throws {
+        resetFocusCacheForTests()
+        appForTests = TestApp.shared
+        let away = window(1, on: Workspace.get(byName: "a"))
+        try await away.moveToScratchpad()
+        XCTAssertTrue(Workspace.get(byName: "empty").focusWorkspace())
+        assertEquals(try await run("scratchpad").exitCode, 0) // shown
+        assertEquals(try await run("scratchpad").exitCode, 0) // and away again
+        TestApp.shared.focusedWindow = away // macOS answers the first request late
+
+        try await syncFocusFromMacOs()
+
+        XCTAssertTrue(away.parent === scratchpadContainer, "the window bounced back out")
     }
 
     func testAnEmptyScratchpadIsAnError() async throws {
@@ -331,10 +368,35 @@ final class ScratchpadTest: XCTestCase {
         let away = window(1, on: Workspace.get(byName: "R"))
         try await away.moveToScratchpad()
 
-        assertEquals(away.unparkedMonitor?.rect.topLeftX, 0)
+        let frame = try XCTUnwrap(away.onScreenFrameOutsideTheScratchpad)
+        assertEquals(frame.size, CGSize(width: 400, height: 300))
+        assertEquals(frame.topLeft, CGPoint(x: 760, y: 390), additionalMsg: "not centred on the main monitor")
 
         let quit = try sourceBody("private func makeAllWindowsVisibleAndRestoreSize(", in: "Sources/AppBundle/util/appBundleUtil.swift")
-        XCTAssertTrue(quit.contains("window.parent is ScratchpadContainer"), "the quit cleanup centres a scratchpad window by where it is parked")
+        XCTAssertTrue(quit.contains("onScreenFrameOutsideTheScratchpad"), "the quit cleanup does not use the on-screen frame")
+    }
+
+    /// After a crash the window registers again while parked, so where it "was" is the corner. The frame AeroSpork
+    /// puts it at when it stops parking it must not come from there, or the window ends up off screen for good.
+    func testAWindowBackInTheScratchpadAfterACrashStillComesOnScreen() async throws {
+        let away = window(1, on: focus.workspace)
+        try await away.moveToScratchpad()
+        away.lastFloatingSize = nil // nothing remembered at all
+        let frame = try XCTUnwrap(away.onScreenFrameOutsideTheScratchpad)
+        XCTAssertTrue(mainMonitor.visibleRect.contains(frame.topLeft), "a window off the scratchpad was left off screen")
+        let disabled = try sourceBody("func layoutWorkspaces(", in: "Sources/AppBundle/layout/refresh.swift")
+        XCTAssertTrue(disabled.contains("onScreenFrameOutsideTheScratchpad"), "enable off does not put scratchpad windows on screen")
+    }
+
+    /// A tab dragged out of a group while the group was put away still carries "it came from the scratchpad", but
+    /// the group took the scratchpad flag with it. It is a window of its own, and lands on the workspace.
+    func testATabThatLeftAPutAwayGroupLandsOnTheWorkspace() async throws {
+        let a = focus.workspace
+        let tornOut = window(1, on: a)
+        XCTAssertFalse(tornOut.isScratchpad)
+        try await exitMacOsNativeUnconventionalState(window: tornOut, prevParentKind: .scratchpadContainer, workspace: a)
+        XCTAssertFalse(tornOut.parent === scratchpadContainer, "a window that is no scratchpad window was put away")
+        assertEquals(tornOut.nodeWorkspace?.name, a.name)
     }
 
     // MARK: - Native tabs
