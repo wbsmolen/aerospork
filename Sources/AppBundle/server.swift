@@ -104,6 +104,40 @@ func encodedAnswer(_ ans: ServerAnswer) -> Data? {
     ))
 }
 
+/// What makes two CLI failures the same record in the log.
+struct CliFailureKey: Equatable {
+    let args: [String]
+    let exitCode: Int32
+    let stderr: String
+}
+
+/// Whether to log `failure`, given the failure that answered the command before it (nil after a
+/// success). `AppLog` is always on, and a status bar polling a failing query, such as
+/// `list-windows --focused` on an empty workspace, wrote a record on every poll.
+func shouldLogCliFailure(_ failure: CliFailureKey, last: CliFailureKey?) -> Bool { failure != last }
+
+/// On the main actor because connections run concurrently.
+@MainActor private var lastCliFailure: CliFailureKey? = nil
+@MainActor private var lastCliFailureRepeats = 0
+
+/// Logs a failed socket command, once per run of identical failures, and the run's length when it
+/// ends. Only the socket comes here: keybindings run in-process.
+@MainActor func logCliAnswer(args: [String], _ answer: ServerAnswer) {
+    let failure = answer.exitCode == ExitCode.success ? nil : CliFailureKey(args: args, exitCode: answer.exitCode, stderr: answer.stderr)
+    if let failure, !shouldLogCliFailure(failure, last: lastCliFailure) {
+        lastCliFailureRepeats += 1
+        return
+    }
+    if let last = lastCliFailure, lastCliFailureRepeats > 0 {
+        AppLog.server.error("'\(last.args.joined(separator: " "), privacy: .public)': previous failure repeated \(lastCliFailureRepeats) times")
+    }
+    lastCliFailure = failure
+    lastCliFailureRepeats = 0
+    if let failure {
+        AppLog.server.error("'\(args.joined(separator: " "), privacy: .public)' exited \(failure.exitCode): \(failure.stderr, privacy: .public)")
+    }
+}
+
 /// Runs a blocking socket call on `queue` and suspends until it returns.
 ///
 /// Called directly it would block a thread of the cooperative pool, which is only as wide as the core
@@ -185,13 +219,7 @@ func newConnection(_ socket: UnixSocketConnection) async {
             }.result
             let answer = _answer.getOrNil() ??
                 serverAnswer(ExitCode.failure, stderr: "Fail to await main thread. \(_answer.failureOrNil?.localizedDescription ?? "")")
-            // Only failures, and only over the socket -- keybindings run in-process and never reach
-            // here -- so this is bounded by how often the user's CLI actually breaks.
-            if answer.exitCode != ExitCode.success {
-                AppLog.server.error(
-                    "'\(request.args.joined(separator: " "), privacy: .public)' exited \(answer.exitCode): \(answer.stderr, privacy: .public)",
-                )
-            }
+            await logCliAnswer(args: request.args, answer)
             await answerToClient(answer)
             continue
         }
