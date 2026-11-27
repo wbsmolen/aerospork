@@ -21,6 +21,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 - If your config file exists but cannot be read (wrong permissions, not UTF-8 text, or a link to a missing file), AeroSpork now says so and keeps your file, instead of quietly running the defaults. Fix the file, or the permissions, and it loads again.
 - If you migrated a config that binds `swap`, it now loads: `swap` is a command.
+- If a script or status bar waits on an `aerospork` command, it now gets exit code 3 and "No response from AeroSpork server within 60 s" when AeroSpork does not answer, instead of waiting forever. Treat exit 3 as "try again later".
 
 ### Added
 

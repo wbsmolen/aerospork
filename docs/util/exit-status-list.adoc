@@ -4,5 +4,6 @@ A no-op also exits 0. See `--fail-if-noop` on the commands that take it.
 The reason is on stderr.
 2:: AeroSpork did not understand the command: an unknown subcommand, flag or value.
 The error on stderr names what the command accepts.
-3:: The CLI cannot reach AeroSpork.
+3:: The CLI cannot reach AeroSpork, or AeroSpork did not answer within 60 seconds.
 Open AeroSpork.app, then run the command again.
+If AeroSpork is running and does not answer, quit it and open it again.
