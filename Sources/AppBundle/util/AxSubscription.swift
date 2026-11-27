@@ -48,8 +48,12 @@ func axRefconWindowId(_ refcon: UnsafeMutableRawPointer?) -> UInt32? {
 /// The one callback of every app's one observer.
 func axNotified(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: UnsafeMutableRawPointer?) {
     switch notif as String {
-        case kAXMovedNotification: movedObs(obs, ax: ax, notif: notif, data: data)
-        case kAXResizedNotification: resizedObs(obs, ax: ax, notif: notif, data: data)
+        case kAXMovedNotification:
+            noteFrameNotification(data)
+            movedObs(obs, ax: ax, notif: notif, data: data)
+        case kAXResizedNotification:
+            noteFrameNotification(data)
+            resizedObs(obs, ax: ax, notif: notif, data: data)
         default: refreshObs(obs, ax: ax, notif: notif, data: data)
     }
 }

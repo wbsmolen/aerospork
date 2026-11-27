@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import os
 
 /// Per-element AX message timeout, in seconds.
 ///
@@ -258,6 +259,7 @@ final class MacApp: AbstractApp {
     func forget(_ windowId: UInt32) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         nativeStateJobs.removeValue(forKey: windowId)?.cancel()
+        if isDebugLoggingEnabled { parkTrace.withLock { $0.forget(windowId) } }
     }
 
     @MainActor
@@ -384,8 +386,9 @@ final class MacApp: AbstractApp {
     /// awaits nothing: the spot depends on it because a parked window must not reach another monitor.
     func hideAxWindow(_ windowId: UInt32, at spot: @escaping @Sendable (CGSize) -> CGPoint) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
-            parkAxWindow(window, app: axApp.threadGuarded, at: spot)
+        setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp, bundleId] window, job in
+            let check = parkAxWindow(window, app: axApp.threadGuarded, at: spot)
+            if isDebugLoggingEnabled, let check { traceParkCheck(windowId, bundleId, check) }
         }
     }
 
@@ -877,17 +880,60 @@ private func isSized(_ actual: CGSize?, _ target: CGSize) -> Bool {
 }
 
 /// The `hideAxWindow` body, generic so the tests can drive it. The spot depends on the size, and both come
-/// from one batched read.
-func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at spot: (CGSize) -> CGPoint) {
+/// from one batched read. Returns the spot and where the window was before any write, nil if unreadable.
+@discardableResult
+func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at spot: (CGSize) -> CGPoint) -> (spot: CGPoint, actual: CGPoint?)? {
     let actual = window.getFrame()
-    guard let size = actual.size else { return }
+    guard let size = actual.size else { return nil }
     let point = spot(size)
     // This runs for every window of every invisible workspace on every refresh; without the
     // guard that was an unconditional AX position write per hidden window, forever.
-    if isAt(actual.topLeft, point) { return }
+    if isAt(actual.topLeft, point) { return (point, actual.topLeft) }
     disableAnimations(app: app) {
         _ = window.set(Ax.topLeftCornerAttr, point)
     }
+    return (point, actual.topLeft)
+}
+
+/// Trace only: does an app move a parked window without the `kAXMoved`/`kAXResized` notification that
+/// every window subscribes to? Re-reading parked windows on every layout could only be skipped if it never
+/// does. Touched only while `AEROSPORK_DEBUG_LOG` is set: one insert per notification, one lookup per check.
+private struct ParkTrace {
+    /// Where the last check left each parked window.
+    var parkedAt: [UInt32: CGPoint] = [:]
+    /// Windows with a move or resize notification since their last check.
+    var notified: Set<UInt32> = []
+    mutating func forget(_ windowId: UInt32) {
+        parkedAt.removeValue(forKey: windowId)
+        notified.remove(windowId)
+    }
+}
+
+/// Every app thread writes here, so one lock. Uncontended, and only while tracing.
+private let parkTrace = OSAllocatedUnfairLock(initialState: ParkTrace())
+
+/// Called for each move or resize notification, with its refcon, which carries the window id (`axRefcon`).
+func noteFrameNotification(_ refcon: UnsafeMutableRawPointer?) {
+    guard isDebugLoggingEnabled, let windowId = axRefconWindowId(refcon) else { return }
+    parkTrace.withLock { _ = $0.notified.insert(windowId) }
+}
+
+private func traceParkCheck(_ windowId: UInt32, _ bundleId: String?, _ check: (spot: CGPoint, actual: CGPoint?)) {
+    let (parkedAt, notified) = parkTrace.withLock { trace in
+        defer { trace.parkedAt[windowId] = check.spot }
+        return (trace.parkedAt[windowId], trace.notified.remove(windowId) != nil)
+    }
+    if parkedWindowMovedWithoutNotification(parkedAt: parkedAt, spot: check.spot, actual: check.actual, notified: notified) {
+        debugLog("Parked window moved without a notification: \(bundleId ?? "no bundle id") window \(windowId) "
+            + "was at \(check.actual.prettyDescription), parked at \(check.spot)")
+    }
+}
+
+/// A re-check found the window away from the spot the previous check left it at, and no move or resize
+/// notification arrived in between. Our own park write notifies too, so the check after a write never counts.
+func parkedWindowMovedWithoutNotification(parkedAt: CGPoint?, spot: CGPoint, actual: CGPoint?, notified: Bool) -> Bool {
+    guard !notified, let parkedAt, let actual else { return false }
+    return isAt(parkedAt, spot) && !isAt(actual, spot)
 }
 
 /// The AX writes that hand focus to a window. Extracted from `MacApp.nativeFocus` so the sequence is

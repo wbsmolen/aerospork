@@ -48,4 +48,17 @@ final class ParkPositionTest: XCTestCase {
         XCTAssertLessThan(predicate.lowerBound, read.lowerBound)
         XCTAssertTrue(body.contains("MacApp.timedOutThisPass.contains(macApp.pid)"), "a timed-out app's window would be parked without asking")
     }
+
+    /// The trace for apps that move a parked window without telling: only a re-check of the same spot that
+    /// finds the window elsewhere, with no notification since, counts.
+    func testAParkedWindowMovedWithoutANotificationIsOnlyThatCase() {
+        let spot = CGPoint(x: -799, y: 900)
+        let away = CGPoint(x: 100, y: 100)
+        assertTrue(parkedWindowMovedWithoutNotification(parkedAt: spot, spot: spot, actual: away, notified: false))
+        assertFalse(parkedWindowMovedWithoutNotification(parkedAt: spot, spot: spot, actual: away, notified: true))
+        assertFalse(parkedWindowMovedWithoutNotification(parkedAt: spot, spot: spot, actual: spot, notified: false)) // still there
+        assertFalse(parkedWindowMovedWithoutNotification(parkedAt: nil, spot: spot, actual: away, notified: false)) // first park
+        assertFalse(parkedWindowMovedWithoutNotification(parkedAt: away, spot: spot, actual: away, notified: false)) // new spot
+        assertFalse(parkedWindowMovedWithoutNotification(parkedAt: spot, spot: spot, actual: nil, notified: false)) // unreadable
+    }
 }
