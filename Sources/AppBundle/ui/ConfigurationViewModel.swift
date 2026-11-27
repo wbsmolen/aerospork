@@ -21,6 +21,7 @@ final class ConfigurationViewModel: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.refreshLiveMonitors() }
         }
+        raw.didChange = { [unowned self] in syncPendingRawEdits() }
     }
 
     /// What the panes edit. Everything a save can write lives here.
@@ -74,6 +75,14 @@ final class ConfigurationViewModel: ObservableObject {
     /// TOML must not call it "Matches the file on disk".
     @Published private(set) var rawTomlIsTheFile = false
     var rawTomlEdited: Bool { rawToml != loadedRawToml }
+    /// `rawTomlEdited`, published only when it flips. The window locks the structured panes on it: a
+    /// structured save refuses while raw edits are pending, and the next raw Apply reloaded `settings`
+    /// and silently threw the structured edit away. Reading `rawTomlEdited` there would observe every keystroke.
+    @Published private(set) var hasPendingRawEdits = false
+
+    private func syncPendingRawEdits() {
+        if hasPendingRawEdits != rawTomlEdited { hasPendingRawEdits = rawTomlEdited }
+    }
 
     /// Set ONLY by the Raw TOML pane's Apply button.
     ///
@@ -388,6 +397,7 @@ final class ConfigurationViewModel: ObservableObject {
     func markLoaded() {
         loaded = settings
         loadedRawToml = rawToml
+        syncPendingRawEdits()
     }
 
     func loadMonitors() -> [MonitorRow] {
@@ -728,7 +738,9 @@ final class ConfigurationViewModel: ObservableObject {
 /// The Raw TOML buffer, apart from the view model that every pane observes.
 @MainActor
 final class RawTomlBuffer: ObservableObject {
-    @Published var text = ""
+    @Published var text = "" { didSet { didChange?() } }
+    /// The view model's hook, so `hasPendingRawEdits` follows the editor's own writes to `text`.
+    var didChange: (() -> Void)?
 }
 
 // MARK: - The snapshot

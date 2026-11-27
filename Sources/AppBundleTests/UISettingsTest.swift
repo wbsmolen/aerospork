@@ -221,9 +221,40 @@ final class UISettingsTest: XCTestCase {
 
         XCTAssertFalse(vm.rawTomlEdited)
         vm.rawToml = "accordion-padding = 7\n"
-        XCTAssertEqual(viewModelChanges, 0, "a keystroke must not re-render every pane")
-        XCTAssertEqual(bufferChanges, 1)
+        XCTAssertEqual(viewModelChanges, 1, "the first edit flips hasPendingRawEdits, and only that")
+        vm.rawToml = "accordion-padding = 70\n"
+        vm.rawToml = "accordion-padding = 700\n"
+        XCTAssertEqual(viewModelChanges, 1, "a keystroke must not re-render every pane")
+        XCTAssertEqual(bufferChanges, 3)
         XCTAssertTrue(vm.rawTomlEdited)
+    }
+
+    /// The window locks the structured panes on this flag. It follows `rawTomlEdited` but publishes
+    /// only when that flips, so the window does not re-render on every keystroke.
+    func testPendingRawEditsFlipOnceEachWay() {
+        let loadedText = "accordion-padding = 30\n"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: loadedText)
+        var flips: [Bool] = []
+        let subscription = vm.$hasPendingRawEdits.dropFirst().sink { flips.append($0) }
+        defer { subscription.cancel() }
+
+        XCTAssertFalse(vm.hasPendingRawEdits)
+        vm.rawToml = "accordion-padding = 3\n"
+        vm.rawToml = "accordion-padding = 31\n"
+        vm.raw.text = "accordion-padding = 310\n" // the editor writes the buffer directly
+        XCTAssertTrue(vm.hasPendingRawEdits)
+        XCTAssertEqual(flips, [true])
+
+        vm.rawToml = loadedText
+        XCTAssertFalse(vm.hasPendingRawEdits)
+        XCTAssertEqual(flips, [true, false])
+
+        // A load makes the buffer the baseline again, so its edits are no longer pending.
+        vm.rawToml = "accordion-padding = 5\n"
+        vm.load(fromText: "accordion-padding = 5\n")
+        XCTAssertFalse(vm.hasPendingRawEdits)
+        XCTAssertEqual(flips, [true, false, true, false])
     }
 
     func testRawTomlValidatesTheBrokenFileInFallbackMode() {

@@ -53,6 +53,9 @@ public struct ConfigurationWindow: View {
             } else if !configWarnings.isEmpty {
                 Banner(configWarnings.joined(separator: "\n"), kind: .warning)
             }
+            if viewModel.hasPendingRawEdits, selectedPane != .rawToml {
+                Banner(Self.pendingRawEditsBanner, kind: .warning, action: ("Go to Raw TOML", { selectedPaneID = SettingsPane.rawToml.rawValue }))
+            }
             tabs
         }
     }
@@ -60,26 +63,32 @@ public struct ConfigurationWindow: View {
     private var tabs: some View {
         TabView(selection: $selectedPaneID) {
             GeneralSettingsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.general) }
                 .tag(SettingsPane.general.rawValue)
 
             GapsSettingsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.gaps) }
                 .tag(SettingsPane.gaps.rawValue)
 
             KeyBindingsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.keys) }
                 .tag(SettingsPane.keys.rawValue)
 
             WorkspacesMonitorsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.monitors) }
                 .tag(SettingsPane.monitors.rawValue)
 
             CallbacksTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.events) }
                 .tag(SettingsPane.events.rawValue)
 
             WindowRulesTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.windowRules) }
                 .tag(SettingsPane.windowRules.rawValue)
 
@@ -113,6 +122,11 @@ public struct ConfigurationWindow: View {
         // Flushed, not cancelled: closing the window inside the 600ms debounce used to drop the last edit.
         .onDisappear { Task { await viewModel.flushPendingAutoSave() } }
     }
+
+    /// A structured save refuses while Raw TOML has unapplied edits, and the next Apply reloads every
+    /// pane from the raw text, so an edit made here meanwhile would be lost. The panes lock instead.
+    /// On each pane, not the `TabView`, which would lock the toolbar and the way back to Raw TOML.
+    static let pendingRawEditsBanner = "Raw TOML has edits you have not applied, so the other panes are locked. Apply or revert them in Raw TOML."
 
     /// Only a parse error is in text Raw TOML can show. Two configs, or one that can't be read, are
     /// fixed outside Settings, and the failure below names the files.

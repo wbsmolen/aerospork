@@ -157,6 +157,20 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertFalse(strip.contains("selectedPane"), "the error strip is hidden on some pane: \(strip)")
     }
 
+    /// The window locks the structured panes on `hasPendingRawEdits`, which publishes only when the
+    /// buffer's edited state flips. Reading the buffer or `rawTomlEdited` would make the window observe
+    /// every keystroke and re-run all seven pane bodies again.
+    func testTheWindowDoesNotReadTheRawBuffer() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationWindow.swift"),
+            encoding: .utf8,
+        ))
+        for read in ["viewModel.raw\\b", "viewModel.rawToml\\b", "rawTomlEdited"] {
+            XCTAssertNil(source.range(of: read, options: .regularExpression), "ConfigurationWindow reads \(read)")
+        }
+        XCTAssertTrue(source.contains(".disabled(viewModel.hasPendingRawEdits)"), "the structured panes lost their lock")
+    }
+
     /// The product voice keeps the em dash for the rare interruption nothing else handles
     /// (`.claude/skills/aerospork-design/readme.md`), and the panes had 17 of them in their copy. A
     /// colon, a comma or a full stop says each of these better. Comments are not copy.
