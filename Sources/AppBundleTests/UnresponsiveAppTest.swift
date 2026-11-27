@@ -38,6 +38,23 @@ final class UnresponsiveAppTest: XCTestCase {
         XCTAssertFalse(processIsGone(1), "launchd is not ours to signal, which is EPERM, not gone")
     }
 
+    /// What AX cannot say -- an unreaped zombie, an element whose remote end died -- WindowServer can. A failed or
+    /// empty read says nothing died, and a background tab is never collected on its word.
+    func testOnlyAWindowWindowServerReadAndLacksIsGone() {
+        let registered: Set<UInt32> = [1, 2, 3, 4]
+        assertEquals(windowsGoneFromWindowServer(registered: registered, alive: [1, 9], backgroundTabs: [:]), [2, 3, 4])
+        assertEquals(windowsGoneFromWindowServer(registered: registered, alive: [1, 9], backgroundTabs: [3: 1]), [2, 4])
+        assertEquals(windowsGoneFromWindowServer(registered: registered, alive: [], backgroundTabs: [:]), [])
+        assertEquals(windowsGoneFromWindowServer(registered: registered, alive: nil, backgroundTabs: [:]), [])
+    }
+
+    /// Under test the read is empty, so the sweep notes nothing and asks for no refresh.
+    func testTheSweepNotesNothingWhenWindowServerSaysNothing() {
+        MacApp.pendingDead = []
+        XCTAssertFalse(MacApp.noteWindowsGoneFromWindowServer())
+        assertEquals(MacApp.pendingDead, [])
+    }
+
     /// `NSRunningApplication(processIdentifier:)` is nil for a bare child process, so no real gone app can
     /// be handed to `getOrRegister` here. Pinned in the source instead.
     func testADeadPidIsNotRegisteredOrReturned() throws {

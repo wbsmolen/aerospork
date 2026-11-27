@@ -240,10 +240,36 @@ final class RefreshSchedulerTest: XCTestCase {
 
     func testOneWindowListAnswersForEveryWindowItNames() throws {
         let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
-        let listed = try XCTUnwrap(body.range(of: ".contains($0.key)"), "a listed window is asked about one by one")
+        let listed = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key)"), "a listed window is asked about one by one")
         let alive = try XCTUnwrap(body.range(of: "return true", range: listed.upperBound ..< body.endIndex))
         let perWindow = try XCTUnwrap(body.range(of: "isDestroyed()"))
         XCTAssertLessThan(alive.lowerBound, perWindow.lowerBound)
+    }
+
+    /// The WindowServer verdict acts only where AX cannot answer: before the timeout shortcut that keeps every
+    /// window, and never against an app that lists the window.
+    func testAWindowGoneFromWindowServerIsDroppedBeforeTheTimeoutKeepsIt() throws {
+        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        let dead = try XCTUnwrap(body.range(of: "if pendingDead.contains($0.key) && !listedIds.contains($0.key) { return false }"))
+        let timeout = try XCTUnwrap(body.range(of: "if timedOut { return true }"))
+        XCTAssertLessThan(dead.lowerBound, timeout.lowerBound, "a timed-out app keeps a window WindowServer destroyed")
+    }
+
+    /// About 1.5 ms a read: the 30 s sweep pays it, a 50 ms-debounced refresh must not.
+    func testWindowServerIsReadByTheSweepNotByARefresh() throws {
+        let refresh = try sourceBody("private func refresh() async throws", in: "Sources/AppBundle/layout/refresh.swift")
+        let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
+        let perApp = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        for body in [refresh, pass, perApp] {
+            XCTAssertFalse(body.contains("windowServerWindowIds()"))
+            XCTAssertFalse(body.contains("noteWindowsGoneFromWindowServer()"))
+        }
+        let sweep = try sourceBody("static func startRegularAppSweep()", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(sweep.contains("noteWindowsGoneFromWindowServer()"))
+        let note = try sourceBody("static func noteWindowsGoneFromWindowServer()", in: "Sources/AppBundle/tree/MacApp.swift")
+        let registered = try XCTUnwrap(note.range(of: "Set(MacWindow.allWindowsMap.keys)"))
+        let read = try XCTUnwrap(note.range(of: "windowServerWindowIds()"))
+        XCTAssertLessThan(registered.lowerBound, read.lowerBound, "a window registered after the read would look dead")
     }
 
     func testAPopupIsOnlyRecheckedSoonAfterItAppeared() {
