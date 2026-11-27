@@ -1,0 +1,80 @@
+= aerospork-move-node-to-scratchpad(1)
+include::util/man-attributes.adoc[]
+:manname: aerospork-move-node-to-scratchpad
+// tag::purpose[]
+:manpurpose: Put a window away in the scratchpad, off screen and on no workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospork move-node-to-scratchpad [-h|--help] [--window-id <window-id>] [--fail-if-noop]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+`move-node-to-scratchpad` takes a window off its workspace and puts it in the scratchpad.
+The scratchpad belongs to no workspace, and AeroSpork keeps its windows off screen.
+`aerospork scratchpad` brings a window back onto the focused workspace, and puts it away again.
+Use it for a terminal, a notes app or a music player that you want to call up from any workspace.
+
+A tiled window leaves its tile. It comes back floating, centred on the monitor, at its floating size.
+A sticky window stops being sticky, and a window that `aerospork fullscreen` made fullscreen comes back at its floating size.
+
+You can also use `move-node-to-scratchpad` in a window rule, as the last command of `run`.
+A window that the rule matches then goes to the scratchpad when it opens.
+
+`list-windows` and `list-workspaces` do not show the windows in the scratchpad, as they do not show minimized windows.
+AeroSpork remembers which windows are in the scratchpad when it restarts.
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+
+--fail-if-noop::
+include::util/fail-if-noop-flag-desc.adoc[]
+
+--window-id <window-id>::
+include::util/window-id-flag-desc.adoc[]
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`move-node-to-scratchpad` exits 1 when no window is focused, and when the window is minimized, in macOS fullscreen or a window of a hidden app.
+With `--fail-if-noop`, it also exits 1 when the window is already in the scratchpad.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Put the focused window away with a binding, and call it back with another:
++
+[source,toml]
+----
+[keys]
+alt-shift-minus = 'move-node-to-scratchpad'
+alt-backtick = 'scratchpad'
+----
+
+* Put every new window of an app in the scratchpad when it opens:
++
+[source,toml]
+----
+[[on-window-detected]]
+    if.app-id = 'com.apple.Notes'
+    run = 'move-node-to-scratchpad'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-scratchpad(1), aerospork-sticky(1), aerospork-move-node-to-workspace(1)
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

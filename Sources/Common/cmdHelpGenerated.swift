@@ -153,6 +153,11 @@ let move_node_to_monitor_help_generated = """
 
     See: man aerospork-move-node-to-monitor
     """
+let move_node_to_scratchpad_help_generated = """
+    USAGE: move-node-to-scratchpad [-h|--help] [--window-id <window-id>] [--fail-if-noop]
+
+    See: man aerospork-move-node-to-scratchpad
+    """
 let move_node_to_workspace_help_generated = """
     USAGE: move-node-to-workspace [-h|--help] [--focus-follows-window] [--wrap-around]
                                   (next|prev)
@@ -187,6 +192,11 @@ let resize_help_generated = """
     USAGE: resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|width|height) [+|-]<number>
 
     See: man aerospork-resize
+    """
+let scratchpad_help_generated = """
+    USAGE: scratchpad [-h|--help] [--app-bundle-id <app-bundle-id>]
+
+    See: man aerospork-scratchpad
     """
 let split_help_generated = """
     USAGE: split [-h|--help] [--window-id <window-id>] (horizontal|vertical|opposite)

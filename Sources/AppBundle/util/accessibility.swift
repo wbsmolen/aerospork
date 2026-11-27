@@ -311,6 +311,7 @@ extension AXUIElement: AxUiElementMock {
 ///   window closed, app still running      -> kAXErrorIllegalArgument (-25201)
 ///   app busy past `axMessagingTimeout`    -> .cannotComplete, after the full timeout
 ///   app terminated                        -> .cannotComplete
+///   AeroSpork has no Accessibility access  -> .apiDisabled (-25211), for every read of every app
 ///
 /// So the intuitive spelling would be wrong twice over. `.invalidUIElement` is never what a destroyed
 /// window reports, so windows would linger in the tree forever; and a busy app is indistinguishable
@@ -322,8 +323,12 @@ extension AXUIElement: AxUiElementMock {
 /// Not an allowlist of "destroyed" codes either. The alive-window filter only ever removes entries,
 /// so a closed window reported with a code missing from such a list would keep its tiling slot until
 /// the app quits. Treating an unexpected code as destroyed costs one re-registration instead.
+///
+/// `.apiDisabled` is the second exception: it says nothing about the window, only that AeroSpork may
+/// not ask. Read as "destroyed", one refresh that ran just as Accessibility was turned off would
+/// collect every window, and each would lose its place and workspace.
 func axErrorMeansDestroyed(_ error: AXError) -> Bool {
-    error != .success && error != .cannotComplete
+    error != .success && error != .cannotComplete && error != .apiDisabled
 }
 
 extension AXObserver {

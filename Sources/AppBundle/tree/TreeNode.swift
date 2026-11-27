@@ -65,6 +65,7 @@ class TreeNode: Equatable, AeroAny {
             case .floatingWindow, .macosNativeFullscreenWindow: dieT("Weight doesn't make sense for floating windows")
             case .macosNativeMinimizedWindow: dieT("Weight doesn't make sense for minimized windows")
             case .macosPopupWindow: dieT("Weight doesn't make sense for popup windows")
+            case .scratchpadWindow: dieT("Weight doesn't make sense for scratchpad windows")
             case .macosNativeHiddenAppWindow: dieT("Weight doesn't make sense for windows of hidden apps")
             case .shimContainerRelation: dieT("Weight doesn't make sense for stub containers")
         }
@@ -85,7 +86,7 @@ class TreeNode: Equatable, AeroAny {
                     CGFloat(newParent.children.sumOfDouble { $0.getWeight(newParent.orientation) }).div(newParent.children.count) ?? 1
                 case .floatingWindow, .macosNativeFullscreenWindow,
                      .rootTilingContainer, .macosNativeMinimizedWindow,
-                     .shimContainerRelation, .macosPopupWindow, .macosNativeHiddenAppWindow:
+                     .shimContainerRelation, .macosPopupWindow, .macosNativeHiddenAppWindow, .scratchpadWindow:
                     WEIGHT_DOESNT_MATTER
             }
         } else {
@@ -121,6 +122,8 @@ class TreeNode: Equatable, AeroAny {
         _parent._mruChildren.pushOrRaise(self)
         _parent.markAsMostRecentChild()
     }
+
+    var childrenInMruOrder: [TreeNode] { Array(_mruChildren) }
 
     var mostRecentChild: TreeNode? {
         var iterator = _mruChildren.makeIterator()
@@ -192,7 +195,7 @@ class TreeNode: Equatable, AeroAny {
             case .tilingContainer: parent?.nodeMonitor
             case .macosFullscreenWindowsContainer: parent?.nodeMonitor
             case .macosHiddenAppsWindowsContainer: parent?.nodeMonitor
-            case .macosMinimizedWindowsContainer, .macosPopupWindowsContainer: nil
+            case .macosMinimizedWindowsContainer, .macosPopupWindowsContainer, .scratchpadContainer: nil
         }
     }
 
@@ -238,8 +241,8 @@ class TreeNode: Equatable, AeroAny {
         let innermostChild = parentsWithSelf.first(where: { (node: TreeNode) -> Bool in
             return switch node.parent?.cases {
                 // stop searching. We didn't find it, or something went wrong
-                case .workspace, nil, .macosMinimizedWindowsContainer,
-                     .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
+                case .workspace, nil, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                     .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer, .scratchpadContainer:
                     true
                 case .tilingContainer(let parent):
                     (layout == nil || parent.layout == layout) &&
@@ -252,8 +255,8 @@ class TreeNode: Equatable, AeroAny {
             case .tilingContainer(let parent):
                 check(parent.orientation == direction.orientation)
                 return innermostChild.ownIndex.map { (parent, $0) }
-            case .workspace, nil, .macosMinimizedWindowsContainer,
-                 .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
+            case .workspace, nil, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                 .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer, .scratchpadContainer:
                 return nil
         }
     }

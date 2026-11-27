@@ -193,19 +193,23 @@ func settleBackgroundTabs() {
         } else if tab.nodeWorkspace?.mostRecentWindowRecursive === tab {
             selected.markAsMostRecentChild()
         }
-        // A command moved the selected tab. The rest of the group go with it, or they'd keep the old workspace
-        // alive, with nothing on it to see.
-        if tab.parent is MacosHiddenAppsWindowsContainer, let workspace = selected.nodeWorkspace, tab.nodeWorkspace != workspace {
-            let mruBefore = workspace.mostRecentWindowRecursive
-            tab.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+        // A command moved the selected tab, to another workspace or in or out of the scratchpad. The rest of the
+        // group go with it, or they'd keep the old workspace alive, with nothing on it to see.
+        if tab.parent is MacosHiddenAppsWindowsContainer || tab.parent is ScratchpadContainer, let home = selected.backgroundTabHome,
+           tab.parent !== home
+        {
+            let mruBefore = selected.nodeWorkspace?.mostRecentWindowRecursive
+            tab.bind(to: home, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
             restoreMru(mruBefore, movedWindow: tab)
         }
     }
 }
 
 extension Window {
-    /// In the tiles or floating, where a background tab can't stay.
-    @MainActor var holdsTabPlace: Bool { layoutReason == .standard && (parent is TilingContainer || parent is Workspace) }
+    /// In the tiles, floating or in the scratchpad, where a background tab can't stay.
+    @MainActor var holdsTabPlace: Bool {
+        layoutReason == .standard && (parent is TilingContainer || parent is Workspace || parent is ScratchpadContainer)
+    }
 
     /// This is a tab of the same group as `tab`, and becomes the group's selected one: it goes where `tab` is, at
     /// its size and with what else made that its place, and `tab` goes behind it.
@@ -217,12 +221,13 @@ extension Window {
         swap(&layoutReason, &tab.layoutReason)
         swap(&isFullscreen, &tab.isFullscreen)
         swap(&noOuterGapsInFullscreen, &tab.noOuterGapsInFullscreen)
+        (isScratchpad, tab.isScratchpad) = (tab.isScratchpad, isScratchpad) // the group is the scratchpad window
         nodeWorkspace?.rootTilingContainer.forgetAway { $0 == self.windowId } // it has its place now
         WorkspaceMemory.stopRestoringLayouts() // the file names the tab that held this place, and can't any more
         // Where this was is a place too, if it just opened: a tile of its own, which has to go at once.
-        if tab.layoutReason == .standard, let workspace = nodeWorkspace {
-            tab.layoutReason = .macos(prevParentKind: tab.parent?.kind ?? .tilingContainer, prevWorkspaceName: workspace.name)
-            tab.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+        if tab.layoutReason == .standard, let home = backgroundTabHome {
+            tab.layoutReason = .macos(prevParentKind: tab.parent?.kind ?? .tilingContainer, prevWorkspaceName: nodeWorkspace?.name)
+            tab.bind(to: home, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
         }
         markAsMostRecentChild()
         if wasFocused { _ = focusWindow() } else { restoreMru(mruBefore, movedWindow: tab) }
@@ -301,6 +306,14 @@ func exitMacOsNativeUnconventionalState(window: Window, prevParentKind: NonLeafT
                 window.bind(to: slot.parent, adaptiveWeight: slot.adaptiveWeight, index: slot.index)
             } else {
                 try await window.relayoutWindow(on: workspace, forceTile: true)
+            }
+        case .scratchpadContainer:
+            // It was put away before macOS took it, so that is where it goes back. Unless it is no scratchpad window
+            // any more: a tab that left its group while the group was put away is a window of its own.
+            if window.isScratchpad {
+                window.bind(to: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            } else {
+                try await window.relayoutWindow(on: workspace)
             }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace)

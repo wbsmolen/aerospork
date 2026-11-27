@@ -137,6 +137,20 @@ final class PersistentWorkspacesTest: XCTestCase {
         assertEquals(Workspace.get(byName: "elsewhere").floatingWindows.count, 2)
     }
 
+    /// A window put in the scratchpad leaves its workspace, and an undeclared empty workspace goes. A declared one stays.
+    func testTheWorkspaceAWindowLeftForTheScratchpadCanBeReleased() async throws {
+        config.persistentWorkspaces = ["kept"]
+        for (id, name): (UInt32, String) in [(1, "left"), (2, "kept")] {
+            XCTAssertTrue(Workspace.get(byName: name).focusWorkspace())
+            try await TestWindow.new(id: id, parent: Workspace.get(byName: name).rootTilingContainer).moveToScratchpad()
+            XCTAssertTrue(Workspace.get(byName: "elsewhere").focusWorkspace())
+            refreshModel()
+        }
+        XCTAssertNil(Workspace.existing(byName: "left"), "the workspace the window left for the scratchpad was kept alive")
+        XCTAssertNotNil(Workspace.existing(byName: "kept"))
+        assertEquals(scratchpadContainer.children.count, 2)
+    }
+
     /// The issue's `cmd-left`/`cmd-right = 'workspace --wrap-around prev/next'` walked only the
     /// workspaces that happened to hold windows.
     func testNextAndPrevWalkThroughEmptyDeclaredWorkspaces() {

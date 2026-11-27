@@ -17,6 +17,19 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 ## Unreleased
 
+## 1.5.0 (2026-11-27)
+
+A scratchpad keeps windows out of sight until you call them up, and workspace switches are quicker because hidden windows are no longer moved again on every refresh.
+
+### Added
+
+- A window can go to the scratchpad, out of sight and on no workspace, and come back on any workspace: `move-node-to-scratchpad` puts it away, `scratchpad` calls it up floating and centred, and puts it away again. `scratchpad --app-bundle-id` calls up the windows of one app, and a window rule can put new windows there.
+
+### Fixed
+
+- Windows on hidden workspaces are no longer moved again on every refresh. macOS keeps a title bar on screen, so a window parked at the bottom edge never sat exactly where AeroSpork put it, and AeroSpork moved it again each time. A workspace switch now takes about 5 ms instead of 13 ms on a typical setup.
+- Turning off Accessibility access for AeroSpork while it runs no longer makes it forget every window's place and workspace.
+
 ## 1.4.0 (2026-11-27)
 
 Status bars can follow AeroSpork with `subscribe`, windows of apps that quit no longer leave empty tiles, and AeroSpork survives several situations that used to stop it.

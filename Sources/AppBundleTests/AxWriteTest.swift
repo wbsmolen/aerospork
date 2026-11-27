@@ -194,6 +194,39 @@ final class AxWriteTest: XCTestCase {
         assertEquals(unreadable.writes, [])
     }
 
+    /// macOS keeps a title bar on screen, so a spot near the bottom edge is clamped upwards. Compared with
+    /// the spot alone, that window never looked parked and was written again on every refresh.
+    func testAClampedParkIsWrittenOnceNotOnEveryRefresh() {
+        let spot = { (_: CGSize) in CGPoint(x: 2047, y: 1329) }
+        let clamped = CGPoint(x: 2047, y: 1289)
+        let win = window()
+        win.onWrite = { _ in .clamp(axValue(Ax.topLeftCornerAttr, clamped)) }
+        var settled: ParkedSpot?
+
+        parkAxWindow(win, app: FakeAxElement(), at: spot, settled: &settled)
+        assertEquals(win.writes, [kAXPositionAttribute])
+        for _ in 0 ..< 3 { parkAxWindow(win, app: FakeAxElement(), at: spot, settled: &settled) }
+        assertEquals(win.writes, [kAXPositionAttribute], additionalMsg: "a window macOS clamped was parked again on every refresh")
+
+        // Moved away by its app: parked again.
+        win.seed(Ax.topLeftCornerAttr, CGPoint(x: 300, y: 300))
+        parkAxWindow(win, app: FakeAxElement(), at: spot, settled: &settled)
+        assertEquals(win.writes.count, 2)
+    }
+
+    /// A write that did not take leaves the window on screen, far from the spot. That is not a clamp, so it is
+    /// not remembered, and the next refresh tries again.
+    func testAParkThatDidNotTakeIsNotRememberedAsParked() {
+        let spot = { (_: CGSize) in CGPoint(x: 2047, y: 1329) }
+        let win = window()
+        win.onWrite = { _ in .ignore }
+        var settled: ParkedSpot?
+        parkAxWindow(win, app: FakeAxElement(), at: spot, settled: &settled)
+        XCTAssertNil(settled)
+        parkAxWindow(win, app: FakeAxElement(), at: spot, settled: &settled)
+        assertEquals(win.writes, [kAXPositionAttribute, kAXPositionAttribute])
+    }
+
     // MARK: write ordering
 
     /// size, then position, then size again -- issues #143 and #335. The trailing size write is

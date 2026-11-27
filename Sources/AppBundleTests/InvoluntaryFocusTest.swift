@@ -36,6 +36,10 @@ final class InvoluntaryFocusTest: XCTestCase {
             axErrorMeansDestroyed(.cannotComplete),
             "a busy app's window was treated as closed -- that is issue #39",
         )
+        XCTAssertFalse(
+            axErrorMeansDestroyed(.apiDisabled),
+            "without Accessibility access every read fails, and every window would be collected",
+        )
         XCTAssertTrue(axErrorMeansDestroyed(.illegalArgument), "what a closed window actually reports was not treated as closed")
         XCTAssertTrue(axErrorMeansDestroyed(.invalidUIElement))
         XCTAssertTrue(axErrorMeansDestroyed(.failure), "an unexpected code should cost a re-registration, not a ghost window")
@@ -256,6 +260,22 @@ final class InvoluntaryFocusTest: XCTestCase {
 
         XCTAssertTrue(arriving.isFullscreen, "the test needs the rule to have run")
         assertEquals(focusedWindowId, typingIn.windowId, additionalMsg: "a rule's 'fullscreen on' took focus")
+    }
+
+    /// The same, for a rule that puts its window in the scratchpad: the window leaves, and focus stays where it was.
+    func testMoveNodeToScratchpadFromARuleDoesNotMoveFocus() async throws {
+        defer { config.onWindowDetected = [] }
+        let workspace = focus.workspace
+        let typingIn = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        XCTAssertTrue(typingIn.focusWindow())
+        config.onWindowDetected = [WindowDetectedCallback(rawRun: [parseCommand("move-node-to-scratchpad").cmdOrDie])]
+
+        let arriving = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await tryOnWindowDetected(arriving)
+
+        XCTAssertTrue(arriving.parent === scratchpadContainer, "the test needs the rule to have run")
+        assertEquals(focusedWindowId, typingIn.windowId, additionalMsg: "a rule's 'move-node-to-scratchpad' took focus")
+        assertEquals(focus.windowOrNil?.windowId, typingIn.windowId)
     }
 
     /// The third bookkeeping rebind, cmd-H with `automatically-unhide-macos-hidden-apps` off. Its

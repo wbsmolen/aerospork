@@ -65,8 +65,8 @@ extension TreeNode {
                         try await container.layoutAccordion(point, width: width, height: height, virtual: virtual, context)
                 }
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
-                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
-                return // Nothing to do for weirdos
+                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .scratchpadContainer:
+                return // Nothing to do for weirdos, and `parkScratchpadWindows` parks the scratchpad
         }
     }
 }

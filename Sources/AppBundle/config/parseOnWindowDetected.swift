@@ -113,7 +113,7 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     }) {
         myErrors.append(.semantic(
             backtrace,
-            "For now, 'layout floating', 'layout tiling', 'fullscreen on', 'sticky on', 'move-node-to-workspace' and 'move-node-to-monitor' are the only commands that are supported in 'on-window-detected'. " +
+            "For now, 'layout floating', 'layout tiling', 'fullscreen on', 'sticky on', 'move-node-to-workspace', 'move-node-to-monitor' and 'move-node-to-scratchpad' are the only commands that are supported in 'on-window-detected'. " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }
@@ -122,7 +122,7 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     if count >= 1 && run.last.map(isWindowRuleMove) != true {
         myErrors.append(.semantic(
             backtrace,
-            "For now, 'move-node-to-workspace' or 'move-node-to-monitor' must be the latest instruction in the callback (otherwise it's error-prone). " +
+            "For now, 'move-node-to-workspace', 'move-node-to-monitor' or 'move-node-to-scratchpad' must be the latest instruction in the callback (otherwise it's error-prone). " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }
@@ -130,7 +130,7 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     if count > 1 {
         myErrors.append(.semantic(
             backtrace,
-            "For now, only one 'move-node-to-workspace' or 'move-node-to-monitor' can be mentioned in 'run' callback. " +
+            "For now, only one 'move-node-to-workspace', 'move-node-to-monitor' or 'move-node-to-scratchpad' can be mentioned in 'run' callback. " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }
@@ -149,5 +149,5 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
 /// The one move a rule may make, last: it takes the window off the workspace the rest of the rule
 /// was working on.
 private func isWindowRuleMove(_ command: any Command) -> Bool {
-    command is MoveNodeToWorkspaceCommand || command is MoveNodeToMonitorCommand
+    command is MoveNodeToWorkspaceCommand || command is MoveNodeToMonitorCommand || command is MoveNodeToScratchpadCommand
 }

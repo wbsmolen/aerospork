@@ -157,11 +157,12 @@ func treeDump() -> Json {
             case .macosHiddenAppsWindowsContainer: return container("macos-hidden-app")
             case .macosFullscreenWindowsContainer: return container("macos-fullscreen")
             case .macosPopupWindowsContainer: return container("macos-popups")
+            case .scratchpadContainer: return container("scratchpad")
         }
     }
 
     let workspaces = Workspace.all
-    let tree = workspaces.map(dump) + [dump(macosMinimizedWindowsContainer), dump(macosPopupWindowsContainer)]
+    let tree = workspaces.map(dump) + [dump(macosMinimizedWindowsContainer), dump(macosPopupWindowsContainer), dump(scratchpadContainer)]
     let monitorPoints = monitors.map(\.rect.topLeftCorner)
     var inconsistencies: [Json] = []
     for workspace in workspaces {

@@ -35,8 +35,8 @@ struct MoveCommand: Command {
                 return try await moveFloating(currentWindow, on: workspace, direction, args, env, io)
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
                 return io.err(moveOutMacosUnconventionalWindow)
-            case .macosPopupWindowsContainer:
-                return false // Impossible
+            case .macosPopupWindowsContainer, .scratchpadContainer:
+                return false // Impossible: neither resolves as a target
         }
     }
 }
@@ -134,7 +134,7 @@ private let floatingMoveStep: CGFloat = 50
             case .tilingContainer(let parent): parent.orientation == direction.orientation
             // Stop searching
             case .workspace, .macosMinimizedWindowsContainer, nil, .macosFullscreenWindowsContainer,
-                 .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer: true
+                 .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer, .scratchpadContainer: true
         }
     }) as? TilingContainer
     guard let innerMostChild else { return false }
@@ -149,8 +149,8 @@ private let floatingMoveStep: CGFloat = 50
             return hitWorkspaceBoundaries(window, parent, io, args, direction, env)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
             return io.err(moveOutMacosUnconventionalWindow)
-        case .macosPopupWindowsContainer:
-            return false // Impossible
+        case .macosPopupWindowsContainer, .scratchpadContainer:
+            return false // Impossible: neither resolves as a target
         case .window:
             die("Window can't contain children nodes")
     }

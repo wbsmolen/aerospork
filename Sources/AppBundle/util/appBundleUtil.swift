@@ -132,6 +132,11 @@ private func makeAllWindowsVisibleAndRestoreSize() async {
     for (_, window) in MacWindow.allWindowsMap where !window.isBackgroundTab {
         // One at a time: an app that fails to answer must not leave every later window off screen.
         do {
+            // A window in the scratchpad has no workspace: centred on the main monitor, as `scratchpad` shows it.
+            if window.parent is ScratchpadContainer {
+                if let frame = window.onScreenFrameOutsideTheScratchpad { try await window.setAxFrameBlocking(frame.topLeft, frame.size) }
+                continue
+            }
             // A floating window is already where the user put it, so a restart keeps it there. If its
             // workspace is hidden it goes back to that spot rather than the monitor's centre.
             if window.isFloating {
