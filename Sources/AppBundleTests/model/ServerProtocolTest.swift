@@ -33,6 +33,16 @@ final class ServerProtocolTest: XCTestCase {
         assertEquals(answer("exec-and-forget echo hi")?.exitCode, ExitCode.badArgs)
     }
 
+    /// A status bar polling a failing query wrote one always-on record per poll.
+    func testOnlyTheFirstOfARunOfIdenticalFailuresIsLogged() {
+        let empty = CliFailureKey(args: ["list-windows", "--focused"], exitCode: ExitCode.failure, stderr: "No window is focused")
+        assertTrue(shouldLogCliFailure(empty, last: nil))
+        assertFalse(shouldLogCliFailure(empty, last: empty))
+        let other = CliFailureKey(args: empty.args, exitCode: empty.exitCode, stderr: "Something else")
+        assertTrue(shouldLogCliFailure(other, last: empty))
+        assertTrue(shouldLogCliFailure(empty, last: nil)) // a success in between clears `last`
+    }
+
     func testHelpSucceeds() {
         let ans = answer("list-workspaces --help")
         assertEquals(ans?.exitCode, ExitCode.success)

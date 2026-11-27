@@ -478,7 +478,8 @@ writes at `.notice`, `.error` and `.fault`, which the unified log keeps, so
 
 **Rule.** Keep `AppLog` cheap and rare. Use it for the startup record, a config that loaded or was
 rejected, config warnings, bindings that did not register, socket events, a second copy that exits,
-CLI commands that exited with an error, and focus changes that AeroSpork made on its own (`session`).
+CLI commands that exited with an error (a run of identical failures is logged once, then once more with
+its count when it ends), and focus changes that AeroSpork made on its own (`session`).
 Never use it for each refresh or each window. **Reason.** It is unconditional, and the unified log
 keeps every record.
 

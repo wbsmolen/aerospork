@@ -79,6 +79,9 @@ enum FormatVar: Equatable {
         case windowIsFullscreen = "window-is-fullscreen"
         case windowIsSticky = "window-is-sticky"
         case windowTitle = "window-title"
+        case windowIsFloating = "window-is-floating"
+        case windowLayout = "window-layout"
+        case windowOrientation = "window-orientation"
     }
 
     enum WorkspaceFormatVar: String, Equatable, CaseIterable {
@@ -178,6 +181,13 @@ extension String {
                     case .windowIsFullscreen: .success(.bool(w.isFullscreen))
                     case .windowIsSticky: .success(.bool(w.isSticky))
                     case .windowTitle: .success(.string(title))
+                    case .windowIsFloating: .success(.bool(w.isFloating))
+                    // Spelled the way the `layout` command takes them. Empty for a window that macOS took
+                    // out of the tiles (minimized, hidden or native fullscreen).
+                    case .windowLayout:
+                        .success(.string((w.parent as? TilingContainer)?.layout.rawValue ?? (w.isFloating ? "floating" : "")))
+                    case .windowOrientation:
+                        .success(.string((w.parent as? TilingContainer).map { $0.orientation == .h ? "horizontal" : "vertical" } ?? ""))
                 }
             case (.workspace(let w), .workspace(let f)):
                 return switch f {

@@ -21,12 +21,14 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 - If your config file exists but cannot be read (wrong permissions, not UTF-8 text, or a link to a missing file), AeroSpork now says so and keeps your file, instead of quietly running the defaults. Fix the file, or the permissions, and it loads again.
 - If you migrated a config that binds `swap`, it now loads: `swap` is a command.
+- If a script or status bar waits on an `aerospork` command, it now gets exit code 3 and "No response from AeroSpork server within 60 s" when AeroSpork does not answer, instead of waiting forever. Treat exit 3 as "try again later".
 
 ### Added
 
 - `swap` trades the focused window with its neighbour, keeping both slots and sizes.
 - `sticky` keeps a floating window on screen as you switch workspaces on its monitor, for video calls and picture-in-picture. A window rule can run `sticky on`, and `%{window-is-sticky}` reports it.
 - Window rules can run `move-node-to-monitor` and `fullscreen on`, so a rule can open an app on the monitor you want.
+- `list-modes --json` prints the binding modes as JSON, and `%{window-layout}`, `%{window-orientation}` and `%{window-is-floating}` tell a status bar how a window is laid out.
 - `debug-windows --tree` prints the whole window tree as JSON, with anything that looks inconsistent, for bug reports.
 - Settings has "Check for updates…" and an automatic-check switch under General.
 - The Monitors pane has an Identify button that shows each monitor's number on that screen.

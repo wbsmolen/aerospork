@@ -97,7 +97,7 @@ let list_exec_env_vars_help_generated = """
     See: man aerospork-list-exec-env-vars
     """
 let list_modes_help_generated = """
-    USAGE: list-modes [-h|--help] [--current]
+    USAGE: list-modes [-h|--help] [--current] [--json]
 
     See: man aerospork-list-modes
     """

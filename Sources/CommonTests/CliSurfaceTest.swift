@@ -143,6 +143,27 @@ final class CliSurfaceTest: XCTestCase {
         assertEquals(failure.exitCode, ExitCode.serverUnreachable)
         XCTAssertTrue(failure.message.contains("too large"), failure.message)
     }
+
+    /// A server that never answers (a wedged main actor) used to hang the CLI forever, and a status
+    /// bar that polls stacked up one process per poll.
+    func testAServerThatNeverAnswersIsUnreachableAfterTheTimeout() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        let start = ContinuousClock.now
+        guard case .failure(let failure) = Cli.run(client, ["focus", "left"], stdin: "", timeout: .seconds(1)) else { return XCTFail("answered") }
+        XCTAssertLessThan(start.duration(to: .now), .seconds(2))
+        assertEquals(failure, CliFailure(message: "No response from AeroSpork server within 1 s", exitCode: ExitCode.serverUnreachable))
+    }
+
+    /// A hang-up is not a timeout, so it must not claim to be one.
+    func testAServerThatHangsUpSaysNoResponse() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close() }
+        Darwin.shutdown(peerFd, SHUT_WR)
+        guard case .failure(let failure) = Cli.run(client, ["focus", "left"], stdin: "", timeout: .seconds(1)) else { return XCTFail("answered") }
+        assertEquals(failure, CliFailure(message: "No response from AeroSpork server", exitCode: ExitCode.serverUnreachable))
+        Darwin.close(peerFd)
+    }
 }
 
 /// Error messages should say what to do next, not only what went wrong.

@@ -48,6 +48,30 @@ final class ListWindowsTest: XCTestCase {
         }
     }
 
+    /// Values spelled the way the `layout` command takes them, and empty where they do not apply.
+    func testLayoutFloatingAndOrientationVariables() throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer // h tiles
+        let tiled = TestWindow.new(id: 1, parent: root)
+        let column = TilingContainer(parent: root, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST)
+        let stacked = TestWindow.new(id: 2, parent: column)
+        let floating = TestWindow.new(id: 3, parent: workspace)
+        let minimized = TestWindow.new(id: 4, parent: macosMinimizedWindowsContainer)
+        defer { _ = minimized.unbindFromParent() }
+        let format: [StringInterToken] = [
+            .interVar("window-layout"), .literal(","), .interVar("window-orientation"), .literal(","), .interVar("window-is-floating"),
+        ]
+        let objs = [tiled, stacked, floating, minimized].map { AeroObj.window(window: $0, title: "") }
+        assertEquals(objs.format(format), .success([
+            "tiles,horizontal,false",
+            "accordion,vertical,false",
+            "floating,,true",
+            ",,false",
+        ]))
+        let json = try XCTUnwrap([objs[0]].formatToJson([.interVar("window-is-floating"), .interVar("window-layout")], ignoreRightPaddingVar: false).getOrNil())
+        assertEquals(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: AnyHashable]], [["window-is-floating": false, "window-layout": "tiles"]])
+    }
+
     func testFormat() {
         Workspace.get(byName: name).rootTilingContainer.apply {
             let windows = [

@@ -9,7 +9,7 @@ include::util/man-attributes.adoc[]
 == Synopsis
 [verse]
 // tag::synopsis[]
-aerospork list-modes [-h|--help] [--current]
+aerospork list-modes [-h|--help] [--current] [--json]
 
 // end::synopsis[]
 
@@ -27,6 +27,7 @@ include::util/conditional-options-header.adoc[]
 
 -h, --help:: Print help and exit.
 --current:: Print only the active binding mode.
+--json:: Print the names as a JSON array of strings.
 
 // =========================================================== Exit status
 include::util/exit-status.adoc[]
@@ -36,6 +37,9 @@ include::util/conditional-examples-header.adoc[]
 
 * Show the active binding mode in a status bar: +
 `aerospork list-modes --current`
+
+* Read the binding modes from a script: +
+`aerospork list-modes --json`
 
 // =========================================================== See also
 include::util/conditional-see-also-header.adoc[]

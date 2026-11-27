@@ -78,4 +78,7 @@ The command still runs. Quit AeroSpork and open it again.
 `Can't connect to AeroSpork server. Is AeroSpork.app running?`::
 The CLI cannot reach the app, and exits 3. Open AeroSpork.app, then run the command again.
 
+`No response from AeroSpork server within 60 s`::
+The app is running but did not answer in time, and the CLI exits 3. The app still finishes the command. If it keeps happening, quit AeroSpork and open it again.
+
 include::util/man-footer.adoc[]

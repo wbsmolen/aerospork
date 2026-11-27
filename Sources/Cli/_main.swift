@@ -74,7 +74,18 @@ func readStdin(limitLines: Int = 1000) -> Result<String, CliFailure> {
     return .success(stdin)
 }
 
-func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Result<ServerAnswer, CliFailure> {
+/// How long the CLI waits for an answer before it gives up with exit 3. A wedged server used to hang
+/// every call, so a status bar that polls stacked up processes. 60 s is far above any real session:
+/// each Accessibility call gives up after 1 s. The server still finishes the command.
+let replyTimeout: Duration = .seconds(60)
+
+/// `timeout` nil waits forever, for a long-lived stream that is quiet between frames.
+func run(
+    _ socket: UnixSocketConnection,
+    _ args: [String],
+    stdin: String,
+    timeout: Duration? = replyTimeout,
+) -> Result<ServerAnswer, CliFailure> {
     guard let request = try? JSONEncoder().encode(ClientRequest(args: args, stdin: stdin)) else {
         return .failure(CliFailure(message: "Can't encode the request", exitCode: ExitCode.badArgs))
     }
@@ -85,10 +96,13 @@ func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Res
             exitCode: ExitCode.badArgs,
         ))
     }
+    // The frame deadline starts at each call, so it covers the whole wait for the reply, session included.
+    if let timeout { socket.setFrameTimeout(timeout) }
     guard socket.sendMessage(request) else {
         return .failure(CliFailure(message: "Can't send request to AeroSpork server", exitCode: ExitCode.serverUnreachable))
     }
     let reply: Data?
+    let waitStart = ContinuousClock.now
     do {
         reply = try socket.recvMessage()
     } catch UnixSocketError.frameTooLarge(let size) {
@@ -100,6 +114,14 @@ func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Res
         reply = nil
     }
     guard let answer = reply else {
+        // The socket reports a timeout and a hang-up alike, so the clock tells them apart. The 0.9
+        // allows for a kernel timer that fires a little early.
+        if let timeout, waitStart.duration(to: .now) >= timeout * 0.9 {
+            return .failure(CliFailure(
+                message: "No response from AeroSpork server within \(timeout.components.seconds) s",
+                exitCode: ExitCode.serverUnreachable,
+            ))
+        }
         return .failure(CliFailure(message: "No response from AeroSpork server", exitCode: ExitCode.serverUnreachable))
     }
     guard let decoded = try? JSONDecoder().decode(ServerAnswer.self, from: answer) else {
