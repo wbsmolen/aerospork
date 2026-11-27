@@ -9,6 +9,25 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>1.5.1</title>
+            <pubDate>Fri, 27 Nov 2026 14:00:01 -0600</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/wbsmolen/aerospork/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
+            <sparkle:version>1.5.1</sparkle:version>
+            <sparkle:shortVersionString>1.5.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>Windows keep their places through the lock screen and through a monitor that drops out and comes back.</p>
+<h3>Fixed</h3>
+<ul>
+<li>A window that macOS stops reporting while the screen is locked keeps its tile and workspace, and is removed only if it really closed.</li>
+<li>Waking displays behind the lock screen no longer makes AeroSpork forget where windows were.</li>
+<li>A monitor that disconnects and comes back, as DisplayLink panels do when the displays sleep, shows the workspace it showed before, even when it comes back at a different position. Another monitor in its old position does not take that workspace.</li>
+</ul>
+<p><a href="https://github.com/wbsmolen/aerospork/blob/main/CHANGELOG.md">Changes in earlier versions</a></p>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.5.1/AeroSpork-1.5.1.zip" length="7513270" type="application/octet-stream" sparkle:edSignature="qRj1fqN3MwNqWQDjxRXgRW1XetUkcYHEqy0n7MA8Petch+BdrEy5B66tboY9CfNel1FbdasmfBjLGANypiQ6AA=="/>
+        </item>
+        <item>
             <title>1.5.0</title>
             <pubDate>Fri, 27 Nov 2026 09:48:54 -0600</pubDate>
             <link>https://github.com/wbsmolen/aerospork</link>
@@ -110,26 +129,9 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 ]]></description>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.4.0/AeroSpork-1.4.0.zip" length="7433162" type="application/octet-stream" sparkle:edSignature="xi5c0DhJMiPICemqgJBM+XSxUbgkMXYY+X7Iowdu9EFq7yWlj2G5IMgETJZ3+w8nyS8rkPChcLfyV4lrWLMmCw=="/>
         </item>
-        <item>
-            <title>1.3.4</title>
-            <pubDate>Fri, 06 Nov 2026 22:26:37 -0600</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.3.4</sparkle:version>
-            <sparkle:shortVersionString>1.3.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<p>A window with native tabs now takes one tile, however many tabs it has.</p>
-<h3>Fixes</h3>
-<ul>
-<li>A window with native tabs takes one tile, however many tabs it has. Each tab used to take a tile of its own, so Finder, and any app using the macOS tab bar, opened a blank gap for every tab behind the one showing. The tile now keeps its place and size as you open, switch and close tabs, and a tab you move out to its own window gets its own tile.</li>
-<li>A new tab goes where its window is, and doesn&#x27;t run window rules, so a rule like <code>&quot;com.apple.finder&quot; = &#x27;move-node-to-workspace 3&#x27;</code> can&#x27;t pull one tab away from the rest.</li>
-<li>Finder windows are tiled as soon as they open, instead of only once they have been focused.</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.4/AeroSpork-1.3.4.zip" length="6987519" type="application/octet-stream" sparkle:edSignature="ul7CHCTvXpkXQHcrFV1lfchD3jdjaNju/w9ktUdkjG/OdUGMuyv3uisBb3+d0r52yOwJCyVm11/CP4TITUfFCQ=="/>
-        </item>
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: kLCtvoh64CU+xYRKXlzqGrOT/DGABZKolKtL38rTCOqiHlVrCkv2cWi/Je7lyB68roIEnEea+ic+m6sobmynAw==
-length: 12198
+edSignature: Dp6QiHeLeMI9HJwL0D8rTiPi195Mnvt25cTqqJenGH79M0ra/atVlrjQ33+YsZHnFGfspkgtTOw3ePZw+4t0Bw==
+length: 12294
 -->
