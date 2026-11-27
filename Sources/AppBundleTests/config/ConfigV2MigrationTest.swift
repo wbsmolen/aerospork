@@ -147,6 +147,7 @@ final class ConfigV2MigrationTest: XCTestCase {
             "onFocusChanged": { $0.onFocusChanged = [focus] },
             "onFocusedWorkspaceChanged": { $0.onFocusedWorkspaceChanged = [focus] },
             "onFocusedMonitorChanged": { $0.onFocusedMonitorChanged = [focus] },
+            "onModeChanged": { $0.onModeChanged = [focus] },
             "gaps": { $0.gaps.inner = .init(vertical: 1, horizontal: 1) },
             "workspaceToMonitorForceAssignment": { $0.workspaceToMonitorForceAssignment = ["1": [.main]] },
             "modes": { $0.modes = self.parsed("[mode.main.binding]\nalt-h = 'focus left'").modes },

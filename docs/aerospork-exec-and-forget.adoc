@@ -37,6 +37,8 @@ AeroSpork adds these variables to the environment:
 * `AEROSPORK_WORKSPACE`: the target workspace, when the command has one.
 * `AEROSPORK_FOCUSED_WORKSPACE`: in `on-focused-workspace-changed`, the workspace that now has focus.
 * `AEROSPORK_PREV_WORKSPACE`: in `on-focused-workspace-changed`, the workspace that had focus before.
+* `AEROSPORK_MODE`: in `on-mode-changed`, the binding mode that is now active.
+* `AEROSPORK_PREV_MODE`: in `on-mode-changed`, the binding mode that was active before.
 
 To start from an empty environment, set `inherit-env-vars = false` in `[exec]`.
 To list the variables that the script receives, set `env-vars` in `[exec]`.

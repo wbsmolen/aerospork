@@ -111,7 +111,29 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
             AppLog.config.error("Hotkey \(binding.descriptionWithKeyNotation, privacy: .public) not registered (status \(status, privacy: .public))")
         }
     }
+    let previous = activeMode
     activeMode = targetMode
+    // nil is `enable off`, and the reload at startup activates the mode already active: neither fires.
+    // A mode change made by an `on-mode-changed` callback does not fire again, or two callbacks that
+    // switch A -> B -> A would loop forever.
+    if let previous, let targetMode, previous != targetMode, !config.onModeChanged.isEmpty,
+       refreshSessionEvent?.isOnModeChanged != true
+    {
+        runOnModeChanged(previous, targetMode)
+    }
+}
+
+/// Runs `on-mode-changed` in a session of its own. Detached: `activateMode` runs inside a session,
+/// and a session must not wait for another (#refresh-and-layout). A test swaps it, because a real
+/// session cannot run headlessly.
+@MainActor var runOnModeChanged: @MainActor (_ from: String, _ to: String) -> Void = { from, to in
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    let commands = config.onModeChanged
+    runDetached("onModeChangedCallbacks") {
+        try await runSession(.onModeChanged, token) {
+            _ = try await commands.runCmdSeq(CmdEnv.defaultEnv.copy(\.modeChange, (from: from, to: to)), .emptyStdin)
+        }
+    }
 }
 
 /// The registrations to drop and the bindings to register, to go from `current` (Carbon id to binding
@@ -180,15 +202,22 @@ func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ er
     return result
 }
 
+/// The one message for a word that is not a modifier, in a binding and in `mod`.
+func modifierError(_ segment: String) -> String {
+    "'\(segment)' is not a modifier. Use cmd, alt, ctrl or shift"
+}
+
 func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String: Key]) -> ParsedToml<(NSEvent.ModifierFlags, Key)> {
     let rawKeys = raw.split(separator: "-")
     let modifiers: ParsedToml<NSEvent.ModifierFlags> = rawKeys.dropLast()
         .mapAllOrFailure {
-            modifiersMap[String($0)].orFailure(.semantic(backtrace, "Can't parse modifiers in '\(raw)' binding"))
+            modifiersMap[String($0)].orFailure(.semantic(backtrace, modifierError(String($0))))
         }
         .map { NSEvent.ModifierFlags($0) }
-    let key: ParsedToml<Key> = rawKeys.last.flatMap { mapping[String($0)] }
-        .orFailure(.semantic(backtrace, "Can't parse the key in '\(raw)' binding"))
+    let last = rawKeys.last.map(String.init) ?? ""
+    // Single characters are left out of the hint: every word starts with one, so `escape` would get `e`.
+    let hint = last.isEmpty ? "" : didYouMeanSuffix(last, from: mapping.keys.filter { $0.count > 1 }.sorted())
+    let key: ParsedToml<Key> = mapping[last].orFailure(.semantic(backtrace, "Can't parse the key in '\(raw)' binding" + hint))
     return modifiers.flatMap { modifiers -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
         key.flatMap { key -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
             .success((modifiers, key))

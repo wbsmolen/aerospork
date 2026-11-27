@@ -35,7 +35,7 @@ func parseMode(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors
             case "binding":
                 result.bindings = parseBindings(value, backtrace, &errors, mapping)
             default:
-                errors += [unknownKeyError(backtrace)]
+                errors += [unknownKeyError(backtrace, key, among: ["binding"])]
         }
     }
     return result

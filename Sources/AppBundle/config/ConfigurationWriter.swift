@@ -395,7 +395,8 @@ enum ConfigurationWriter {
             for section in spellings { removeKey(&lines, section: section, key: old.workspace) }
         }
         for row in now where !before.contains(row) {
-            setKey(&lines, section: section(for: row.workspace, among: spellings, in: lines), key: row.workspace, value: formatMonitorValue(row.monitor))
+            // `[monitors]` wins in `applyConfigV2`.
+            setKey(&lines, section: section(for: row.workspace, among: spellings, winner: "monitors", in: lines), key: row.workspace, value: formatMonitorValue(row.monitor))
         }
     }
 
@@ -565,10 +566,12 @@ enum ConfigurationWriter {
         if let i = keyLine(lines, section, key) { lines.remove(at: i) }
     }
 
-    /// Which of a table's spellings, v2 first, `key` belongs in: where its line already is, else a
-    /// section the file already has, else the v2 spelling, which `setKey` creates.
-    private static func section(for key: String, among spellings: [String], in lines: [String]) -> String {
-        spellings.last { keyLine(lines, $0, key) != nil } ?? spellings.first { headerIndex(lines, $0) != nil } ?? spellings[0]
+    /// Which of a table's spellings, v2 first, `key` belongs in: where its line already is (`winner`'s
+    /// first, the spelling the parser lets win when both have it), else a section the file already
+    /// has, else the v2 spelling, which `setKey` creates.
+    private static func section(for key: String, among spellings: [String], winner: String, in lines: [String]) -> String {
+        ([winner] + spellings).first { keyLine(lines, $0, key) != nil }
+            ?? spellings.first { headerIndex(lines, $0) != nil } ?? spellings[0]
     }
 
     // MARK: - Gaps
@@ -641,7 +644,8 @@ enum ConfigurationWriter {
             // Only what changed: `formatCommand` normalizes quoting, so rewriting an untouched line
             // would turn `key = "cmd"` into `key = 'cmd'`.
             for row in new where !old.contains(row) {
-                setKey(&lines, section: section(for: row.key, among: sections, in: lines), key: row.key, value: formatCommand(row.command))
+                // `[mode.*]` wins in `applyConfigV2`.
+                setKey(&lines, section: section(for: row.key, among: sections, winner: sections[1], in: lines), key: row.key, value: formatCommand(row.command))
             }
         }
     }

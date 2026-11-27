@@ -74,7 +74,7 @@ final class ConfigTest: XCTestCase {
         assertEquals(
             errors.descriptions,
             [
-                "mode.main.binding.aalt-j: Can\'t parse modifiers in \'aalt-j\' binding",
+                "mode.main.binding.aalt-j: \'aalt\' is not a modifier. Use cmd, alt, ctrl or shift",
                 "mode.main.binding.alt-hh: Can\'t parse the key in \'alt-hh\' binding",
             ],
         )
@@ -126,6 +126,29 @@ final class ConfigTest: XCTestCase {
             ["gaps.unknownKey: Unknown key"],
         )
         // assertEquals(config.enableNormalizationFlattenContainers, false)
+    }
+
+    func testUnknownKeySuggestsTheNearMiss() {
+        assertEquals(parseConfigForTest("[gaps]\niner = 8").1.descriptions, ["gaps.iner: Unknown key. Did you mean 'inner'?"])
+        assertEquals(
+            parseConfigForTest("acordion-padding = 4").1.descriptions,
+            ["acordion-padding: Unknown top-level key. Did you mean 'accordion-padding'?"],
+        )
+    }
+
+    func testUnknownBindingKeySuggestsTheNearMiss() {
+        assertEquals(
+            parseConfigForTest("[mode.main.binding]\nalt-escape = 'close'").1.descriptions,
+            ["mode.main.binding.alt-escape: Can't parse the key in 'alt-escape' binding. Did you mean 'esc'?"],
+        )
+    }
+
+    /// The same words as `mod = 'meta'` says, for the same rule.
+    func testBadModifierInABindingNamesTheWord() {
+        assertEquals(
+            parseConfigForTest("[mode.main.binding]\nsuper-a = 'close'").1.descriptions,
+            ["mode.main.binding.super-a: 'super' is not a modifier. Use cmd, alt, ctrl or shift"],
+        )
     }
 
     /// Deprecated, but no longer a *lie*: the value now reaches `config`, where `focus.swift`

@@ -19,7 +19,6 @@ final class MigrationTrapsTest: XCTestCase {
         let (result, warnings) = parse("""
             config-version = 2
             auto-reload-config = true
-            on-mode-changed = []
             accordion-padding = 7
 
             [focus-follows-mouse]
@@ -30,6 +29,15 @@ final class MigrationTrapsTest: XCTestCase {
         for key in upstreamOnlyKeyParsers.keys {
             XCTAssertTrue(warnings.contains { $0.hasPrefix(key) }, "no warning for \(key): \(warnings)")
         }
+    }
+
+    /// Reported and ignored until AeroSpork honoured it. A config that carried it now runs it.
+    func testOnModeChangedIsHonouredNotIgnored() {
+        XCTAssertNil(upstreamOnlyKeyParsers["on-mode-changed"])
+        let (result, warnings) = parse("on-mode-changed = ['exec-and-forget echo $AEROSPORK_MODE']")
+        guard case .success(let config) = result else { return XCTFail("\(result)") }
+        assertEquals(config.onModeChanged.count, 1)
+        assertEquals(warnings, [])
     }
 
     /// A binding to a command that does not parse is fatal for the whole config, and `swap` was the one

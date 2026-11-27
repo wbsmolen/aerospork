@@ -165,6 +165,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "on-focus-changed": Parser(\.onFocusChanged) { parseCommandOrCommands($0).toParsedToml($1) },
     "on-focused-monitor-changed": Parser(\.onFocusedMonitorChanged) { parseCommandOrCommands($0).toParsedToml($1) },
     "on-focused-workspace-changed": Parser(\.onFocusedWorkspaceChanged) { parseCommandOrCommands($0).toParsedToml($1) },
+    "on-mode-changed": Parser(\.onModeChanged) { parseCommandOrCommands($0).toParsedToml($1) },
 
     "enable-normalization-flatten-containers": Parser(\.enableNormalizationFlattenContainers, parseBool),
     "enable-normalization-opposite-orientation-for-nested-containers": Parser(\.enableNormalizationOppositeOrientationForNestedContainers, parseBool),
@@ -472,7 +473,7 @@ extension TOMLTable {
             if let parser = fieldsParser[key] {
                 raw = parser.transformRawConfig(raw, value, backtrace, &errors)
             } else {
-                errors.append(unknownKeyError(backtrace))
+                errors.append(unknownKeyError(backtrace, key, among: fieldsParser.keys))
             }
         }
 
@@ -480,8 +481,9 @@ extension TOMLTable {
     }
 }
 
-func unknownKeyError(_ backtrace: TomlBacktrace) -> TomlParseError {
-    .semantic(backtrace, backtrace.isRootKey ? "Unknown top-level key" : "Unknown key")
+/// `candidates` are the keys that table accepts, for a "did you mean" on a near miss.
+func unknownKeyError(_ backtrace: TomlBacktrace, _ key: String, among candidates: some Collection<String>) -> TomlParseError {
+    .semantic(backtrace, (backtrace.isRootKey ? "Unknown top-level key" : "Unknown key") + didYouMeanSuffix(key, from: candidates.sorted()))
 }
 
 func expectedActualTypeError(expected: TOMLType, actual: TOMLType, _ backtrace: TomlBacktrace) -> TomlParseError {
