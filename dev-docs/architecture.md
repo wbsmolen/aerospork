@@ -80,6 +80,12 @@ a security boundary: a process that can reach the socket can already write the c
 explains the trust model. **Test.** `ServerProtocolTest.testExecOverSocketGetsBadArgs` pins the
 refusal.
 
+**Rule.** The app ignores SIGPIPE for the whole process (`ignoreSigpipe`, first in `initAppBundle`), on
+top of `SO_NOSIGPIPE` on each socket. **Reason.** A CLI that gave up on a paused or busy server left a
+SIGPIPE that reached the process when it resumed, and the default action of SIGPIPE ended the window
+manager. **Test.** `ServerProtocolTest.testTheAppIgnoresSigpipe`,
+`testAnAnswerToAClientThatHungUpDoesNotKillTheServer`.
+
 ### The subscribe stream
 
 `aerospork subscribe` is the one connection that gets many answers: a snapshot, then one answer for

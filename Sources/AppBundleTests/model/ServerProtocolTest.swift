@@ -83,6 +83,26 @@ final class ServerProtocolTest: XCTestCase {
         XCTAssertTrue(answer.stderr.hasPrefix("Can't parse request '\(String(repeating: "x", count: 200))'.\n"), answer.stderr)
     }
 
+    /// A CLI that gave up (its 60 s timeout, Ctrl-C) closes its end before the answer. The server's write must
+    /// fail quietly: a SIGPIPE here kills the window manager, test runner included.
+    func testTheAppIgnoresSigpipe() throws {
+        let original = signal(SIGPIPE, SIG_DFL)
+        defer { signal(SIGPIPE, original) }
+        ignoreSigpipe()
+        let installed = signal(SIGPIPE, SIG_DFL)
+        XCTAssertEqual(unsafeBitCast(installed, to: Int.self), unsafeBitCast(SIG_IGN, to: Int.self), "SIGPIPE's default action ends the window manager")
+        let start = try readRepoFile("Sources/AppBundle/initAppBundle.swift")
+        XCTAssertTrue(start.contains("public func initAppBundle() {\n    ignoreSigpipe()"), "ignoreSigpipe() must be the first thing initAppBundle does")
+    }
+
+    func testAnAnswerToAClientThatHungUpDoesNotKillTheServer() async throws {
+        setUpWorkspacesForTests()
+        let client = serverConnectionForTests()
+        try sendRequest(client, ["list-workspaces", "--focused"])
+        client.close()
+        try await Task.sleep(for: .milliseconds(500)) // the main actor is free, so the session runs and answers
+    }
+
     // MARK: - subscribe
 
     private func subscribe(_ args: [String], frameTimeout: Duration = .seconds(5)) async throws -> (UnixSocketConnection, ServerAnswer?) {

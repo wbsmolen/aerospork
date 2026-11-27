@@ -55,6 +55,7 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
 }
 
 @MainActor public func initAppBundle() {
+    ignoreSigpipe()
     initTerminationHandler()
     isCli = false
     initServerArgs()
@@ -162,3 +163,10 @@ private func initServerArgs() {
         cliError("\(path) doesn't exist")
     }
 }
+
+/// A write to a socket or pipe whose reader is gone must fail with EPIPE, never kill the window manager.
+///
+/// `SO_NOSIGPIPE` on each CLI socket was not enough: a CLI that gave up on a paused server (its 60 s
+/// timeout) left a SIGPIPE that reached the process as a whole when it resumed, on the main run loop, and
+/// its default action ended AeroSpork. Ignored for the whole process, every such write just returns EPIPE.
+func ignoreSigpipe() { signal(SIGPIPE, SIG_IGN) }
