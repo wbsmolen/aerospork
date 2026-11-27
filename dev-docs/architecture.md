@@ -348,6 +348,14 @@ A change of the monitor configuration has its own debounce in `GlobalObserver`, 
 rebalances the workspaces when the set of monitors changes. That handles DisplayLink, which connects
 in several stages and can flap.
 
+**Rule.** While the session reports the screen locked, a refresh removes only the windows that WindowServer
+says are gone (`shouldCollect`), and a monitor change does not call the screen unlocked. Both read the lock with
+`screenIsLocked()`, a query, and only when the answer decides something. **Reason.** Behind the lock screen
+Accessibility can stop listing windows that are alive, and DisplayLink panels drop while the displays sleep. A
+flag kept from lock and unlock notifications would stop window removal for good after one missed unlock.
+**Test.** `RefreshSchedulerTest.testALockedScreenCollectsOnlyWindowsWindowServerSaysAreGone`,
+`testAMonitorChangeDoesNotAssumeTheScreenIsUnlocked`.
+
 ## Monitors and fingerprints
 
 `MonitorFingerprint.fromScreen` identifies a monitor by these keys, most reliable first:
@@ -365,6 +373,14 @@ separates two otherwise identical panels. A DisplayLink display has no EDID: Cor
 UUID is the only way to pin a workspace to one DisplayLink panel, for example `1 = { uuid = "..." }`
 in `[monitors]`. The sub-table spelling `[monitors.1.fingerprint]` also parses, but the Settings
 window refuses to edit that row.
+
+**Rule.** When a panel leaves, `rearrangeWorkspacesOnMonitors` keeps the workspace it showed under its UUID
+(`lastVisibleWorkspaceByUuid`). The panel gets it back when it returns, at any origin, unless that workspace is on
+screen elsewhere by then, and no other panel takes it by position meanwhile. **Reason.** A DisplayLink panel can
+come back at another origin, and matching by position gave its workspace to the wrong screen. A map keyed by point
+would hand it to a different panel that sits at the old spot. **Test.**
+`MonitorIdentityTest.testAPanelBackAtANewOriginGetsItsWorkspaceBack`,
+`testAnotherPanelAtTheOldSpotDoesNotTakeTheWorkspace`.
 
 Fingerprint `width` and `height` are in points, the unit of `%{monitor-width}` and
 `%{monitor-height}`. To read the values for a fingerprint, run

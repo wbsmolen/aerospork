@@ -272,6 +272,24 @@ final class RefreshSchedulerTest: XCTestCase {
         XCTAssertLessThan(registered.lowerBound, read.lowerBound, "a window registered after the read would look dead")
     }
 
+    /// While the screen is locked Accessibility can stop listing every window. Only WindowServer's word counts then,
+    /// or the panes come back empty after unlock.
+    func testALockedScreenCollectsOnlyWindowsWindowServerSaysAreGone() {
+        assertEquals(shouldCollect(7, provenDead: [], screenIsLocked: false), true)
+        assertEquals(shouldCollect(7, provenDead: [], screenIsLocked: true), false)
+        assertEquals(shouldCollect(7, provenDead: [7], screenIsLocked: true), true)
+    }
+
+    /// The lock is read, never assumed: DisplayLink panels drop while the displays sleep behind the lock screen, and
+    /// a monitor change that called the screen unlocked threw away the places the lock screen needs.
+    func testAMonitorChangeDoesNotAssumeTheScreenIsUnlocked() throws {
+        let body = try sourceBody("private static func applyMonitorConfigurationChange()", in: "Sources/AppBundle/GlobalObserver.swift")
+        XCTAssertFalse(body.contains("screenIsDefinitelyUnlocked: true"))
+        XCTAssertTrue(body.contains("screenIsDefinitelyUnlocked: !screenIsLocked()"))
+        let refresh = try sourceBody("private func refresh() async throws", in: "Sources/AppBundle/layout/refresh.swift")
+        XCTAssertTrue(refresh.contains("shouldCollect(window.windowId, provenDead: MacApp.pendingDead, screenIsLocked: locked)"))
+    }
+
     func testAPopupIsOnlyRecheckedSoonAfterItAppeared() {
         let now = Date()
         assertEquals(shouldRecheckPopup(registeredAt: now - 5, now: now), true)

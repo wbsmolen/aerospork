@@ -24,3 +24,16 @@ func windowsGoneFromWindowServer(registered: Set<UInt32>, alive: Set<UInt32>?, b
     guard let alive, !alive.isEmpty else { return [] }
     return registered.subtracting(alive).filter { backgroundTabs[$0] == nil }
 }
+
+/// Whether the session reports the screen locked. A query, not a flag kept from lock and unlock notifications,
+/// which one missed unlock would leave stuck. About 0.3 ms, so read only when the answer changes something.
+func screenIsLocked() -> Bool {
+    if isUnitTest { return false }
+    return (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] != nil
+}
+
+/// While the screen is locked, Accessibility can go blank and every window looks closed, so only WindowServer's word
+/// that a window is gone counts. The rest wait for the first refresh after unlock, when a dead one is gone for good.
+func shouldCollect(_ windowId: UInt32, provenDead: Set<UInt32>, screenIsLocked: Bool) -> Bool {
+    !screenIsLocked || provenDead.contains(windowId)
+}

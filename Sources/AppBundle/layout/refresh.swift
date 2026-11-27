@@ -220,6 +220,8 @@ func followVisibleWorkspaces() {
     }
 }
 
+@MainActor private var keptWhileLocked = 0
+
 @MainActor
 private func refresh() async throws {
     if shouldResetMouseManipulation(flag: currentlyManipulatedWithMouseWindowId != nil, buttonDown: isLeftMouseButtonDown) {
@@ -230,23 +232,25 @@ private func refresh() async throws {
     // Set, not Array: this is membership-tested once per window below, so an Array made it O(W^2).
     let aliveWindowIds = Set(mapping.values.flatMap { $0 })
 
-    var collected = 0
-    for window in MacWindow.allWindows {
-        if !aliveWindowIds.contains(window.windowId) {
-            if MacApp.pendingDead.contains(window.windowId) { // here, not in the filter: the listed loop can re-add an id
-                let app = window.macApp
-                AppLog.session.notice("window \(window.windowId, privacy: .public) of \(app.bundleId ?? "?", privacy: .public) (\(app.pid, privacy: .public)) is gone from WindowServer; removing its tile; process gone: \(processIsGone(app.pid), privacy: .public)")
-            }
-            window.garbageCollect(skipClosedWindowsCache: false)
-            collected += 1
+    let unlisted = MacWindow.allWindows.filter { !aliveWindowIds.contains($0.windowId) }
+    let locked = !unlisted.isEmpty && screenIsLocked() // the query only when it decides something
+    var kept = 0
+    for window in unlisted {
+        guard shouldCollect(window.windowId, provenDead: MacApp.pendingDead, screenIsLocked: locked) else {
+            kept += 1
+            continue
         }
+        if MacApp.pendingDead.contains(window.windowId) { // here, not in the filter: the listed loop can re-add an id
+            let app = window.macApp
+            AppLog.session.notice("window \(window.windowId, privacy: .public) of \(app.bundleId ?? "?", privacy: .public) (\(app.pid, privacy: .public)) is gone from WindowServer; removing its tile; process gone: \(processIsGone(app.pid), privacy: .public)")
+        }
+        window.garbageCollect(skipClosedWindowsCache: false)
     }
     // Settled: collected, or listed by an app that answers. A later sweep finds any the lock screen kept from the filter.
     MacApp.pendingDead.subtract(pendingDead)
-    // Whether lock-aware GC is needed at all: one record if windows die while the screen is locked. A query,
-    // not a flag kept from notifications, which one missed unlock would leave stuck. About 0.3 ms, so only here.
-    if collected > 0, (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] != nil {
-        AppLog.session.notice("collected \(collected, privacy: .public) windows while the screen is locked")
+    if kept != keptWhileLocked { // a change, not every refresh: `AppLog` is kept (#logging)
+        keptWhileLocked = kept
+        if kept > 0 { AppLog.session.notice("screen locked: keeping \(kept, privacy: .public) windows Accessibility stopped listing until unlock") }
     }
     for (app, windowIds) in mapping {
         for windowId in windowIds {
