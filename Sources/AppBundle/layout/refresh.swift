@@ -59,6 +59,7 @@ func runRefreshSessionBlocking(
             gcMonitors()
 
             updateTrayText()
+            EventBroadcaster.shared.emitWorkspaceWindowsChanges()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
             // Here as well as at quit: a crash, a force quit and `killall -9` never reach the quit
@@ -115,6 +116,7 @@ func runSession<T>(
             refreshModel()
 
             updateTrayText()
+            EventBroadcaster.shared.emitWorkspaceWindowsChanges()
             try await layoutWorkspaces()
             // After layout, which awaits: this is what gets pushed to macOS, so it must be the latest.
             let focusAfter = focus.windowOrNil

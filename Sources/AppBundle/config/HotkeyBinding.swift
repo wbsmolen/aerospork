@@ -116,10 +116,11 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
     // nil is `enable off`, and the reload at startup activates the mode already active: neither fires.
     // A mode change made by an `on-mode-changed` callback does not fire again, or two callbacks that
     // switch A -> B -> A would loop forever.
-    if let previous, let targetMode, previous != targetMode, !config.onModeChanged.isEmpty,
-       refreshSessionEvent?.isOnModeChanged != true
-    {
-        runOnModeChanged(previous, targetMode)
+    if let previous, let targetMode, previous != targetMode {
+        EventBroadcaster.shared.emit(.modeChanged, ["mode": .string(targetMode), "prev-mode": .string(previous)])
+        if !config.onModeChanged.isEmpty, refreshSessionEvent?.isOnModeChanged != true {
+            runOnModeChanged(previous, targetMode)
+        }
     }
 }
 
