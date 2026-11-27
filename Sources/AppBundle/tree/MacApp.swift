@@ -532,7 +532,7 @@ final class MacApp: AbstractApp {
 
     /// Every 30 seconds, off the main thread: each app it asks about is a round trip to LaunchServices.
     static func startRegularAppSweep() {
-        Task.detached(priority: .utility) {
+        _ = Task.detached(priority: .utility) {
             while !Task.isCancelled {
                 try await Task.sleep(for: .seconds(30))
                 let regular = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
