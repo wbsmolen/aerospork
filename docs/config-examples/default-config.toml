@@ -105,6 +105,7 @@ backspace = ["close-all-windows-but-current", "mode main"]
 # accordion-padding = 30
 # default-root-container-layout = "tiles"       # tiles | accordion
 # default-root-container-orientation = "auto"   # auto | horizontal | vertical
+# new-window-placement = "sibling"              # sibling | nest: a new window shares the focused tile
 #
 # Run something after AeroSpork starts:
 # after-startup-command = ["exec-and-forget sketchybar --reload"]

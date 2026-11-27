@@ -36,6 +36,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 - "Show config error…" in the menu opens Settings on Raw TOML at the line with the error.
 - `on-mode-changed` runs commands when the binding mode changes, with `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` set, so a status bar can show the mode.
 - `subscribe` prints a line of JSON for each change of focus, workspace, monitor or mode, each new window, and each window that comes to or leaves a workspace, so a status bar can stay current without starting a process for each event. `man aerospork-subscribe` lists every event and field.
+- `new-window-placement = 'nest'` makes a new window share the focused window's tile, so the other windows keep their size and new windows open in a spiral. It is off by default, and the General pane in Settings has the same choice.
 
 ### Changed
 

@@ -172,6 +172,9 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     "default-root-container-layout": Parser(\.defaultRootContainerLayout, parseLayout),
     "default-root-container-orientation": Parser(\.defaultRootContainerOrientation, parseDefaultContainerOrientation),
+    "new-window-placement": Parser(\.newWindowPlacement) { raw, backtrace in
+        parseString(raw, backtrace).flatMap { parseEnum($0, NewWindowPlacement.self).toParsedToml(backtrace) }
+    },
 
     "start-at-login": Parser(\.startAtLogin, parseBool),
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),

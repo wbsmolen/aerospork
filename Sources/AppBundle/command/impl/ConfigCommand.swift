@@ -198,6 +198,7 @@ extension [Command] {
             flag(config.enableNormalizationOppositeOrientationForNestedContainers),
         "default-root-container-layout": str(config.defaultRootContainerLayout.rawValue),
         "default-root-container-orientation": str(config.defaultRootContainerOrientation.rawValue),
+        "new-window-placement": str(config.newWindowPlacement.rawValue),
         "accordion-padding": int(config.accordionPadding),
         "persistent-workspaces": .array(
             config.persistentWorkspaces.sorted { $0.toLogicalSegments() < $1.toLogicalSegments() }.map { str($0) },

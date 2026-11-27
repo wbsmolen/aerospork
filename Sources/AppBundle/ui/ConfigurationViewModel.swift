@@ -754,6 +754,7 @@ extension ConfigurationViewModel {
             var automaticallyUnhideMacosHiddenApps = false
             var defaultRootContainerLayout = "tiles"
             var defaultRootContainerOrientation = "auto"
+            var newWindowPlacement = "sibling"
             var accordionPadding = 30
             var enableNormalizationFlattenContainers = true
             var enableNormalizationOppositeOrientation = true
@@ -838,6 +839,7 @@ extension ConfigurationViewModel.Settings {
         .bool("enable-normalization-opposite-orientation-for-nested-containers", \.general.enableNormalizationOppositeOrientation, \.enableNormalizationOppositeOrientationForNestedContainers),
         .init("default-root-container-layout", \.general.defaultRootContainerLayout, { c, _ in c.defaultRootContainerLayout.rawValue }, ConfigurationWriter.escapedLiteral),
         .init("default-root-container-orientation", \.general.defaultRootContainerOrientation, { c, _ in c.defaultRootContainerOrientation.rawValue }, ConfigurationWriter.escapedLiteral),
+        .init("new-window-placement", \.general.newWindowPlacement, { c, _ in c.newWindowPlacement.rawValue }, ConfigurationWriter.escapedLiteral),
         .init("accordion-padding", \.general.accordionPadding, { c, _ in c.accordionPadding }, { String($0) }),
         .commands("after-startup-command", \.callbacks.afterStartup),
         .commands("on-focus-changed", \.callbacks.onFocusChanged),

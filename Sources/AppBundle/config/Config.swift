@@ -100,6 +100,8 @@ struct Config: ConvenienceCopyable {
     var automaticallyUnhideMacosHiddenApps: Bool = false
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
+    /// Where a new tiled window goes. See `Window.nestWithTileItOpenedBeside`.
+    var newWindowPlacement: NewWindowPlacement = .sibling
     /// Deprecated, but honoured -- `focus.swift` spawns it on every workspace change.
     var execOnWorkspaceChange: [String] = []
     var keyMapping = KeyMapping()
@@ -132,4 +134,10 @@ struct Config: ConvenienceCopyable {
 /// `CaseIterable` so `parseEnum` can list the accepted values in the error message.
 enum DefaultContainerOrientation: String, CaseIterable {
     case horizontal, vertical, auto
+}
+
+/// `sibling`: a new tiled window goes beside the focused one, in its container. `nest`: the two share
+/// the focused window's tile, in a new container of their own.
+enum NewWindowPlacement: String, CaseIterable {
+    case sibling, nest
 }
