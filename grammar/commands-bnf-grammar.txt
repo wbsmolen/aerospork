@@ -105,6 +105,9 @@ aerospork -h;
 
     | list-workspaces [<list_workspaces1_flag>]... --monitor <monitor_id>... [<list_workspaces1_flag>]...
     | list-workspaces [--format <output_format>|--count|--json] (--all|--focused) [--format <output_format>|--count|--json]
+
+    | subscribe --all
+    | subscribe <subscribe_event>...
     ;
 
 <window_id> ::= {{{ aerospork list-windows --all --format '%{window-id}%{tab}%{app-name} - %{window-title}' }}};
@@ -134,6 +137,8 @@ aerospork -h;
     | --app-bundle-id <app_bundle_id>
     ;
 <output_format> ::= {{{ true }}};
+
+<subscribe_event> ::= focus-changed|focused-workspace-changed|focused-monitor-changed|mode-changed|window-detected|workspace-windows-changed;
 
 <app_bundle_id> ::= {{{ aerospork list-apps --format '%{app-bundle-id}%{tab}%{app-name}' }}};
 <pid> ::= {{{ aerospork list-apps --format '%{app-pid}%{tab}%{app-name}' }}};

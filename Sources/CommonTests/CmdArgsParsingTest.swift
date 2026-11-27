@@ -111,6 +111,14 @@ final class CmdArgsParsingTest: XCTestCase {
     func testSingleValueOptionReportsAMissingValue() {
         assertFailure(parseCmdArgs(["list-workspaces", "--monitor", "all", "--format"]), "ERROR: <output-format> is mandatory")
     }
+
+    func testSubscribeTakesEitherAllOrAListOfEvents() {
+        assertEquals(parse(["subscribe", "--all"], as: SubscribeCmdArgs.self)?.subscribedEvents, Set(SubscribeEvent.allCases))
+        assertEquals(parse(["subscribe", "mode-changed", "focus-changed"], as: SubscribeCmdArgs.self)?.subscribedEvents, [.modeChanged, .focusChanged])
+        assertNotNil(errorOrNil(parseCmdArgs(["subscribe"])))
+        assertNotNil(errorOrNil(parseCmdArgs(["subscribe", "--all", "mode-changed"])))
+        XCTAssertTrue(errorOrNil(parseCmdArgs(["subscribe", "mode-change"]))?.contains("workspace-windows-changed") == true)
+    }
 }
 
 // MARK: helpers

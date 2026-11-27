@@ -23,6 +23,11 @@ struct EnableCommand: Command {
             activateMode(mainModeId)
         } else {
             activateMode(nil)
+            // A disabled server answers nothing but `enable`, and a stream would otherwise sit silent.
+            EventBroadcaster.shared.removeAll(sending: serverAnswer(
+                ExitCode.failure,
+                stderr: "\(aeroSporkAppName) server was disabled. Run 'aerospork enable on', then subscribe again",
+            ))
         }
         return true
     }

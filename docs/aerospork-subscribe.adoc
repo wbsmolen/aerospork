@@ -1,0 +1,135 @@
+= aerospork-subscribe(1)
+include::util/man-attributes.adoc[]
+:manname: aerospork-subscribe
+// tag::purpose[]
+:manpurpose: Print a JSON line for each event, until interrupted
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospork subscribe [-h|--help] --all
+aerospork subscribe [-h|--help] <event>...
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+`subscribe` prints the current state as one line of JSON, then one line of JSON for each event that happens, until you interrupt it.
+A status bar reads the lines as they come, instead of starting a process for each change.
+
+include::util/cli-only.adoc[]
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+--all:: Print every event.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+<event>...::
+The events to print: one or more of `focus-changed`, `focused-workspace-changed`, `focused-monitor-changed`, `mode-changed`, `window-detected` and `workspace-windows-changed`.
+
+// =========================================================== Output
+ifndef::env-site[]
+== Output
+endif::[]
+ifdef::env-site[]
+[.lead]
+**OUTPUT**
+endif::[]
+
+Each line is one JSON object.
+Its `event` field names it, and its `version` field is `1`.
+The version changes only when a field changes in a way that breaks a reader, so check it before you read the other fields.
+A field can be added to an event in the same version.
+Fields that name a monitor, a window or a mode are `null` when there is none.
+`monitor-id` counts from 1, like `%{monitor-id}` in aerospork-list-monitors(1).
+
+The first line is always the snapshot:
+
+`snapshot`::
+`mode` (the active binding mode),
+`focused-workspace`,
+`focused-window-id`,
+`focused-monitor-id`,
+`monitors` (one object for each monitor: `monitor-id`, `monitor-name`, and `workspace`, the workspace it shows),
+and `workspaces` (one object for each workspace: `workspace`, `monitor-id` and `windows`).
+
+`windows`, here and in `workspace-windows-changed`, is a list of objects sorted by `window-id`, each with `window-id`, `app-name` and `app-bundle-id`.
+It holds the windows that `aerospork list-windows --workspace <name>` lists.
+A minimized window belongs to no workspace.
+
+The events that follow:
+
+`focus-changed`::
+The focused window changed, or focus moved to an empty workspace.
+Fields: `window-id`, `workspace`.
+
+`focused-workspace-changed`::
+Fields: `workspace`, `prev-workspace`.
+
+`focused-monitor-changed`::
+Fields: `monitor-id`, `prev-monitor-id`, `workspace` (the focused workspace).
+
+`mode-changed`::
+Fields: `mode`, `prev-mode`.
+
+`window-detected`::
+AeroSpork saw a new window, after the `on-window-detected` rules ran.
+Fields: `window-id`, `app-name`, `app-bundle-id`, `workspace` (where the rules left it).
+
+`workspace-windows-changed`::
+A window came to or left a workspace: it opened, closed, moved or was minimized.
+One event for each workspace that changed.
+Fields: `workspace`, `windows` (all the windows the workspace has now).
+
+The focus events fire when the `on-focus-changed`, `on-focused-workspace-changed` and `on-focused-monitor-changed` callbacks would, and `mode-changed` when `on-mode-changed` would.
+They do not depend on whether the config sets those callbacks.
+
+AeroSpork keeps up to 16 subscribers.
+A subscriber that stops reading is dropped, not waited on: read the lines as they come.
+
+// =========================================================== Exit status
+ifndef::env-site[]
+== Exit status
+endif::[]
+ifdef::env-site[]
+[.lead]
+**EXIT STATUS**
+endif::[]
+
+`subscribe` runs until you interrupt it, or until AeroSpork ends the stream:
+
+1:: Window management was off when you subscribed, it was turned off with `aerospork enable off`, or 16 subscribers were already connected.
+The reason is on stderr.
+2:: An unknown event or flag.
+3:: AeroSpork is not running, it quit, or it dropped this subscriber because it stopped reading.
+Start `subscribe` again to get a new snapshot.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Update a status bar's workspace list when windows come and go: +
+`aerospork subscribe focused-workspace-changed workspace-windows-changed`
+
+* Watch every event: +
+`aerospork subscribe --all`
+
+* Print the name of each workspace you go to: +
+`aerospork subscribe focused-workspace-changed | jq --unbuffered -r 'select(.event != "snapshot") | .workspace'`
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-list-windows(1), aerospork-list-workspaces(1), aerospork-mode(1)
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

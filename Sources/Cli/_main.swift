@@ -26,6 +26,8 @@ enum CliAction: Equatable {
     /// `-v` / `--version`. Answered by the client alone when the server is unreachable.
     case version
     case send([String], readsStdin: Bool)
+    /// `subscribe`: many answers, each printed as it comes, with no timeout.
+    case stream([String])
 }
 
 /// Whether the command takes its `next`/`prev` list from stdin. Nothing else may touch it: in a
@@ -47,7 +49,7 @@ func plan(args: [String]) -> CliAction {
     // still answer when there is no server to ask.
     if args.first == "--version" || args.first == "-v" { return .version }
     return switch parseCmdArgs(args) {
-        case .cmd(let cmd): .send(args, readsStdin: readsStdin(cmd))
+        case .cmd(let cmd): cmd is SubscribeCmdArgs ? .stream(args) : .send(args, readsStdin: readsStdin(cmd))
         case .help(let help): .help(help)
         case .failure(let e): .badArgs(e)
     }
@@ -101,6 +103,31 @@ func run(
     guard socket.sendMessage(request) else {
         return .failure(CliFailure(message: "Can't send request to AeroSpork server", exitCode: ExitCode.serverUnreachable))
     }
+    return receive(socket, timeout: timeout)
+}
+
+/// `subscribe`: hands each answer to `onAnswer` until the stream ends, then returns why. No timeout, because a
+/// stream is quiet for as long as nothing happens.
+func runStream(_ socket: UnixSocketConnection, _ args: [String], onAnswer: (ServerAnswer) -> Void) -> CliFailure {
+    var next = run(socket, args, stdin: "", timeout: nil)
+    while true {
+        switch next {
+            case .failure(let failure): return failure
+            case .success(let answer):
+                // The server ends a stream it refuses or closes with a failure that says why.
+                if answer.exitCode != ExitCode.success { return CliFailure(message: answer.stderr, exitCode: answer.exitCode) }
+                onAnswer(answer)
+        }
+        next = receive(socket, timeout: nil, noAnswer: "AeroSpork server ended the stream")
+    }
+}
+
+/// The next answer from the server, decoded. `timeout` nil waits forever.
+func receive(
+    _ socket: UnixSocketConnection,
+    timeout: Duration?,
+    noAnswer: String = "No response from AeroSpork server",
+) -> Result<ServerAnswer, CliFailure> {
     let reply: Data?
     let waitStart = ContinuousClock.now
     do {
@@ -122,7 +149,7 @@ func run(
                 exitCode: ExitCode.serverUnreachable,
             ))
         }
-        return .failure(CliFailure(message: "No response from AeroSpork server", exitCode: ExitCode.serverUnreachable))
+        return .failure(CliFailure(message: noAnswer, exitCode: ExitCode.serverUnreachable))
     }
     guard let decoded = try? JSONDecoder().decode(ServerAnswer.self, from: answer) else {
         // This used to be `getOrDie()` -- a fatalError with a twenty-line "please report a bug"
@@ -156,7 +183,7 @@ struct Main {
             // Before connecting: whatever feeds the pipe can take as long as it likes, and the server
             // hangs up on a connection that says nothing.
             case .send(_, readsStdin: true): stdin = readStdin().orExit()
-            case .version, .send: break
+            case .version, .send, .stream: break
         }
 
         let socketFile = cliSocketPath(appId: aeroSporkAppId)
@@ -166,6 +193,20 @@ struct Main {
             exit(ExitCode.serverUnreachable)
         }
         defer { socket.close() }
+
+        if case .stream(let args) = action {
+            var first = true
+            let end = runStream(socket, args) { answer in
+                if first, let warning = versionMismatchWarning(client: aeroSporkVersionAndHash, server: answer.serverVersionAndHash) {
+                    printStderr(warning)
+                }
+                first = false
+                print(answer.stdout)
+                fflush(stdout) // a pipe is block-buffered, and a status bar reads line by line
+            }
+            printStderr(end.message)
+            exit(end.exitCode)
+        }
 
         // `--version` carries no subcommand, so the server is asked for nothing but its version.
         let ans = run(socket, action == .version ? [] : args, stdin: stdin).orExit()

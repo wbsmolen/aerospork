@@ -3,7 +3,8 @@ import Common
 
 /// The CLI reads stdin before it connects, then does exactly one request/response and closes, so
 /// nothing legitimate is ever slow on the socket. Anything that is, is a stuck or hostile client
-/// holding a thread hostage. Applies to each frame, in each direction.
+/// holding a thread hostage. Applies to each frame, in each direction. A `subscribe` stream keeps it on
+/// each write, and waits for the client's hang-up without it (`streamEvents`).
 private let clientFrameTimeoutSec = 30
 
 func startUnixSocketServer(socketFile: String = cliSocketPath(appId: aeroSporkAppId)) {
@@ -150,6 +151,34 @@ private func blockingSocketCall<T: Sendable>(on queue: DispatchQueue, _ body: @e
     }
 }
 
+let serverDisabledMessage = "\(aeroSporkAppName) server is disabled and doesn't accept commands. Run 'aerospork enable on' to enable it"
+
+/// `subscribe`: the snapshot, then a frame for each event, until the client hangs up, the broadcaster drops it
+/// for falling behind, or `enable off` ends every stream. The main actor is taken only to register, which is
+/// where the snapshot is read. The frames are written on the subscriber's own queue.
+private func streamEvents(_ events: Set<SubscribeEvent>, to socket: UnixSocketConnection, waitingOn queue: DispatchQueue) async {
+    let subscriber = Subscriber(
+        events: events,
+        send: { answer in encodedAnswer(answer).map { socket.sendMessage($0) } ?? false },
+        hangUp: { socket.shutdown() },
+    )
+    // One main-actor step, so an `enable off` cannot fall between the check and the registration.
+    let refusal: String? = await MainActor.run {
+        if !TrayMenuModel.shared.isEnabled { return serverDisabledMessage }
+        if EventBroadcaster.shared.add(subscriber) { return nil }
+        return "\(aeroSporkAppName) already streams to \(EventBroadcaster.maxSubscribers) subscribers. Stop one, then subscribe again"
+    }
+    if let refusal {
+        let data = encodedAnswer(serverAnswer(ExitCode.failure, stderr: refusal))
+        _ = await blockingSocketCall(on: queue) { data.map { socket.sendMessage($0) } }
+        return
+    }
+    await blockingSocketCall(on: queue) { socket.waitForHangUp() }
+    await EventBroadcaster.shared.remove(subscriber)
+    socket.shutdown() // a write blocked on a client that stopped reading fails now, not at its deadline
+    await subscriber.drain() // before `newConnection` closes the descriptor the writes use
+}
+
 /// Holds nothing while it waits on the client. The main actor is only taken to run the command, and
 /// the reply is written after `runSession` has returned and left `sessionGate`, so a client that
 /// stops reading delays itself and not the session queued behind it.
@@ -190,16 +219,17 @@ func newConnection(_ socket: UnixSocketConnection) async {
         }
         let (command, help, err) = parseCommand(request.args).unwrap()
         guard let token: RunSessionGuard = await .isServerEnabled(orIsEnableCommand: command) else {
-            await answerToClient(serverAnswer(
-                ExitCode.failure,
-                stderr: "\(aeroSporkAppName) server is disabled and doesn't accept commands. " +
-                    "Run 'aerospork enable on' to enable it",
-            ))
+            await answerToClient(serverAnswer(ExitCode.failure, stderr: serverDisabledMessage))
             continue
         }
         if let ans = nonRunningAnswer(command: command, help: help, err: err) {
             await answerToClient(ans)
             continue
+        }
+        // Before `runSession`: a stream holds no session and never waits on `sessionGate`.
+        if let command = command as? SubscribeCommand {
+            await streamEvents(command.args.subscribedEvents, to: socket, waitingOn: ioQueue)
+            return
         }
         if let command {
             let _answer: Result<ServerAnswer, Error> = await Task { @MainActor in

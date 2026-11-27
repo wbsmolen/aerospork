@@ -155,6 +155,43 @@ final class CliSurfaceTest: XCTestCase {
         assertEquals(failure, CliFailure(message: "No response from AeroSpork server within 1 s", exitCode: ExitCode.serverUnreachable))
     }
 
+    func testSubscribeIsStreamed() {
+        assertEquals(plan(args: ["subscribe", "--all"]), .stream(["subscribe", "--all"]))
+        assertEquals(plan(args: ["subscribe", "mode-changed", "focus-changed"]), .stream(["subscribe", "mode-changed", "focus-changed"]))
+    }
+
+    /// A stream is quiet for as long as nothing happens, so the reply timeout must not end it. The pause here is
+    /// longer than the one that ends `run` in the test above.
+    func testAStreamKeepsReadingThroughSilence() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close() }
+        let peer = UnixSocketConnection(fd: peerFd)
+        Thread.detachNewThread {
+            for line in ["{\"event\":\"snapshot\"}", "{\"event\":\"mode-changed\"}"] {
+                let answer = ServerAnswer(exitCode: ExitCode.success, stdout: line, serverVersionAndHash: aeroSporkVersionAndHash)
+                peer.sendMessage(try! JSONEncoder().encode(answer))
+                Thread.sleep(forTimeInterval: 1.5)
+            }
+            peer.close()
+        }
+        var lines: [String] = []
+        let end = runStream(client, ["subscribe", "--all"]) { lines.append($0.stdout) }
+        assertEquals(lines, ["{\"event\":\"snapshot\"}", "{\"event\":\"mode-changed\"}"])
+        assertEquals(end, CliFailure(message: "AeroSpork server ended the stream", exitCode: ExitCode.serverUnreachable))
+    }
+
+    /// The server refuses a stream, or ends it on `enable off`, with a failure that says why.
+    func testAStreamEndsWithTheServersReason() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        let refusal = ServerAnswer(exitCode: ExitCode.failure, stderr: "disabled", serverVersionAndHash: aeroSporkVersionAndHash)
+        UnixSocketConnection(fd: peerFd).sendMessage(try JSONEncoder().encode(refusal))
+        var lines: [String] = []
+        let end = runStream(client, ["subscribe", "--all"]) { lines.append($0.stdout) }
+        assertEquals(lines, [])
+        assertEquals(end, CliFailure(message: "disabled", exitCode: ExitCode.failure))
+    }
+
     /// A hang-up is not a timeout, so it must not claim to be one.
     func testAServerThatHangsUpSaysNoResponse() throws {
         let (client, peerFd) = socketPair()

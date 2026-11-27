@@ -46,6 +46,22 @@ final class CliConnectionTest: XCTestCase {
         assertEquals(answer.exitCode, ExitCode.badArgs)
     }
 
+    /// A subscriber is quiet for as long as nothing happens. The frame timeout, which ends any other connection
+    /// that stays silent, must not end its stream.
+    func testAnIdleSubscriberOutlivesTheFrameTimeout() async throws {
+        setUpWorkspacesForTests()
+        TrayMenuModel.shared.isEnabled = true
+        defer { EventBroadcaster.shared.removeAll(sending: serverAnswer(ExitCode.failure)) }
+        let client = serverConnectionForTests(frameTimeout: .milliseconds(300))
+        defer { client.close() }
+        try sendRequest(client, ["subscribe", "mode-changed"])
+        assertEquals(eventJson(try await nextAnswer(client))["event"] as? String, "snapshot")
+
+        try await Task.sleep(for: .seconds(1))
+        EventBroadcaster.shared.emit(.modeChanged, ["mode": .string("resize"), "prev-mode": .string("main")])
+        assertEquals(eventJson(try await nextAnswer(client))["event"] as? String, "mode-changed")
+    }
+
     /// `sendMessage` refuses a frame over the limit, so an oversize answer used to reach the client as
     /// silence: "No response from AeroSpork server".
     func testAnOversizeAnswerBecomesAFailureThatSaysSo() throws {

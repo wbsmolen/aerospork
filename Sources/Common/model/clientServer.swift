@@ -1,7 +1,12 @@
 import Foundation
 
 // TO EVERYONE REVERSE-ENGINEERING THE PROTOCOL
-// client-server socket API is not public yet.
+// client-server socket API is not public yet. What `aerospork subscribe` prints is: see
+// docs/aerospork-subscribe.adoc.
+//
+// One answer per request, except `subscribe`, which gets one answer per line it prints: the snapshot
+// first, then an event in each answer's stdout, all with exit code 0. A refusal, or the end of the
+// stream by `enable off`, is a last answer with a non-zero exit code and the reason on stderr.
 public struct ServerAnswer: Codable, Sendable {
     public let exitCode: Int32
     public let stdout: String

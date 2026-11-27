@@ -83,6 +83,102 @@ final class ServerProtocolTest: XCTestCase {
         XCTAssertTrue(answer.stderr.hasPrefix("Can't parse request '\(String(repeating: "x", count: 200))'.\n"), answer.stderr)
     }
 
+    // MARK: - subscribe
+
+    private func subscribe(_ args: [String], frameTimeout: Duration = .seconds(5)) async throws -> (UnixSocketConnection, ServerAnswer?) {
+        let client = serverConnectionForTests(frameTimeout: frameTimeout)
+        try sendRequest(client, ["subscribe"] + args)
+        return (client, try await nextAnswer(client))
+    }
+
+    private func tearDownSubscribers() {
+        EventBroadcaster.shared.removeAll(sending: serverAnswer(ExitCode.failure))
+        TrayMenuModel.shared.isEnabled = true
+    }
+
+    func testSubscribeGetsTheSnapshotThenEvents() async throws {
+        setUpWorkspacesForTests()
+        TrayMenuModel.shared.isEnabled = true
+        defer { tearDownSubscribers() }
+        let (client, snapshot) = try await subscribe(["mode-changed"])
+        assertEquals(snapshot?.exitCode, ExitCode.success)
+        assertEquals(eventJson(snapshot)["event"] as? String, "snapshot")
+        assertEquals(eventJson(snapshot)["version"] as? Int, 1)
+        assertEquals(eventJson(snapshot)["focused-workspace"] as? String, focus.workspace.name)
+
+        EventBroadcaster.shared.emit(.modeChanged, ["mode": .string("resize"), "prev-mode": .string("main")])
+        let event = eventJson(try await nextAnswer(client))
+        assertEquals(event["event"] as? String, "mode-changed")
+        assertEquals(event["mode"] as? String, "resize")
+        assertEquals(event["version"] as? Int, 1)
+
+        client.close()
+        try await waitUntil { EventBroadcaster.shared.subscribers.isEmpty } // the server saw the hang-up
+    }
+
+    /// A client that stops reading is dropped once its queue is full. It must not slow the other subscriber,
+    /// or the commands on other connections.
+    func testAClientThatStopsReadingIsDroppedAndOthersAreNot() async throws {
+        setUpWorkspacesForTests()
+        TrayMenuModel.shared.isEnabled = true
+        defer { tearDownSubscribers() }
+        let (stuck, _) = try await subscribe(["mode-changed"], frameTimeout: .seconds(30))
+        defer { stuck.close() }
+        let (reader, _) = try await subscribe(["mode-changed"])
+        defer { reader.close() }
+        let batches = 20
+        let perBatch = 50
+        let read = Task.detached {
+            var count = 0
+            while count < batches * perBatch, (try? reader.recvMessage()) != nil { count += 1 }
+            return count
+        }
+
+        // In batches, as events come: a burst of more than the queue holds would drop a reader too.
+        for _ in 0 ..< batches {
+            for _ in 0 ..< perBatch { EventBroadcaster.shared.emit(.modeChanged, ["mode": .string(String(repeating: "m", count: 100))]) }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        assertEquals(await read.value, batches * perBatch)
+        assertEquals(EventBroadcaster.shared.subscribers.count, 1)
+
+        let other = serverConnectionForTests()
+        defer { other.close() }
+        try sendRequest(other, ["no-such-command"])
+        assertEquals(try await nextAnswer(other)?.exitCode, ExitCode.badArgs)
+    }
+
+    func testADisabledServerRefusesSubscribe() async throws {
+        TrayMenuModel.shared.isEnabled = false
+        defer { tearDownSubscribers() }
+        let (client, answer) = try await subscribe(["--all"])
+        defer { client.close() }
+        assertEquals(answer?.exitCode, ExitCode.failure)
+        assertEquals(answer?.stderr, serverDisabledMessage)
+        assertTrue(EventBroadcaster.shared.subscribers.isEmpty)
+    }
+
+    /// A disabled server answers nothing but `enable`, so its streams end with the reason, instead of going quiet.
+    func testEnableOffEndsEveryStream() async throws {
+        setUpWorkspacesForTests()
+        TrayMenuModel.shared.isEnabled = true
+        defer {
+            tearDownSubscribers()
+            activateMode(mainModeId)
+        }
+        let (client, _) = try await subscribe(["--all"])
+        defer { client.close() }
+
+        let io = CmdIo(stdin: .emptyStdin)
+        assertTrue(try await EnableCommand(args: EnableCmdArgs(rawArgs: [], targetState: .off)).run(.defaultEnv, io))
+
+        let last = try await nextAnswer(client)
+        assertEquals(last?.exitCode, ExitCode.failure)
+        XCTAssertTrue(last?.stderr.contains("disabled") == true, last?.stderr ?? "")
+        assertNil(try await nextAnswer(client)) // and the server hung up
+        assertTrue(EventBroadcaster.shared.subscribers.isEmpty)
+    }
+
     /// A release server that is running but wedged: it takes the connection into its backlog and never
     /// answers. Without a frame timeout the debug build hangs at launch and at quit.
     func testTalkingToAWedgedReleaseServerGivesUp() throws {
