@@ -46,6 +46,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 - A config that names upstream keys on several lines gets one warning per kind, listing the lines.
 - Errors in Settings name what happened and offer the way out, on every pane.
 - The shortcut recorder starts recording on a click, Space or Return, and no longer when Tab moves onto it.
+- While Raw TOML has edits you have not applied, the other Settings panes are locked, so the next Apply can't silently undo a change made there.
 - VoiceOver reads the menu bar as a sentence, for example "Workspace 1, focused".
 - Monitor sizes in Settings are shown in points, the unit `[monitors]` fingerprints use.
 
@@ -64,6 +65,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 - A window that stays minimized across a restart keeps its workspace's monitor.
 - `reload-config --dry-run` no longer hides the banner that says the defaults are running.
 - `list-windows --workspace` with a name that does not exist no longer creates that workspace.
+- When a workspace moves to another monitor, the monitor it left goes back to the workspace it showed before, instead of the first one by name.
 - The `.pre-v2` backup keeps your config's file permissions.
 
 ### Security
