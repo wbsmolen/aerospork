@@ -296,7 +296,8 @@ final class MacApp: AbstractApp {
                 // `_AXUIElementGetWindow`, which can still time out and read as nil; not covered.)
                 var raw: AnyObject?
                 let error = AXUIElementCopyAttributeValue(axApp.threadGuarded, Ax.focusedWindowAttr.key as CFString, &raw)
-                if error == .cannotComplete { throw NativeFocusUnknown() }
+                // Without Accessibility access every read fails `.apiDisabled`, which is no answer either.
+                if error == .cannotComplete || error == .apiDisabled { throw NativeFocusUnknown() }
                 let element = error == .success ? raw.flatMap { CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil } : nil
                 let axWindow = identifyWindows(element.map { [$0] } ?? [], known: knownElements(windows.threadGuarded)).first
                     .flatMap { windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax, axObserver.threadGuarded) }

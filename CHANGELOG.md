@@ -17,6 +17,10 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 ## Unreleased
 
+### Fixed
+
+- Turning off Accessibility access for AeroSpork while it runs no longer makes it forget every window's place and workspace.
+
 ## 1.4.0 (2026-11-27)
 
 Status bars can follow AeroSpork with `subscribe`, windows of apps that quit no longer leave empty tiles, and AeroSpork survives several situations that used to stop it.

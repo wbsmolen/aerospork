@@ -36,6 +36,10 @@ final class InvoluntaryFocusTest: XCTestCase {
             axErrorMeansDestroyed(.cannotComplete),
             "a busy app's window was treated as closed -- that is issue #39",
         )
+        XCTAssertFalse(
+            axErrorMeansDestroyed(.apiDisabled),
+            "without Accessibility access every read fails, and every window would be collected",
+        )
         XCTAssertTrue(axErrorMeansDestroyed(.illegalArgument), "what a closed window actually reports was not treated as closed")
         XCTAssertTrue(axErrorMeansDestroyed(.invalidUIElement))
         XCTAssertTrue(axErrorMeansDestroyed(.failure), "an unexpected code should cost a re-registration, not a ghost window")
