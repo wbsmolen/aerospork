@@ -55,6 +55,29 @@ The genuinely user-visible win here is a different one: `printStderr` used to be
 unconditional, so **every** `aerospork` CLI invocation printed 6+ `[DEBUG]` lines to stderr. That
 broke anyone scripting the CLI.
 
+### Workspace switch baseline, 1.4.0
+
+Release build, warm process, one built-in display, `xctrace record --template Logging --attach`, Points
+of Interest intervals per `runSession`. Workspace 1 had three tiled windows, workspace 2 one floating
+window. The attribute names in release signposts are private, so only counts and durations are shown.
+
+| scenario | switches | AX calls per switch (median) | switch (`runSession`) | refresh after it |
+|---|---|---|---|---|
+| plain | 27 | 15: 7.2 reads, 4.0 writes | 13.3 ms median, p90 17.1, max 21.4 | 11.3 ms median, about 27 reads |
+| a two-tab Finder group open | 22 | 13.5: 7.5 reads, 5.4 writes | 13.0 ms median, p90 14.8 | 17.7 ms median, max 94, about 40 reads |
+
+A tab group adds about 13 reads and 6 ms to the background refresh, and nothing to the switch itself.
+That is why the tab-grouping cache and the floating-window prefetch were not built.
+
+**Parked windows and `kAXMoved`.** A throwaway accessory app parked through AX the way AeroSpork parks
+moved and resized itself in each way AppKit offers (move, resize, an animated move, and a `setFrame`
+that macOS constrains). Every frame change AX could see sent `kAXMoved` or `kAXResized` within about
+40 ms, 9 out of 9. A constrained `setFrame` changed both position and size and sent only
+`kAXResized`. Skipping the re-read of clean parked windows would save about one batched read per
+parked window per refresh, so `isFrameSatisfied` keeps reading the actual frame. The
+`Parked window moved without a notification` trace (`dev-docs/development.md`) re-measures it with
+real apps.
+
 ## Changes
 
 ### Removed unconditional work
