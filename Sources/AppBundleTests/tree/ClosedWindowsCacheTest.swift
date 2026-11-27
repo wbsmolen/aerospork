@@ -59,6 +59,51 @@ final class ClosedWindowsCacheTest: XCTestCase {
         assertEquals(FrozenWorkspace(workspace).macosUnconventionalWindows.map(\.id), [4646, 4747])
     }
 
+    /// The unlock restore gives each hidden workspace its monitor without showing it: showing every frozen
+    /// workspace in turn rewrote each monitor's previous workspace, so the next stub was whichever
+    /// frozen workspace sorted last, and showing a visible one again made it its own previous workspace.
+    func testRestoreKeepsHiddenWorkspacesOnTheirMonitorAndShowsOnlyTheVisibleOnes() throws {
+        resetClosedWindowsCache()
+        defer { resetClosedWindowsCache() }
+        let left = panel(id: 1, x: 0)
+        let right = panel(id: 2, x: 1920)
+        testMonitors = [left, right]
+        rearrangeWorkspacesOnMonitors()
+        // The right monitor showed D, then C, then B: C and D are hidden there, and C came last before B.
+        for name in ["D", "C", "B"] { XCTAssertTrue(right.setActiveWorkspace(Workspace.get(byName: name))) }
+        XCTAssertTrue(left.setActiveWorkspace(Workspace.get(byName: "A")))
+        let windows = ["A", "B", "C", "D"].enumerated().map { i, name in
+            TestWindow.new(id: UInt32(5000 + i), parent: Workspace.get(byName: name).rootTilingContainer)
+        }
+        let stubsBefore = [left, right].map { getStubWorkspace(for: $0).name }
+        assertEquals(stubsBefore[1], "C")
+
+        cacheClosedWindowIfNeeded(window: windows[0])
+        let frozenNames = Workspace.all.map(\.name)
+
+        // Locked: every window looks closed, and the empty hidden workspaces are collected.
+        for window in windows { window.unbindFromParent() }
+        Workspace.garbageCollectUnusedWorkspaces()
+        XCTAssertNil(Workspace.existing(byName: "C"), "precondition: the lock collects hidden workspaces")
+
+        let detected = TestWindow.new(id: 5000, parent: Workspace.get(byName: "A"))
+        XCTAssertTrue(try awaitRestore(detected))
+
+        assertEquals(Workspace.all.map(\.name), frozenNames)
+        for name in ["C", "D"] {
+            assertEquals(Workspace.get(byName: name).workspaceMonitor.rect.topLeftCorner, right.rect.topLeftCorner)
+            XCTAssertFalse(Workspace.get(byName: name).isVisible)
+        }
+        assertEquals(left.activeWorkspace.name, "A")
+        assertEquals(right.activeWorkspace.name, "B")
+        assertEquals([left, right].map { getStubWorkspace(for: $0).name }, stubsBefore)
+    }
+
+    private func panel(id: Int, x: CGFloat) -> MonitorImpl {
+        let rect = Rect(topLeftX: x, topLeftY: 0, width: 1920, height: 1080)
+        return MonitorImpl(monitorAppKitNsScreenScreensId: id, name: "Panel \(id)", rect: rect, visibleRect: rect, fingerprint: nil)
+    }
+
     /// Asks the cache the same question `restoreClosedWindowsCacheIfNeeded` asks, without needing a
     /// real AX window to restore onto.
     private func restoreWouldFind(_ id: UInt32) -> Bool {
