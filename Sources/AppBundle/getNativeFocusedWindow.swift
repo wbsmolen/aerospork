@@ -43,5 +43,8 @@ func syncFocusFromMacOs() async throws {
         return
     }
     if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+    if let nativeFocused, macOsFocusedAPutAwayScratchpadWindow(nativeFocused) {
+        try await nativeFocused.showFromScratchpad(on: focus.workspace) // then the adopt below can focus it
+    }
     updateFocusCache(nativeFocused)
 }

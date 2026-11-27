@@ -39,6 +39,16 @@ private let nativeFocusGrace: TimeInterval = 1.0
     focusAdoptedAwayFrom = nil
 }
 
+/// Does macOS name a window the scratchpad put away, as news? cmd-tab to an app whose only window is put away
+/// does that. The window must come out, or the keyboard goes to a window nobody can see. Not when macOS still
+/// names the window it named before, which is what it does right after `move-node-to-scratchpad` put the focused
+/// window away, and not while a focus request of ours is in flight.
+@MainActor func macOsFocusedAPutAwayScratchpadWindow(_ nativeFocused: Window?) -> Bool {
+    guard let nativeFocused, nativeFocused.parent is ScratchpadContainer else { return false }
+    if let pending = pendingNativeFocus, Date() < pending.deadline { return false }
+    return nativeFocused.windowId != lastKnownNativeFocusedWindowId
+}
+
 /// Called by `MacApp.nativeFocus`. Until macOS reports this window focused, reports of *other*
 /// windows are treated as our own request still in flight rather than as a user focus change.
 @MainActor func expectNativeFocus(_ windowId: UInt32, deadline: Date = Date().addingTimeInterval(nativeFocusGrace)) {

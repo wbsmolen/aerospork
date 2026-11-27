@@ -127,6 +127,26 @@ final class ScratchpadTest: XCTestCase {
         XCTAssertTrue(away.parent === focus.workspace)
     }
 
+    /// cmd-tab to an app whose only window is put away: macOS names that window, and it must come out, or the
+    /// keyboard goes to a window nobody can see. Not right after it was put away, while macOS still names it.
+    func testAPutAwayWindowMacOsFocusesComesOut() async throws {
+        resetFocusCacheForTests()
+        let a = focus.workspace
+        let away = window(1, on: a)
+        let other = window(2, on: a)
+        updateFocusCache(away)
+        try await away.moveToScratchpad()
+        XCTAssertFalse(macOsFocusedAPutAwayScratchpadWindow(away), "macOS still naming the window just put away is not news")
+
+        updateFocusCache(other)
+        XCTAssertTrue(macOsFocusedAPutAwayScratchpadWindow(away))
+        XCTAssertFalse(macOsFocusedAPutAwayScratchpadWindow(other), "a window on a workspace needs nothing")
+        try await away.showFromScratchpad(on: focus.workspace)
+        updateFocusCache(away)
+        assertEquals(focus.windowOrNil?.windowId, 1, additionalMsg: "the shown window could not take focus")
+        XCTAssertTrue(away.isScratchpad, "a shown scratchpad window is still a scratchpad window")
+    }
+
     func testAnEmptyScratchpadIsAnError() async throws {
         let result = try await run("scratchpad")
         assertEquals(result.exitCode, 1)
