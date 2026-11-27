@@ -133,8 +133,9 @@ private func makeAllWindowsVisibleAndRestoreSize() async {
         // One at a time: an app that fails to answer must not leave every later window off screen.
         do {
             // A floating window is already where the user put it, so a restart keeps it there. If its
-            // workspace is hidden it goes back to that spot rather than the monitor's centre.
-            if window.isFloating {
+            // workspace is hidden it goes back to that spot rather than the monitor's centre. A window in the
+            // scratchpad goes back to where it was put away, on the main monitor: it has no workspace to say which.
+            if window.isFloating || window.parent is ScratchpadContainer {
                 if let spot = window.unparkedTopLeftCorner { try await window.setAxFrameBlocking(spot, nil) }
                 continue
             }

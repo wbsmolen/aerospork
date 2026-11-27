@@ -8,6 +8,7 @@ enum TreeNodeCases {
     case macosHiddenAppsWindowsContainer(MacosHiddenAppsWindowsContainer)
     case macosFullscreenWindowsContainer(MacosFullscreenWindowsContainer)
     case macosPopupWindowsContainer(MacosPopupWindowsContainer)
+    case scratchpadContainer(ScratchpadContainer)
 }
 
 enum NonLeafTreeNodeCases {
@@ -17,6 +18,7 @@ enum NonLeafTreeNodeCases {
     case macosHiddenAppsWindowsContainer(MacosHiddenAppsWindowsContainer)
     case macosFullscreenWindowsContainer(MacosFullscreenWindowsContainer)
     case macosPopupWindowsContainer(MacosPopupWindowsContainer)
+    case scratchpadContainer(ScratchpadContainer)
 }
 
 enum TilingTreeNodeCases {
@@ -31,6 +33,7 @@ enum NonLeafTreeNodeKind: Equatable {
     case macosHiddenAppsWindowsContainer
     case macosFullscreenWindowsContainer
     case macosPopupWindowsContainer
+    case scratchpadContainer
 }
 
 protocol NonLeafTreeNodeObject: TreeNode {}
@@ -51,6 +54,8 @@ extension TreeNode {
             return .macosFullscreenWindowsContainer(container)
         } else if let container = self as? MacosPopupWindowsContainer {
             return .macosPopupWindowsContainer(container)
+        } else if let container = self as? ScratchpadContainer {
+            return .scratchpadContainer(container)
         } else {
             die("Unknown tree")
         }
@@ -83,6 +88,8 @@ extension NonLeafTreeNodeObject {
             return .macosFullscreenWindowsContainer(container)
         } else if let container = self as? MacosPopupWindowsContainer {
             return .macosPopupWindowsContainer(container)
+        } else if let container = self as? ScratchpadContainer {
+            return .scratchpadContainer(container)
         } else {
             die("Unknown tree \(self)")
         }
@@ -96,6 +103,7 @@ extension NonLeafTreeNodeObject {
             case .macosFullscreenWindowsContainer: .macosFullscreenWindowsContainer
             case .macosHiddenAppsWindowsContainer: .macosHiddenAppsWindowsContainer
             case .macosPopupWindowsContainer: .macosPopupWindowsContainer
+            case .scratchpadContainer: .scratchpadContainer
         }
     }
 }
@@ -106,6 +114,7 @@ enum ChildParentRelation: Equatable {
     case macosNativeHiddenAppWindow
     case macosNativeMinimizedWindow
     case macosPopupWindow
+    case scratchpadWindow
     case tiling(parent: TilingContainer)
     case rootTilingContainer
 
@@ -131,6 +140,10 @@ func getChildParentRelationOrNil(child: TreeNode, parent: NonLeafTreeNodeObject)
         case (.window, .macosPopupWindowsContainer): .macosPopupWindow
         case (_, .macosPopupWindowsContainer): nil
         case (.macosPopupWindowsContainer, _): nil
+
+        case (.window, .scratchpadContainer): .scratchpadWindow
+        case (_, .scratchpadContainer): nil
+        case (.scratchpadContainer, _): nil
 
         case (.window, .macosMinimizedWindowsContainer): .macosNativeMinimizedWindow
         case (_, .macosMinimizedWindowsContainer): nil

@@ -14,6 +14,8 @@ final class WindowRuleCommandsTest: XCTestCase {
             "['layout floating', 'fullscreen on', 'move-node-to-monitor main']",
             "['layout tiling', 'move-node-to-workspace W']",
             "['sticky on']",
+            "['move-node-to-scratchpad']",
+            "['layout floating', 'move-node-to-scratchpad']",
         ] {
             assertEquals(errors(run), [], additionalMsg: run)
         }
@@ -36,6 +38,7 @@ final class WindowRuleCommandsTest: XCTestCase {
     func testTheMoveComesLast() {
         XCTAssertTrue(errors("['move-node-to-monitor next', 'fullscreen on']").contains { $0.contains("must be the latest instruction") })
         XCTAssertTrue(errors("['move-node-to-workspace W', 'layout floating']").contains { $0.contains("must be the latest instruction") })
+        XCTAssertTrue(errors("['move-node-to-scratchpad', 'sticky on']").contains { $0.contains("must be the latest instruction") })
     }
 
     /// The two moves are one move between them: the second would undo the first.
@@ -44,8 +47,9 @@ final class WindowRuleCommandsTest: XCTestCase {
             "['move-node-to-workspace W', 'move-node-to-monitor next']",
             "['move-node-to-monitor next', 'move-node-to-monitor prev']",
             "['move-node-to-workspace W', 'move-node-to-workspace V']",
+            "['move-node-to-scratchpad', 'move-node-to-workspace W']",
         ] {
-            XCTAssertTrue(errors(run).contains { $0.contains("only one 'move-node-to-workspace' or 'move-node-to-monitor'") }, run)
+            XCTAssertTrue(errors(run).contains { $0.contains("only one 'move-node-to-workspace', 'move-node-to-monitor' or 'move-node-to-scratchpad'") }, run)
         }
     }
 

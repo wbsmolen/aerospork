@@ -359,6 +359,7 @@ func layoutWorkspaces(parkOnlyUnparked: Bool = false) async throws {
             workspace.allLeafWindowsRecursive.compactMap { $0 as? MacWindow }.forEach { $0.unhideFromCorner() }
             try await workspace.layoutWorkspace() // Unhide tiling windows from corner
         }
+        scratchpadContainer.children.compactMap { $0 as? MacWindow }.forEach { $0.unhideFromCorner() }
         return
     }
 
@@ -380,6 +381,7 @@ func layoutWorkspaces(parkOnlyUnparked: Bool = false) async throws {
             try await window.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
         }
     }
+    try await parkScratchpadWindows(monitors: monitors, onlyUnparked: parkOnlyUnparked)
 }
 
 @MainActor

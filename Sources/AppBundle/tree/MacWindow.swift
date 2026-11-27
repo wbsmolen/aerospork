@@ -37,7 +37,9 @@ final class MacWindow: Window {
         // Location is the fallback, not the first answer: at a cold start no workspace is active, so that
         // branch resolves to a stub invented from the first keybound name in sort order -- which a named
         // workspace like `A` can never be.
-        let remembered = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId)
+        // A window in the scratchpad has no workspace, so it is asked first: it must not restore a workspace.
+        let toScratchpad = WorkspaceMemory.returnsToScratchpad(windowId: windowId)
+        let remembered = toScratchpad ? nil : WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId)
         let workspace = remembered
             ?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace)
         var data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)
@@ -46,6 +48,7 @@ final class MacWindow: Window {
         if let existing = allWindowsMap[windowId] { return existing }
         let isRemembered = remembered != nil
         if isRemembered { data = WorkspaceMemory.restoredBinding(of: windowId, on: workspace, default: data) }
+        if toScratchpad { data = BindingData(parent: scratchpadContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST) }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
         window.workspaceNameAtRegistration = workspace.name
@@ -151,7 +154,7 @@ final class MacWindow: Window {
                         //   https://github.com/wbsmolen/aerospork/issues/65
                         deadWindowFocus.windowOrNil?.nativeFocus()
                     }
-                case .macosPopupWindowsContainer, .macosMinimizedWindowsContainer:
+                case .macosPopupWindowsContainer, .macosMinimizedWindowsContainer, .scratchpadContainer:
                     break // Don't switch back on popup destruction
             }
         }
@@ -205,8 +208,8 @@ final class MacWindow: Window {
     /// Where this window belongs once it is no longer parked.
     @MainActor
     var unparkedTopLeftCorner: CGPoint? {
-        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect, let nodeWorkspace else { return nil }
-        let workspaceRect = nodeWorkspace.workspaceMonitor.rect
+        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect, let monitor = unparkedMonitor else { return nil }
+        let workspaceRect = monitor.rect
         return workspaceRect.topLeftCorner + CGPoint(
             x: workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x,
             y: workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y,
@@ -216,13 +219,14 @@ final class MacWindow: Window {
     @MainActor
     func unhideFromCorner() {
         guard prevUnhiddenProportionalPositionInsideWorkspaceRect != nil else { return }
-        guard nodeWorkspace != nil else { return } // hiding only makes sense for workspace windows
+        // Hiding only makes sense for workspace windows, and the scratchpad's, which `enable off` shows.
+        guard nodeWorkspace != nil || parent is ScratchpadContainer else { return }
         guard let parent else { return }
 
         switch getChildParentRelation(child: self, parent: parent) {
             // Just a small optimization to avoid unnecessary AX calls for non floating windows
             // Tiling windows should be unhidden with layoutRecursive anyway
-            case .floatingWindow:
+            case .floatingWindow, .scratchpadWindow:
                 if let unparkedTopLeftCorner { setAxTopLeftCorner(unparkedTopLeftCorner) }
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
                  .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
@@ -367,8 +371,8 @@ func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async
                 .windowDetected,
                 subscribeWindowJson(window).merging(["workspace": window.nodeWorkspace.map { .string($0.name) } ?? .null]) { $1 },
             )
-        case .macosPopupWindowsContainer:
-            break
+        case .macosPopupWindowsContainer, .scratchpadContainer:
+            break // a window registered into the scratchpad was there before, and its rules ran then
     }
 }
 

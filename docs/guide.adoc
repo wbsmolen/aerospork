@@ -310,6 +310,41 @@ A sticky window is a floating window. Tile it, or move it with `move-node-to-wor
 `move-node-to-monitor`, and it stops being sticky. A minimized sticky window, or one of a hidden app,
 stays on its workspace until it comes back.
 
+[#scratchpad]
+=== Keep a window out of sight, and call it up on any workspace
+
+The scratchpad holds windows that you want close at hand but not on screen: a terminal, a notes app,
+a music player. A window in the scratchpad is on no workspace, and AeroSpork keeps it off screen. Run
+xref:commands.adoc#move-node-to-scratchpad[move-node-to-scratchpad] to put the focused window there,
+and xref:commands.adoc#scratchpad[scratchpad] to call it up on the workspace you are on. The window
+floats, centred on the monitor. Run `scratchpad` again to put it away. AeroSpork does not bind these
+commands by default, so bind them to keys:
+
+[source,toml]
+----
+[keys]
+alt-shift-minus = 'move-node-to-scratchpad'
+alt-minus = 'scratchpad'  # Shows the window you put away last, or puts the focused one back
+----
+
+With `--app-bundle-id`, a binding calls up the windows of one app. Together with a window rule that
+puts the app's windows in the scratchpad when they open, that makes a dropdown terminal:
+
+[source,toml]
+----
+[keys]
+alt-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
+
+[[on-window-detected]]
+    if.app-id = 'com.apple.Terminal'
+    run = 'move-node-to-scratchpad'
+----
+
+A window that you called up stays on that workspace, like any floating window, until you put it back.
+Move it with `move-node-to-workspace` or `move-node-to-monitor`, tile it, or make it sticky, and it
+stops being a scratchpad window. `list-windows` and `list-workspaces` do not show the windows in the
+scratchpad, as they do not show minimized windows.
+
 [#binding-modes]
 === Add a binding mode
 
@@ -684,7 +719,8 @@ When AeroSpork restarts, it puts back the whole layout:
 * The workspace of each window, and the monitor of each workspace.
 * The workspace that each monitor showed.
 * The tree of each workspace, with its split sizes and layouts.
-* The place of each floating, fullscreen and minimized window, and which windows are sticky.
+* The place of each floating, fullscreen and minimized window, which windows are sticky, and which
+  are in the scratchpad.
 
 AeroSpork knows a window by the ID that the macOS window server gives it. The memory lasts as long
 as the window server does. A restart of AeroSpork keeps it: an update, a crash, `killall`, or Quit
@@ -1403,10 +1439,11 @@ A rule with no condition matches every new window.
 * `fullscreen on`. A rule must say `on`: a bare `fullscreen` toggles, so the window would leave
   fullscreen if the rule ran again. See xref:commands.adoc#fullscreen[fullscreen].
 * `sticky on`, for the same reason. See <<sticky-windows>>.
-* xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] and
-  xref:commands.adoc#move-node-to-monitor[move-node-to-monitor]. A rule moves its window at most
-  once, with one of the two, and the move is the last command in the list. A move takes the window
-  away from the workspace that the commands before it worked on.
+* xref:commands.adoc#move-node-to-workspace[move-node-to-workspace],
+  xref:commands.adoc#move-node-to-monitor[move-node-to-monitor] and
+  xref:commands.adoc#move-node-to-scratchpad[move-node-to-scratchpad]. A rule moves its window at
+  most once, with one of the three, and the move is the last command in the list. A move takes the
+  window away from the workspace that the commands before it worked on.
 
 To open an app on another monitor, for example, move its window to that monitor. The window goes to
 the workspace that the monitor shows:

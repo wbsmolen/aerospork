@@ -39,8 +39,8 @@ struct SplitCommand: Command {
                 return true
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
                 return io.err("Can't split macos fullscreen, minimized windows and windows of hidden apps. This behavior may change in the future")
-            case .macosPopupWindowsContainer:
-                return false // Impossible
+            case .macosPopupWindowsContainer, .scratchpadContainer:
+                return false // Impossible: neither resolves as a target
         }
     }
 }

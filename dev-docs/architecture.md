@@ -282,6 +282,24 @@ removes an empty container, and gives the away windows of that container to the 
 
 **Test.** `AwayWindowTest`.
 
+### The scratchpad
+
+**Rule.** The scratchpad is `scratchpadContainer`, a global container like the minimized one, and
+`scratchpadWindowIds` says which windows are scratchpad windows, put away or shown. A shown one is an
+ordinary floating window. A window put away keeps no away place. Registration asks
+`WorkspaceMemory.returnsToScratchpad` before `restoredWorkspace`, and a window that goes back into the
+scratchpad restores neither half of a workspace. Sticky and scratchpad are exclusive. `layoutWorkspaces`
+parks the container's windows against the focused monitor, and the quit cleanup puts them on the main
+monitor.
+
+**Reason.** A reserved workspace would have to be filtered out of every reader of `Workspace.all`, and
+the compiler checks none of them: one miss shows it on a monitor. A container is outside every workspace
+enumeration from the start, and its `TreeNodeCases` case makes the compiler flag every switch. The id
+set outlives the lock screen, which collects live windows that come back with the same id. A sticky
+window in the scratchpad would follow the screen back out.
+
+**Test.** `ScratchpadTest`, `WorkspaceMemoryTest.testWindowRegistrationDoesNotUseTheNameOnlyLookup`.
+
 ### Native tabs
 
 **Rule.** A native tab group takes one tile, however many tabs it has. `findBackgroundTabs` in

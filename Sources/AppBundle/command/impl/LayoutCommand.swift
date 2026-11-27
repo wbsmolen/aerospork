@@ -40,13 +40,14 @@ struct LayoutCommand: Command {
             case .tiling:
                 guard let parent = window.parent else { return false }
                 switch parent.cases {
-                    case .macosPopupWindowsContainer:
-                        return false // Impossible
+                    case .macosPopupWindowsContainer, .scratchpadContainer:
+                        return false // Impossible: neither resolves as a target
                     case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
                         return io.err("Can't change layout for macOS minimized, fullscreen windows or windows or hidden apps. This behavior is subject to change")
                     case .tilingContainer:
                         return true // Nothing to do
                     case .workspace(let workspace):
+                        window.isScratchpad = false // a scratchpad window is a floating one, and this one stays here
                         window.lastFloatingSize = try await window.getAxSize() ?? window.lastFloatingSize
                         try await window.relayoutWindow(on: workspace, forceTile: true)
                         return true
@@ -76,7 +77,7 @@ struct LayoutCommand: Command {
 
             return true
         case .workspace, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
-             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
+             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .scratchpadContainer:
             return io.err("The window is non-tiling - it may be floating or in a special container")
     }
 }
