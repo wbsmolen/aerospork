@@ -51,11 +51,17 @@ struct GeneralSettingsTab: View {
                 }
                 .pickerStyle(.segmented)
 
+                Picker("New windows open", selection: viewModel.binding(\.settings.general.newWindowPlacement)) {
+                    Text("Beside").tag("sibling")
+                    Text("Nested").tag("nest")
+                }
+                .pickerStyle(.segmented)
+
                 NumberField("Accordion peek", value: viewModel.binding(\.settings.general.accordionPadding))
             } header: {
                 SectionLabel("Layout", "rectangle.split.3x1")
             } footer: {
-                SettingsHint("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
+                SettingsHint("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. Nested splits the focused window's tile between it and the new window, so the other windows keep their size; beside gives every window in the row a narrower share. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
             }
 
             Section {

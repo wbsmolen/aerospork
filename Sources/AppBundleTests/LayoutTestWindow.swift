@@ -69,4 +69,5 @@ final class LayoutTestWindow: Window, CustomStringConvertible {
     @MainActor override var isMacosAppHidden: Bool { false }
     @MainActor override func getAxRect() async throws -> Rect? { axRect }
     @MainActor override func getAxTopLeftCorner() async throws -> CGPoint? { axRect.topLeftCorner }
+    @MainActor override func getAxSize() async throws -> CGSize? { axRect.size }
 }

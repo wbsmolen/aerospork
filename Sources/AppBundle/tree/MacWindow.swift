@@ -67,6 +67,7 @@ final class MacWindow: Window {
                 // Running it again would undo a move made by hand since. `during-aerospork-startup = true`
                 // is a request to run at startup, so those still do.
                 if !isNewTab { try await tryOnWindowDetected(window, onlyStartupRules: isRemembered) }
+                window.applyNewWindowPlacement(isRemembered: isRemembered, isNewTab: isNewTab)
             }
         }
         // A window that arrives looking like a popup is re-checked by `validateStillPopups` -- but only
@@ -285,6 +286,36 @@ extension Window {
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
             : unbindAndGetBindingDataForNewWindow(try await getAxUiElementWindowType(), workspace, window: self)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+    }
+
+    /// `new-window-placement = 'nest'`: a new tiled window shares the tile of the focused window with it, in a
+    /// container of their own, instead of taking a share of the whole row. Called once, at registration, after
+    /// the window rules, so a window a rule moved nests where it lands, beside that workspace's focused window.
+    ///
+    /// Never for a window from workspace memory (the file has its place), a new native tab (it took its
+    /// group's tile), or the windows already open at startup. A window macOS gives back comes through
+    /// `takeAwaySlot`, and `layout tiling` through `relayoutWindow`: neither calls this.
+    @MainActor
+    func applyNewWindowPlacement(isRemembered: Bool, isNewTab: Bool) {
+        guard config.newWindowPlacement == .nest, !isRemembered, !isNewTab, !isStartup,
+              layoutReason == .standard, parent is TilingContainer, let workspace = nodeWorkspace else { return }
+        let own = unbindFromParent()
+        // Alone in its container, the tile already is that container's whole space: nesting would only flip it.
+        guard let tile = workspace.mostRecentWindowRecursive, let row = tile.parent as? TilingContainer,
+              row.layout == .tiles, row.children.count > 1
+        else {
+            bind(to: own.parent, adaptiveWeight: own.adaptiveWeight, index: own.index)
+            return
+        }
+        let place = tile.unbindFromParent()
+        let orientation: Orientation = if !config.enableNormalizationOppositeOrientationForNestedContainers, let rect = tile.lastAppliedLayoutVirtualRect {
+            rect.width >= rect.height ? .h : .v
+        } else {
+            row.orientation.opposite
+        }
+        let nest = TilingContainer(parent: row, adaptiveWeight: place.adaptiveWeight, orientation, .tiles, index: place.index)
+        tile.bind(to: nest, adaptiveWeight: WEIGHT_AUTO, index: 0)
+        bind(to: nest, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     }
 }
 

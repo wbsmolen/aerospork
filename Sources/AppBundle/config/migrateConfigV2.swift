@@ -204,6 +204,7 @@ private func compactRanges(_ names: [String]) -> [String] {
         a.enableNormalizationOppositeOrientationForNestedContainers == b.enableNormalizationOppositeOrientationForNestedContainers &&
         a.defaultRootContainerLayout == b.defaultRootContainerLayout &&
         a.defaultRootContainerOrientation == b.defaultRootContainerOrientation &&
+        a.newWindowPlacement == b.newWindowPlacement &&
         a.startAtLogin == b.startAtLogin &&
         a.automaticallyUnhideMacosHiddenApps == b.automaticallyUnhideMacosHiddenApps &&
         a.accordionPadding == b.accordionPadding &&

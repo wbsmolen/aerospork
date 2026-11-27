@@ -564,6 +564,51 @@ enable-normalization-flatten-containers = false
 enable-normalization-opposite-orientation-for-nested-containers = false
 ----
 
+[#new-window-placement]
+==== Where a new window goes
+
+A new window opens beside the focused window, in the same container. Each new window takes a share
+of that whole row, so a third or fourth window makes every window in the row narrower.
+
+To make a new window share the focused window's tile instead, set:
+
+[source,toml]
+----
+new-window-placement = 'nest'   # the built-in default is 'sibling'
+----
+
+With `'nest'`, the focused window and the new window go into a new container that takes the
+focused window's place and size. The other windows keep their size. With the normalizations on, the
+new container has the opposite orientation of its parent, so windows open in a spiral:
+
+----
+h_tiles
+├── window 1
+└── v_tiles
+    ├── window 2
+    └── h_tiles
+        ├── window 3
+        └── window 4
+----
+
+With `enable-normalization-opposite-orientation-for-nested-containers = false`, the new container
+splits the focused window along its longer side.
+
+Some windows never nest:
+
+* The first two windows of a container. They sit side by side, because the focused window already
+  fills its container.
+* A window in an accordion container.
+* A window that a restart brings back to the place it had, and the windows that are already open
+  when AeroSpork starts.
+* A new native tab. It takes the tile of its tab group.
+* A window that comes back from minimized, hidden or fullscreen. It goes back to its place.
+* A window that `layout tiling` or a move command puts in the tiles.
+
+When a <<on-window-detected-callback,window rule>> moves a new window to another workspace, the
+window nests there, beside the focused window of that workspace. The Layout section of the General
+pane in Settings has the same choice.
+
 [#floating-windows]
 ==== Floating windows
 
@@ -1012,6 +1057,7 @@ The other built-in defaults:
 |`accordion-padding` |`30` |commented out
 |`default-root-container-layout` |`'tiles'` |commented out
 |`default-root-container-orientation` |`'auto'` |commented out
+|`new-window-placement` |`'sibling'` |commented out
 |`start-at-login` |`false` |commented out
 |`enable-normalization-flatten-containers` |`true` |no
 |`enable-normalization-opposite-orientation-for-nested-containers` |`true` |no

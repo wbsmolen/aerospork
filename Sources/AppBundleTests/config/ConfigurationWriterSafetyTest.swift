@@ -389,7 +389,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
     /// them has to survive being written and read back.
     func testEveryScalarKeyRoundTrips() {
         let table = ConfigurationViewModel.Settings.scalarKeys
-        assertEquals(table.count, 14)
+        assertEquals(table.count, 15)
         assertEquals(Set(table.map(\.key)).count, table.count)
         XCTAssertTrue(Set(table.map(\.key)).isSubset(of: configParserKeys))
 
@@ -398,6 +398,7 @@ final class ConfigurationWriterSafetyTest: XCTestCase {
         edited.general.automaticallyUnhideMacosHiddenApps = true
         edited.general.defaultRootContainerLayout = "accordion"
         edited.general.defaultRootContainerOrientation = "vertical"
+        edited.general.newWindowPlacement = "nest"
         edited.general.accordionPadding = 12
         edited.general.enableNormalizationFlattenContainers = false
         edited.general.enableNormalizationOppositeOrientation = false

@@ -137,6 +137,7 @@ final class ConfigV2MigrationTest: XCTestCase {
             "enableNormalizationFlattenContainers": { $0.enableNormalizationFlattenContainers.toggle() },
             "defaultRootContainerLayout": { $0.defaultRootContainerLayout = .accordion },
             "defaultRootContainerOrientation": { $0.defaultRootContainerOrientation = .horizontal },
+            "newWindowPlacement": { $0.newWindowPlacement = .nest },
             "startAtLogin": { $0.startAtLogin.toggle() },
             "automaticallyUnhideMacosHiddenApps": { $0.automaticallyUnhideMacosHiddenApps.toggle() },
             "accordionPadding": { $0.accordionPadding += 1 },

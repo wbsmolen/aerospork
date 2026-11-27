@@ -25,6 +25,7 @@ final class ConfigIntrospectionTest: XCTestCase {
             "enable-normalization-opposite-orientation-for-nested-containers",
             "default-root-container-layout",
             "default-root-container-orientation",
+            "new-window-placement",
         ] {
             XCTAssertNotNil(get(key), "'\(key)' is not reachable via config --get")
         }
