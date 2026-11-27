@@ -119,6 +119,8 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
     /// A minimized window has no workspace, so the command already fails before the macOS-owned guard.
     func testAMinimizedWindowIsRefused() {
         let window = TestWindow.new(id: 1, parent: macosMinimizedWindowsContainer)
+        // The container is global, so `setUpWorkspacesForTests` does not empty it, and a later test would find this window.
+        defer { window.unbindFromParent() }
         let io = CmdIo(stdin: .emptyStdin)
         let succ = MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b").copy(\.windowId, 1)).run(.defaultEnv, io)
 
