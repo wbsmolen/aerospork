@@ -17,26 +17,39 @@ How to write this file. script/publish-release.sh reads the section of the versi
 
 ## Unreleased
 
+## 1.4.0 (2026-11-27)
+
+Status bars can follow AeroSpork with `subscribe`, windows of apps that quit no longer leave empty tiles, and AeroSpork survives several situations that used to stop it.
+
 ### Upgrade notes
 
 - If your config file exists but cannot be read (wrong permissions, not UTF-8 text, or a link to a missing file), AeroSpork now says so and keeps your file, instead of quietly running the defaults. Fix the file, or the permissions, and it loads again.
 - If you migrated a config that binds `swap`, it now loads: `swap` is a command.
 - If a script or status bar waits on an `aerospork` command, it now gets exit code 3 and "No response from AeroSpork server within 60 s" when AeroSpork does not answer, instead of waiting forever. Treat exit 3 as "try again later".
 - If your config has `on-mode-changed`, AeroSpork now runs it on each mode change. It used to report the key and ignore it. Remove the key if you do not want its commands to run.
+- If a workspace range mixes digits and letters, or upper and lower case, such as `0-A`, the config no longer loads. List those workspaces by name instead.
 
 ### Added
+
+#### Windows
 
 - `swap` trades the focused window with its neighbour, keeping both slots and sizes.
 - `sticky` keeps a floating window on screen as you switch workspaces on its monitor, for video calls and picture-in-picture. A window rule can run `sticky on`, and `%{window-is-sticky}` reports it.
 - Window rules can run `move-node-to-monitor` and `fullscreen on`, so a rule can open an app on the monitor you want.
+- `new-window-placement = 'nest'` makes a new window share the focused window's tile, so the other windows keep their size and new windows open in a spiral. It is off by default, and the General pane in Settings has the same choice.
+
+#### Status bars and scripts
+
+- `subscribe` prints a line of JSON for each change of focus, workspace, monitor or mode, each new window, and each window that comes to or leaves a workspace, so a status bar can stay current without starting a process for each event. `man aerospork-subscribe` lists every event and field.
+- `on-mode-changed` runs commands when the binding mode changes, with `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` set, so a status bar can show the mode.
 - `list-modes --json` prints the binding modes as JSON, and `%{window-layout}`, `%{window-orientation}` and `%{window-is-floating}` tell a status bar how a window is laid out.
 - `debug-windows --tree` prints the whole window tree as JSON, with anything that looks inconsistent, for bug reports.
+
+#### Settings
+
 - Settings has "Check for updates…" and an automatic-check switch under General.
 - The Monitors pane has an Identify button that shows each monitor's number on that screen.
 - "Show config error…" in the menu opens Settings on Raw TOML at the line with the error.
-- `on-mode-changed` runs commands when the binding mode changes, with `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` set, so a status bar can show the mode.
-- `subscribe` prints a line of JSON for each change of focus, workspace, monitor or mode, each new window, and each window that comes to or leaves a workspace, so a status bar can stay current without starting a process for each event. `man aerospork-subscribe` lists every event and field.
-- `new-window-placement = 'nest'` makes a new window share the focused window's tile, so the other windows keep their size and new windows open in a spiral. It is off by default, and the General pane in Settings has the same choice.
 
 ### Changed
 
@@ -45,8 +58,10 @@ How to write this file. script/publish-release.sh reads the section of the versi
 - One `split` binding while flatten normalization is on is now a warning, instead of rejecting the whole config.
 - A config that names upstream keys on several lines gets one warning per kind, listing the lines.
 - Errors in Settings name what happened and offer the way out, on every pane.
+- A config error for an unknown key or key name suggests the name you probably meant, and a bad modifier gets the same message everywhere.
+- A binding or a monitor pin written in both the v1 and the v2 spelling loads with a warning that names the one that wins, and Settings edits that one.
 - The shortcut recorder starts recording on a click, Space or Return, and no longer when Tab moves onto it.
-- While Raw TOML has edits you have not applied, the other Settings panes are locked, so the next Apply can't silently undo a change made there.
+- While Raw TOML has edits you have not applied, the other Settings panes are locked, so the next Apply cannot silently undo a change made there.
 - VoiceOver reads the menu bar as a sentence, for example "Workspace 1, focused".
 - Monitor sizes in Settings are shown in points, the unit `[monitors]` fingerprints use.
 
