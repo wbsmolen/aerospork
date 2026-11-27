@@ -155,6 +155,17 @@ find it later, so start `log stream` before you reproduce the problem. In Consol
 subsystem and enable **Action > Include Debug Messages**. `dev-docs/architecture.md`, "Logging",
 explains the two channels.
 
+To count the apps that move a parked window without a `kAXMoved` or `kAXResized` notification, set
+`AEROSPORK_DEBUG_LOG` and restart the debug copy as above, then leave this running during normal use:
+
+```bash
+log stream --debug --predicate 'subsystem == "com.wbs.aerospork.debug" AND eventMessage CONTAINS "Parked window moved without a notification"'
+```
+
+The message names the app's bundle ID and the window ID, for example
+`Parked window moved without a notification: com.apple.Terminal window 1234 was at (100.0, 100.0), parked at (-799.0, 900.0)`.
+The check that follows AeroSpork's own park write never counts, since that write notifies too.
+
 ## Code signing
 
 `script/signing-identity.sh` finds signing identities in your keychain. `generate.sh`,
