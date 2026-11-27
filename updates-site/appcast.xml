@@ -9,6 +9,86 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <description>Updates for AeroSpork, an i3-like tiling window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>1.4.0</title>
+            <pubDate>Fri, 27 Nov 2026 08:53:26 -0600</pubDate>
+            <link>https://github.com/wbsmolen/aerospork</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/wbsmolen/aerospork/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
+            <sparkle:version>1.4.0</sparkle:version>
+            <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>Status bars can follow AeroSpork with <code>subscribe</code>, windows of apps that quit no longer leave empty tiles, and AeroSpork survives several situations that used to stop it.</p>
+<h3>Upgrade notes</h3>
+<ul>
+<li>If your config file exists but cannot be read (wrong permissions, not UTF-8 text, or a link to a missing file), AeroSpork now says so and keeps your file, instead of quietly running the defaults. Fix the file, or the permissions, and it loads again.</li>
+<li>If you migrated a config that binds <code>swap</code>, it now loads: <code>swap</code> is a command.</li>
+<li>If a script or status bar waits on an <code>aerospork</code> command, it now gets exit code 3 and &quot;No response from AeroSpork server within 60 s&quot; when AeroSpork does not answer, instead of waiting forever. Treat exit 3 as &quot;try again later&quot;.</li>
+<li>If your config has <code>on-mode-changed</code>, AeroSpork now runs it on each mode change. It used to report the key and ignore it. Remove the key if you do not want its commands to run.</li>
+<li>If a workspace range mixes digits and letters, or upper and lower case, such as <code>0-A</code>, the config no longer loads. List those workspaces by name instead.</li>
+</ul>
+<h3>Added</h3>
+<h4>Windows</h4>
+<ul>
+<li><code>swap</code> trades the focused window with its neighbour, keeping both slots and sizes.</li>
+<li><code>sticky</code> keeps a floating window on screen as you switch workspaces on its monitor, for video calls and picture-in-picture. A window rule can run <code>sticky on</code>, and <code>%{window-is-sticky}</code> reports it.</li>
+<li>Window rules can run <code>move-node-to-monitor</code> and <code>fullscreen on</code>, so a rule can open an app on the monitor you want.</li>
+<li><code>new-window-placement = &#x27;nest&#x27;</code> makes a new window share the focused window&#x27;s tile, so the other windows keep their size and new windows open in a spiral. It is off by default, and the General pane in Settings has the same choice.</li>
+</ul>
+<h4>Status bars and scripts</h4>
+<ul>
+<li><code>subscribe</code> prints a line of JSON for each change of focus, workspace, monitor or mode, each new window, and each window that comes to or leaves a workspace, so a status bar can stay current without starting a process for each event. <code>man aerospork-subscribe</code> lists every event and field.</li>
+<li><code>on-mode-changed</code> runs commands when the binding mode changes, with <code>AEROSPORK_MODE</code> and <code>AEROSPORK_PREV_MODE</code> set, so a status bar can show the mode.</li>
+<li><code>list-modes --json</code> prints the binding modes as JSON, and <code>%{window-layout}</code>, <code>%{window-orientation}</code> and <code>%{window-is-floating}</code> tell a status bar how a window is laid out.</li>
+<li><code>debug-windows --tree</code> prints the whole window tree as JSON, with anything that looks inconsistent, for bug reports.</li>
+</ul>
+<h4>Settings</h4>
+<ul>
+<li>Settings has &quot;Check for updates…&quot; and an automatic-check switch under General.</li>
+<li>The Monitors pane has an Identify button that shows each monitor&#x27;s number on that screen.</li>
+<li>&quot;Show config error…&quot; in the menu opens Settings on Raw TOML at the line with the error.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>AeroSpork asks apps for less on every workspace switch and refresh, so switching is quicker with many windows open.</li>
+<li>Saving in Settings no longer re-registers every hotkey, so a key pressed during a save is not lost.</li>
+<li>One <code>split</code> binding while flatten normalization is on is now a warning, instead of rejecting the whole config.</li>
+<li>A config that names upstream keys on several lines gets one warning per kind, listing the lines.</li>
+<li>Errors in Settings name what happened and offer the way out, on every pane.</li>
+<li>A config error for an unknown key or key name suggests the name you probably meant, and a bad modifier gets the same message everywhere.</li>
+<li>A binding or a monitor pin written in both the v1 and the v2 spelling loads with a warning that names the one that wins, and Settings edits that one.</li>
+<li>The shortcut recorder starts recording on a click, Space or Return, and no longer when Tab moves onto it.</li>
+<li>While Raw TOML has edits you have not applied, the other Settings panes are locked, so the next Apply cannot silently undo a change made there.</li>
+<li>VoiceOver reads the menu bar as a sentence, for example &quot;Workspace 1, focused&quot;.</li>
+<li>Monitor sizes in Settings are shown in points, the unit <code>[monitors]</code> fingerprints use.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>A window of an app that quit while updating itself no longer leaves an empty tile behind.</li>
+<li>A window that is gone but that its app still seems to hold, for example when the app hangs as it exits, now gives up its empty tile within 30 seconds.</li>
+<li><code>move-node-to-workspace</code> and <code>move-node-to-monitor</code> refuse a window in macOS fullscreen or of a hidden app, as <code>move</code> does, instead of leaving an empty tile for it on the other workspace.</li>
+<li>AeroSpork no longer quits when a CLI command gives up waiting for it, or is interrupted, while AeroSpork is busy.</li>
+<li>AeroSpork no longer quits when every display is asleep or a DisplayLink dock is reconnecting.</li>
+<li>AeroSpork no longer quits at startup when both <code>~/.aerospork.toml</code> and <code>~/.config/aerospork/aerospork.toml</code> exist.</li>
+<li>Saving in Settings keeps a symlinked config a symlink, so a dotfiles manager keeps managing it.</li>
+<li>A config file you create, replace or restore is picked up without a restart, and deleting it falls back to the defaults after a second.</li>
+<li>The shortcut recorder can record Shift with a digit or punctuation key, function keys and keypad keys, and follows the key mapping preset.</li>
+<li>Clicking anywhere outside the shortcut recorder cancels it, so a ⌘W that follows closes the window instead of being recorded as a binding.</li>
+<li>Raw TOML shows errors from Apply, Restore and a changed file, undo no longer cuts text out of the config, and Reload waits until unapplied edits are applied or reverted.</li>
+<li>Focusing a minimized window whose workspace was cleaned up brings it back on the focused monitor, instead of on the main monitor.</li>
+<li>A window that stays minimized across a restart keeps its workspace&#x27;s monitor.</li>
+<li><code>reload-config --dry-run</code> no longer hides the banner that says the defaults are running.</li>
+<li><code>list-windows --workspace</code> with a name that does not exist no longer creates that workspace.</li>
+<li>When a workspace moves to another monitor, the monitor it left goes back to the workspace it showed before, instead of the first one by name.</li>
+<li>The <code>.pre-v2</code> backup keeps your config&#x27;s file permissions.</li>
+</ul>
+<h3>Security</h3>
+<ul>
+<li>The CLI socket no longer spins a CPU core when the process runs out of file descriptors.</li>
+</ul>
+<p><a href="https://github.com/wbsmolen/aerospork/blob/main/CHANGELOG.md">Changes in earlier versions</a></p>
+]]></description>
+            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.4.0/AeroSpork-1.4.0.zip" length="7433162" type="application/octet-stream" sparkle:edSignature="xi5c0DhJMiPICemqgJBM+XSxUbgkMXYY+X7Iowdu9EFq7yWlj2G5IMgETJZ3+w8nyS8rkPChcLfyV4lrWLMmCw=="/>
+        </item>
+        <item>
             <title>1.3.4</title>
             <pubDate>Fri, 06 Nov 2026 22:26:37 -0600</pubDate>
             <link>https://github.com/wbsmolen/aerospork</link>
@@ -43,48 +123,9 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 ]]></description>
             <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.3/AeroSpork-1.3.3.zip" length="6946156" type="application/octet-stream" sparkle:edSignature="+XmmAheQzT2JFkG3lKYL1W8oUyqDKgStRaZR7F3IB+RqzH3ZwaHHp7+gzJe+fysktzLwsdMqiZctQfT8MldvAQ=="/>
         </item>
-        <item>
-            <title>1.3.2</title>
-            <pubDate>Fri, 06 Nov 2026 12:12:55 -0600</pubDate>
-            <link>https://github.com/wbsmolen/aerospork</link>
-            <sparkle:version>1.3.2</sparkle:version>
-            <sparkle:shortVersionString>1.3.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<p>A restart now brings back your whole layout, floating windows can be moved and resized from the keyboard, and updates require a signed feed.</p>
-<h3>Upgrade notes</h3>
-<ul>
-<li>A window rule no longer runs again on a window that was already open when AeroSpork restarted, because that could undo a move you made by hand. Rules with <code>if.during-aerospork-startup = true</code> still do.</li>
-<li>AeroSpork now refuses an update feed that isn&#x27;t signed. The feed at aerospork.app is, so nothing changes unless you serve your own.</li>
-</ul>
-<h3>A restart keeps everything</h3>
-<ul>
-<li>Nested containers, each container&#x27;s layout and orientation, and which windows are fullscreen in AeroSpork all come back, on top of the order and sizes 1.3.1 added. It doesn&#x27;t matter which app answers first.</li>
-<li>A floating window stays where you put it when AeroSpork quits, instead of moving to the center of its monitor. That holds on a hidden workspace too, and after a crash.</li>
-<li>A minimized window keeps its place across any number of restarts, not just the first.</li>
-<li>An app that answers late still gets its place back, until you change a layout. From then on a late window goes wherever a new one would, so it can&#x27;t undo what you just did.</li>
-</ul>
-<h3>Floating windows</h3>
-<ul>
-<li><code>move</code> moves a floating window by 50 points and stops at the edge of its monitor. <code>--boundaries all-monitors-outer-frame</code> takes it on to the next monitor.</li>
-<li><code>resize</code> resizes a floating window. <code>smart</code> changes its width and <code>smart-opposite</code> its height, and it stays on its monitor.</li>
-<li>Directional <code>focus</code> works on a workspace that has only floating windows. It used to find nothing.</li>
-<li>Switching to a workspace with only floating windows focuses the most recent one, not whichever came first.</li>
-</ul>
-<h3>Other fixes</h3>
-<ul>
-<li><code>focus --window-id</code> brings back a minimized window or a window of a hidden app, and <code>macos-native-minimize --window-id</code> unminimizes one. Both used to do nothing.</li>
-<li><code>move-mouse</code> after another command in the same binding goes to where the window is now, not where it was.</li>
-<li>A learned minimum window size is asked about again whenever the windows in its row change, so one that has since come down no longer stays. An accordion&#x27;s minimum now counts its padding, so windows in one no longer overlap their neighbours by it.</li>
-<li>An app that turns into a regular app without launching or activating, like a background agent opening a window, is noticed within 30 seconds rather than whenever it is next activated.</li>
-<li>Adding a section to a config with no final newline and removing it leaves the file as it was.</li>
-<li><code>resize</code> on a window in an accordion says why it can&#x27;t, rather than claiming the window is floating.</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/wbsmolen/aerospork/releases/download/v1.3.2/AeroSpork-1.3.2.zip" length="6926281" type="application/octet-stream" sparkle:edSignature="MGSRvQrhU/rBzgBj/tHjbwvT5NdO0HFKLhRAG9SAEQQp8300xHA11NElY8iYi1Kf3Bs0eiVcP+7FC3x9nQjbDA=="/>
-        </item>
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: x69iq1+hTH9WBMYl3FaiCRwH993ssWOtkMuuN0sCMfY1XGTtVDoyBurX3yMbK7tIRGwFHvHIlLfKHE7x4XYRAA==
-length: 7572
+edSignature: JPsjtaTZzJl2u5IRrXVXxIUArcDZLi7f8BpHGV6c9VMiZl9lRzBCBDSTvJoctL8lzJfc9y89+61T5BMHkDxHAg==
+length: 11962
 -->
