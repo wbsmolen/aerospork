@@ -310,7 +310,7 @@ final class ConfigurationViewModel: ObservableObject {
         autoSaveTask = nil
     }
 
-    /// Called when the settings window goes away: a pending edit is written now, not dropped.
+    /// Called when the settings window goes away, or Raw TOML opens: a pending edit is written now, not dropped.
     ///
     /// It used to be cancelled, so a change made less than 600ms before closing the window was
     /// discarded without a word -- the toggle had moved, the file had not. The save runs the same guards
@@ -320,7 +320,7 @@ final class ConfigurationViewModel: ObservableObject {
         cancelPendingAutoSave()
         await saveConfiguration()
         if let errorMessage {
-            AppLog.config.notice("Settings closed with an edit that could not be saved: \(errorMessage, privacy: .public)")
+            AppLog.config.notice("An edit could not be saved when Settings closed or opened Raw TOML: \(errorMessage, privacy: .public)")
         }
     }
 

@@ -231,6 +231,13 @@ final class UISettingsTest: XCTestCase {
 
     /// The window locks the structured panes on this flag. It follows `rawTomlEdited` but publishes
     /// only when that flips, so the window does not re-render on every keystroke.
+    /// A structured edit made under 600 ms before opening Raw TOML would be refused once typing starts,
+    /// then dropped by the next Apply. Opening the pane writes it first.
+    func testOpeningRawTomlWritesAPendingAutosaveFirst() throws {
+        let source = try readRepoFile("Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift")
+        XCTAssertTrue(source.contains("await viewModel.flushPendingAutoSave()"))
+    }
+
     func testPendingRawEditsFlipOnceEachWay() {
         let loadedText = "accordion-padding = 30\n"
         let vm = ConfigurationViewModel()

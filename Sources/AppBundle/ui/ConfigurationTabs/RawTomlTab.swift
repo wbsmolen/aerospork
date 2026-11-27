@@ -75,6 +75,10 @@ struct RawTomlTab: View {
             jump(to: line)
         }
         .task {
+            // A structured edit still waiting on its 600 ms autosave is written before Raw TOML can be
+            // typed in. Otherwise the save is refused for unapplied Raw TOML edits, and the next Apply or
+            // Revert drops the edit without a word.
+            await viewModel.flushPendingAutoSave()
             // Touches the file system. The pane re-renders on every keystroke, so leaving it in a
             // computed view property turned typing into repeated directory scans.
             backups = viewModel.configBackups()
