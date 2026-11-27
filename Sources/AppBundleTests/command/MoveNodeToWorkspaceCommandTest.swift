@@ -116,6 +116,17 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         assertRefused(from: Workspace.get(byName: "a").macOsNativeHiddenAppsWindowsContainer)
     }
 
+    /// A minimized window has no workspace, so the command already fails before the macOS-owned guard.
+    func testAMinimizedWindowIsRefused() {
+        let window = TestWindow.new(id: 1, parent: macosMinimizedWindowsContainer)
+        let io = CmdIo(stdin: .emptyStdin)
+        let succ = MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b").copy(\.windowId, 1)).run(.defaultEnv, io)
+
+        XCTAssertFalse(succ)
+        XCTAssertTrue(window.parent === macosMinimizedWindowsContainer, "the window moved")
+        XCTAssertTrue(Workspace.get(byName: "b").isEffectivelyEmpty)
+    }
+
     private func assertRefused(from container: NonLeafTreeNodeObject) {
         let workspaceA = Workspace.get(byName: "a")
         let window = TestWindow.new(id: 1, parent: workspaceA.rootTilingContainer)
