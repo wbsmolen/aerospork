@@ -127,6 +127,27 @@ final class UISettingsTest: XCTestCase {
         XCTAssertEqual(clicked.accessibilityRole(), .button)
     }
 
+    /// A click on blank background takes no focus, so an armed recorder used to stay armed and record the
+    /// ⌘W that followed as a global binding. Any click outside it cancels.
+    func testAClickOutsideTheRecorderCancelsIt() {
+        func click(at point: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+            ).orDie("NSEvent.mouseEvent returned nil")
+        }
+        let recorder = RecorderView(frame: NSRect(x: 0, y: 0, width: 120, height: 22))
+        XCTAssertTrue(recorder.accessibilityPerformPress())
+        recorder.disarmIfOutside(click(at: NSPoint(x: 10, y: 10)))
+        XCTAssertTrue(recorder.isArmed, "a click on the recorder itself keeps it recording")
+        recorder.disarmIfOutside(click(at: NSPoint(x: 400, y: 300)))
+        XCTAssertFalse(recorder.isArmed)
+        var captured: [String] = []
+        recorder.onCapture = { captured.append($0) }
+        XCTAssertFalse(recorder.performKeyEquivalent(with: keyEvent("w", keyCode: 13, [.command])))
+        XCTAssertEqual(captured, [])
+    }
+
     /// Modifier order is not cosmetic: it is the string written into the config, and `ctrl-alt-h`
     /// and `alt-ctrl-h` are two different TOML keys for the same physical shortcut.
     func testRecorderBuildsNotationInCanonicalModifierOrder() {

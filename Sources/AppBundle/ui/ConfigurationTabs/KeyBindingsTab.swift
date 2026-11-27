@@ -599,11 +599,33 @@ final class RecorderView: NSView {
         isArmed = true
         needsDisplay = true
         settingsAnnounce("Recording. Press a shortcut.")
+        clickAwayMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            self?.disarmIfOutside(event)
+            return event
+        }
+    }
+
+    /// A click on blank background takes no focus, so losing first responder alone left the recorder armed,
+    /// and the ⌘W that followed was recorded and saved as a global binding instead of closing the window.
+    private var clickAwayMonitor: Any?
+
+    func disarmIfOutside(_ event: NSEvent) {
+        guard isArmed else { return }
+        if event.window === window, bounds.contains(convert(event.locationInWindow, from: nil)) { return }
+        disarm()
+        if window?.firstResponder === self { window?.makeFirstResponder(nil) }
+    }
+
+    private func disarm() {
+        isArmed = false
+        needsDisplay = true
+        if let clickAwayMonitor { NSEvent.removeMonitor(clickAwayMonitor) }
+        clickAwayMonitor = nil
     }
 
     override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool { needsDisplay = true; return true }
-    override func resignFirstResponder() -> Bool { isArmed = false; needsDisplay = true; return true }
+    override func resignFirstResponder() -> Bool { disarm(); return true }
     override func mouseDown(with event: NSEvent) { arm(); window?.makeFirstResponder(self) }
     override func accessibilityPerformPress() -> Bool { arm(); window?.makeFirstResponder(self); return true }
 

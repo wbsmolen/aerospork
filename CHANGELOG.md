@@ -61,6 +61,7 @@ How to write this file. script/publish-release.sh reads the section of the versi
 - Saving in Settings keeps a symlinked config a symlink, so a dotfiles manager keeps managing it.
 - A config file you create, replace or restore is picked up without a restart, and deleting it falls back to the defaults after a second.
 - The shortcut recorder can record Shift with a digit or punctuation key, function keys and keypad keys, and follows the key mapping preset.
+- Clicking anywhere outside the shortcut recorder cancels it, so a ⌘W that follows closes the window instead of being recorded as a binding.
 - Raw TOML shows errors from Apply, Restore and a changed file, undo no longer cuts text out of the config, and Reload waits until unapplied edits are applied or reverted.
 - Focusing a minimized window whose workspace was cleaned up brings it back on the focused monitor, instead of on the main monitor.
 - A window that stays minimized across a restart keeps its workspace's monitor.
