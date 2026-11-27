@@ -71,7 +71,7 @@ function RawTomlTab({ toml, setToml, original }) {
               document.body,
             )}
           </div>
-          <Button variant="borderless" title="External edits are picked up automatically — the config file is watched">Open in TextEdit</Button>
+          <Button variant="borderless" title="External edits are picked up automatically: the config file is watched">Open in TextEdit</Button>
           <Button variant="borderless" title="Re-read the config file. Normally automatic.">Reload</Button>
         </div>
       </BarStrip>
@@ -92,7 +92,7 @@ function RawTomlTab({ toml, setToml, original }) {
                 style={{ cursor: 'pointer', textDecoration: errorHover ? 'underline' : 'none' }}>
                 <StatusLabel kind="error">{error}</StatusLabel>
               </span>
-            : edited ? <StatusLabel kind="ok">Valid — press Apply (⌘S) to write it</StatusLabel>
+            : edited ? <StatusLabel kind="ok">Valid. Press Apply (⌘S) to write it.</StatusLabel>
             : <StatusLabel kind="neutral">Matches the file on disk</StatusLabel>}
           <span style={{ flex: 1 }} />
           <Button variant="borderless" title="Load a previous version of this config into the editor">Restore…</Button>

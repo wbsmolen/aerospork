@@ -19,6 +19,10 @@ import XCTest
 final class ConfigSafetyWriterFuzzTest: XCTestCase {
     private static let configsPerEdit = 400
 
+    /// Set by `testMultilineValuesAreRefusedOrPreserved`, which runs every property below again over
+    /// configs that also hold values spanning lines.
+    private var multiline = false
+
     // MARK: - The property
 
     func testNoOpRenderIsByteIdentical() {
@@ -28,6 +32,43 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
             assertEquals(ConfigurationWriter.render(baseText: text, from: vm), text)
             assertNil(ConfigurationWriter.refusal(rendered: text, base: text, from: vm))
             return true
+        }
+    }
+
+    /// The writer reads a file line by line and does not lex TOML: any line that starts with `[` is a
+    /// header to it, and any line with `=` a key, even inside a `'''` string. A value that spans lines
+    /// is the one shape where that guess is wrong, so every property above must still hold for it,
+    /// through `refusal` when the line surgery goes astray. Half the configs, so the suite stays fast.
+    func testMultilineValuesAreRefusedOrPreserved() {
+        multiline = true
+        testNoOpRenderIsByteIdentical()
+        testScalarEditPreservesEverythingElse()
+        testCallbackEditPreservesEverythingElse()
+        testGapsEditPreservesEverythingElse()
+        testBindingEditPreservesEverythingElse()
+        testBindingRemovalPreservesEverythingElse()
+        testMonitorEditPreservesEverythingElse()
+        testExecEditPreservesEverythingElse()
+        testPresetEditPreservesEverythingElse()
+        testRuleEditPreservesEverythingElse()
+    }
+
+    /// The generator drops a config that does not load, so a rule the parser rejected would vanish
+    /// from the draws without a word. Each one loads, survives a save with no edit, and survives an
+    /// edit to the rules, which rewrites the section.
+    func testEveryRuleCommandLoadsAndSurvivesASave() {
+        for text in Self.ruleCommandFragments {
+            guard case .success = parseConfig(text) else { return XCTFail("the corpus rule does not load:\n\(text)") }
+            let vm = ConfigurationViewModel()
+            vm.load(fromText: text)
+            assertEquals(ConfigurationWriter.render(baseText: text, from: vm), text)
+            assertNil(ConfigurationWriter.refusal(rendered: text, base: text, from: vm))
+
+            vm.settings.windowRules.append(.init(appId: "com.example.app", run: "fullscreen on"))
+            let out = ConfigurationWriter.render(baseText: text, from: vm)
+            XCTAssertNil(ConfigurationWriter.refusal(rendered: out, base: text, from: vm), text)
+            guard case .success(let config) = parseConfig(out) else { return XCTFail("the rule edit broke the config:\n\(out)") }
+            assertEquals(config.onWindowDetected.count, 2, additionalMsg: out)
         }
     }
 
@@ -119,12 +160,20 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
         )
 
         // The bytes, which `flatten` cannot see: comments, quoting, indentation, order, line endings.
+        // A line inside a value that spans lines is neither a header nor a key, whatever it starts
+        // with, and belongs to the key that opened the value.
         var remaining = Self.lines(after)[...]
         var section = ""
-        for line in Self.lines(before) {
+        var edited = false
+        let beforeLines = Self.lines(before)
+        for (line, continues) in zip(beforeLines, Self.continuesValue(beforeLines)) {
             let t = line.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("[") { section = t.trimmingCharacters(in: CharacterSet(charactersIn: "[] ")).components(separatedBy: "]")[0] }
-            if t.isEmpty || isEdited(section, t) { continue }
+            if !continues {
+                if t.hasPrefix("[") { section = t.trimmingCharacters(in: CharacterSet(charactersIn: "[] ")).components(separatedBy: "]")[0] }
+                edited = isEdited(section, t)
+                if t.isEmpty { continue }
+            }
+            if edited { continue }
             guard let at = remaining.firstIndex(of: line) else {
                 XCTFail("edit '\(keys)' moved or changed the line '\(line)'\n--- before ---\n\(before)\n--- after ---\n\(after)")
                 return
@@ -138,19 +187,58 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
         text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
     }
 
+    /// For each line, whether it starts inside a value an earlier line opened: a multi-line string, or
+    /// an array or inline table not yet closed. Just enough TOML lexing for the generated fragments.
+    private static func continuesValue(_ lines: [String]) -> [Bool] {
+        var open: Substring? = nil // the delimiter of the multi-line string we are in
+        var depth = 0
+        return lines.map { line in
+            let continues = open != nil || depth > 0
+            var rest = Substring(line)
+            while let c = rest.first {
+                if let delimiter = open {
+                    if rest.hasPrefix(delimiter) {
+                        open = nil
+                        rest = rest.dropFirst(3)
+                    } else {
+                        rest = rest.dropFirst(delimiter == "\"\"\"" && c == "\\" ? 2 : 1)
+                    }
+                    continue
+                }
+                if rest.hasPrefix("'''") || rest.hasPrefix("\"\"\"") {
+                    open = rest.prefix(3)
+                    rest = rest.dropFirst(3)
+                    continue
+                }
+                rest = rest.dropFirst()
+                switch c {
+                    case "#": rest = ""
+                    case "'", "\"":
+                        while let d = rest.first, d != c { rest = rest.dropFirst(c == "\"" && d == "\\" ? 2 : 1) }
+                        rest = rest.dropFirst()
+                    case "[", "{": depth += 1
+                    case "]", "}": depth -= 1
+                    default: break
+                }
+            }
+            return continues
+        }
+    }
+
     /// Runs `body` over every generated config the app itself would load: an already-broken config
     /// proves nothing about the writer. `body` says whether it got as far as checking anything.
     private func forEachGeneratedConfig(_ body: (String) -> Bool) {
         var rng = SplitMix64(seed: 0x5EED_C0FF_EE00_1234)
         var checked = 0
-        for _ in 0 ..< Self.configsPerEdit {
-            let text = Self.generate(&rng)
+        let count = multiline ? Self.configsPerEdit / 2 : Self.configsPerEdit
+        for _ in 0 ..< count {
+            let text = Self.generate(&rng, multiline: multiline)
             guard case .success = parseConfig(text) else { continue }
             if body(text) { checked += 1 }
         }
         // Guards against the generator drifting into producing only refused or only broken configs,
         // which would turn every assertion above into a no-op that passes forever.
-        XCTAssertGreaterThan(checked, Self.configsPerEdit / 10, "generator produced almost nothing editable")
+        XCTAssertGreaterThan(checked, count / 10, "generator produced almost nothing editable")
     }
 
     // MARK: - Comparison
@@ -248,17 +336,62 @@ final class ConfigSafetyWriterFuzzTest: XCTestCase {
         "[[on-window-detected]]\nif.app-id = 'com.apple.finder'\nrun = ['layout floating']",
         "[[on-window-detected]]\nif.app-name-regex-substring = 'term'\nif.during-aerospork-startup = true\nrun = 'move-node-to-workspace 2'",
         "# documentation for the next section\n[gaps]\ninner.horizontal = 9",
+    ] + ruleCommandFragments
+
+    /// A rule for each command a rule may run besides the first three, so the pane's whole-section
+    /// rewrite meets every one of them.
+    private static let ruleCommandFragments: [String] = [
+        "[[on-window-detected]]\nif.app-id = 'com.example.tv'\nrun = ['fullscreen on --no-outer-gaps', 'move-node-to-monitor --focus-follows-window next']",
+        "[on-window]\n'com.example.chat' = 'move-node-to-monitor main'",
+        "[[on-window-detected]]\nif.window-title-regex-substring = '^picture.in.picture$'\nrun = 'sticky on'",
     ]
 
-    private static func generate(_ rng: inout SplitMix64) -> String {
+    /// Values that span lines, and lines inside them that look like a header or a key. Several
+    /// close a `'''` string behind a `#`, so the line a writer leaves behind is still valid TOML.
+    private static let multilinePreambleFragments: [String] = [
+        "after-startup-command = '''exec-and-forget echo\n[gaps]\ninner = 99\n'''",
+        "after-startup-command = \"\"\"exec-and-forget printf '\n[keys]\naccordion-padding = 1\n'\"\"\"",
+        "after-startup-command = '''exec-and-forget echo\naccordion-padding = 7 # '''",
+        "on-focus-changed = '''exec-and-forget echo\n[mode.main.binding]\nalt-h = 'focus right'\n'''",
+        "on-focus-changed = [\n  'move-mouse window-lazy-center',\n  '''exec-and-forget echo\n[exec]\n''',\n]",
+        "on-focus-changed = \"\"\"move-mouse window-lazy-center\"\"\"", // one line, triple-quoted
+        "exec = { inherit-env-vars = false, env-vars = { NOTE = '''\n[exec.env-vars]\nPATH = 'x'\n''' } }",
+        "accordion-padding = 30 # ''' a delimiter in a comment",
+    ]
+
+    private static let multilineSectionFragments: [String] = [
+        "[keys]\nalt-enter = '''exec-and-forget osascript -e '\ntell application \"Terminal\"\n    do script\nend tell'\n'''",
+        "[keys]\nalt-x = '''exec-and-forget echo\n[gaps]\ninner = 99\n'''",
+        "[mode.main.binding]\nalt-h = '''exec-and-forget echo\n[keys]\nalt-j = 'focus down' # '''",
+        "[mode.main.binding]\nalt-1 = [\n  'workspace 1',\n  '''exec-and-forget echo\n[monitors]\n''',\n]",
+        "[mode.main]\nbinding = { alt-h = [\n  'focus left',\n] }", // inline table holding a multi-line array
+        "[exec.env-vars]\nNOTE = \"\"\"\n[exec]\ninherit-env-vars = true\n\"\"\"",
+        "[exec]\ninherit-env-vars = true\n\n[exec.env-vars]\nNOTE = '''\nPATH = '/tmp' # '''",
+        "[monitors]\n1 = [\n  'secondary',\n  'built-in',\n]",
+        "[monitors]\n2 = ['secondary', '''\nbuilt-in\n# x''']",
+        "[workspace-to-monitor-force-assignment]\n3 = \"\"\"\n[monitors]\n4 = 'main'\"\"\"",
+        // A workspace name may hold brackets, which is how a rule's command gets a line that opens with one.
+        "[[on-window-detected]]\nif.app-id = 'com.example.ml'\nrun = '''move-node-to-workspace\n[gaps]#'''",
+        "[[on-window-detected]]\nif.app-id = 'com.example.basic'\nrun = \"\"\"move-node-to-workspace\n[on-window]#\"\"\"",
+        "[on-window]\n'com.apple.mail' = '''move-node-to-workspace\n[[on-window-detected]]#'''",
+        "[key-mapping]\npreset = '''dvorak'''",
+        "[gaps]\nouter.top = [\n  { monitor.\"built-in\" = 3 },\n  6,\n]",
+    ]
+
+    /// `multiline` adds the fragments above and at least one of them. Without it the draws are the
+    /// ones every other case has always made, so their configs stay the same.
+    private static func generate(_ rng: inout SplitMix64, multiline: Bool = false) -> String {
+        let preamble = multiline ? preambleFragments + multilinePreambleFragments : preambleFragments
+        let sectionPool = multiline ? sectionFragments + multilineSectionFragments : sectionFragments
         var parts: [String] = []
         for _ in 0 ..< Int.random(in: 0 ... 5, using: &rng) {
-            parts.append(preambleFragments.randomElement(using: &rng)!)
+            parts.append(preamble.randomElement(using: &rng)!)
         }
         var sections: [String] = []
         for _ in 0 ..< Int.random(in: 0 ... 4, using: &rng) {
-            sections.append(sectionFragments.randomElement(using: &rng)!)
+            sections.append(sectionPool.randomElement(using: &rng)!)
         }
+        if multiline { sections.append(multilineSectionFragments.randomElement(using: &rng)!) }
         parts += sections.shuffled(using: &rng)
         let text = parts.joined(separator: Bool.random(using: &rng) ? "\n\n" : "\n")
         return Bool.random(using: &rng) ? text : text.replacingOccurrences(of: "\n", with: "\r\n")

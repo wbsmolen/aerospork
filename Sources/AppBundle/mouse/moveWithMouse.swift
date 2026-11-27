@@ -6,7 +6,7 @@ private var moveWithMouseTask: Task<(), any Error>? = nil
 
 func movedObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: UnsafeMutableRawPointer?) {
     // Almost all of these are our own frame writes. Only a drag needs to know which window moved.
-    let windowId = isLeftMouseButtonDown ? ax.containingWindowId() : nil
+    let windowId = isLeftMouseButtonDown ? axRefconWindowId(data) : nil
     let notif = notif as String
     runDetached("moveWithMouse") {
         guard let token: RunSessionGuard = .isServerEnabled else { return }

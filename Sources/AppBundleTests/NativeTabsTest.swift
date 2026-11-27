@@ -164,6 +164,27 @@ final class NativeTabsTest: XCTestCase {
         assertEquals(start.macOsNativeHiddenAppsWindowsContainer.children.count, 0)
     }
 
+    /// `swap` trades the group's one tile with another, slot for slot, and a background tab's ID stands for its group.
+    func testAGroupSwapsAsOneTile() async throws {
+        let windows = tiles([300, 900, 300])
+        try await workspace.layoutWorkspace()
+        let (wide, narrow) = (width(windows[1]), width(windows[2]))
+        let tab = openTab(4, from: windows[1])
+        try await refresh([2: 4])
+
+        assertEquals(try await parseCommand("swap --window-id 4 right").cmdOrDie.run(.defaultEnv, .emptyStdin).exitCode, 0)
+        try await refresh([2: 4])
+        assertEquals(order, [1, 3, 4])
+        assertEquals(waiting, [2])
+        XCTAssertEqual(width(tab), narrow, accuracy: 0.01)
+        XCTAssertEqual(width(windows[2]), wide, accuracy: 0.01)
+
+        assertEquals(try await parseCommand("swap --window-id 2 left").cmdOrDie.run(.defaultEnv, .emptyStdin).exitCode, 0)
+        try await refresh([2: 4])
+        assertEquals(order, [1, 4, 3])
+        assertEquals(waiting, [2])
+    }
+
     /// Opened while focus was somewhere else: a tab goes where its group is, not where any new window would.
     func testANewTabGoesWhereTheGroupIs() async throws {
         let windows = tiles([1, 1])
@@ -282,6 +303,15 @@ final class NativeTabsTest: XCTestCase {
 
         assertEquals(order, [2])
         XCTAssertTrue(popup.parent === macosPopupWindowsContainer)
+    }
+
+    /// A new tab is no new window, so `on-window-detected` does not run for it: a rule that moves the app's
+    /// windows would tear the tab out of its group. Registration needs a real app's AX, so this reads the source.
+    func testANewTabRunsNoWindowRules() throws {
+        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift")
+        XCTAssertTrue(body.contains("let isNewTab = !tabsBeside.isEmpty"))
+        let rules = try XCTUnwrap(body.split(separator: "\n").first { $0.contains("tryOnWindowDetected(") }, "registration no longer runs window rules")
+        XCTAssertTrue(rules.contains("if !isNewTab {"), "window rules run for a new tab: \(rules)")
     }
 
     /// An app with several groups.

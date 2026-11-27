@@ -99,17 +99,15 @@ struct IconButton: View {
     let systemImage: String
     let label: String
     var role: ButtonRole?
-    var isEnabled = true
     let action: () -> Void
 
     var body: some View {
         Button(role: role, action: action) {
             Image(systemName: systemImage)
                 .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
+                .settingsHitTarget()
         }
         .buttonStyle(.borderless)
-        .disabled(!isEnabled)
         .help(label)
         .accessibilityLabel(label)
     }
@@ -154,27 +152,10 @@ struct SettingsHint: View {
     }
 }
 
-/// A hint pinned to the bottom of a tab that has no action bar of its own to hang it off.
-struct SettingsFooter: View {
-    let text: String
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            SettingsHint(text)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-        }
-        .background(.bar)
-    }
-}
-
 /// The macOS "table with a +/- strip glued to its bottom edge" idiom, once instead of three times.
 ///
-/// The caveat text lives in here rather than in a separate `SettingsFooter` below it, because two
-/// stacked `.bar` strips with two dividers is more chrome than the content it explains.
+/// The caveat text lives in here rather than in a separate strip below it, because two stacked
+/// `.bar` strips with two dividers is more chrome than the content it explains.
 struct ListActionBar: View {
     let addHelp: String
     let removeHelp: String
@@ -189,16 +170,11 @@ struct ListActionBar: View {
             HStack(spacing: 10) {
                 // Icon-only buttons carry no title, so the help text has to double as the label or
                 // VoiceOver reads them as "button".
-                Button(action: onAdd) { Image(systemName: "plus") }
-                    .help(addHelp)
-                    .accessibilityLabel(addHelp)
-                Button { onRemove?() } label: { Image(systemName: "minus") }
+                IconButton(systemImage: "plus", label: addHelp, action: onAdd)
+                IconButton(systemImage: "minus", label: removeHelp) { onRemove?() }
                     .disabled(onRemove == nil)
-                    .help(removeHelp)
-                    .accessibilityLabel(removeHelp)
                 Spacer(minLength: 12)
             }
-            .buttonStyle(.borderless)
             .padding(.horizontal, 12)
             .padding(.top, 7)
             .padding(.bottom, hint == nil ? 7 : 3)
@@ -235,9 +211,9 @@ struct WorkspaceChip: View {
                 .padding(.vertical, 2)
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 1))
+                .settingsHitTarget()
         }
         .buttonStyle(.plain)
-        .settingsHitTarget()
         .help(help)
         .accessibilityLabel(help)
     }
@@ -245,9 +221,12 @@ struct WorkspaceChip: View {
 
 extension View {
     /// 24×24 is the WCAG 2.5.8 floor; caption-size pills and 14pt icon buttons are visually right
-    /// but physically too small, so the hit shape grows without moving a pixel.
+    /// but physically too small, so the hit shape grows 5pt on each side without moving a pixel.
+    /// Not a `frame(minWidth:minHeight:)`: that grew layout, so the Keys filter pill jumped when
+    /// its clear button appeared, and a clear button overflowed the 22pt recorder. Apply it to a
+    /// button's label: the label's shape is what the button hit-tests.
     func settingsHitTarget() -> some View {
-        frame(minWidth: 24, minHeight: 24).contentShape(Rectangle())
+        contentShape(Rectangle().inset(by: -5))
     }
 }
 
@@ -339,6 +318,9 @@ struct Badge: View {
     var tone: Tone = .standard
     let help: String
 
+    /// A binding that `mod` and `workspaces` generate. Three rows of the Keys pane show it.
+    static let generated = Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+
     init(_ text: String, tone: Tone = .standard, help: String) {
         self.text = text
         self.tone = tone
@@ -427,10 +409,18 @@ struct Banner: View {
 
     let text: String
     let kind: Kind
+    /// The recovery, on the pane where the banner shows: name the state, then the way out. The title
+    /// says what the button does, including what it throws away.
+    let action: (title: String, run: () -> Void)?
+    /// The edge that meets the content: `.bottom` under the window's top edge, `.top` in the bottom
+    /// inset.
+    let dividerEdge: VerticalEdge
 
-    init(_ text: String, kind: Kind) {
+    init(_ text: String, kind: Kind, action: (title: String, run: () -> Void)? = nil, dividerEdge: VerticalEdge = .bottom) {
         self.text = text
         self.kind = kind
+        self.action = action
+        self.dividerEdge = dividerEdge
     }
 
     var body: some View {
@@ -445,11 +435,15 @@ struct Banner: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let action {
+                Button(action.title, action: action.run)
+                    .fixedSize()
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(kind.tint.opacity(0.13))
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: dividerEdge == .top ? .top : .bottom) { Divider() }
     }
 }
 
@@ -472,23 +466,31 @@ struct Banner: View {
     return editor
 }
 
-/// Opens the user's config in that editor, creating it from the bundled default if it is missing.
-@MainActor func openConfigInExternalEditor() {
-    let editor = getTextEditorToOpenConfig()
-    let fallbackConfig = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
-    switch findCustomConfigUrl() {
-        case .file(let url):
-            url.open(with: editor)
-        case .noCustomConfigExists:
-            _ = try? FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
-            // `ConfigFileWatcher.start()` bails when there is no user config to watch, and it ran at
-            // launch. Without re-arming here, the file we just created is not watched, so the edit
-            // the user is about to make in that editor would never be picked up.
-            ConfigFileWatcher.start()
-            fallbackConfig.open(with: editor)
-        case .ambiguousConfigError:
-            fallbackConfig.open(with: editor)
+/// Opens the config the server reads in that editor, creating it from the bundled default if it is
+/// missing. Returns why it could not, for the pane to show.
+///
+/// The file is `userConfigTargetUrl()`, the one the writer saves to. This used to create
+/// `~/.aerospork.toml` whenever no config existed, so with `--config-path` naming a file not yet
+/// created the user edited a file the server never reads, and a failed copy said nothing.
+/// `target` and `open` are seams for tests.
+@MainActor func openConfigInExternalEditor(
+    target: Result<URL, String> = userConfigTargetUrl(),
+    open: (URL) -> Void = { $0.open(with: getTextEditorToOpenConfig()) },
+) -> String? {
+    let url: URL
+    switch target {
+        case .success(let it): url = it
+        case .failure(let reason): return reason
     }
+    if !FileManager.default.fileExists(atPath: url.path) {
+        do {
+            try FileManager.default.copyItem(at: defaultConfigUrl, to: url)
+        } catch {
+            return "Could not create \(url.path(percentEncoded: false)): \(error.localizedDescription) Check that its folder exists and that you can write to it."
+        }
+    }
+    open(url)
+    return nil
 }
 
 /// Small borderless "copy this string" button. Two tabs need it and they had two different ones.
@@ -509,6 +511,7 @@ struct CopyButton: View {
                 // The colour change is the entire confirmation -- there is no toast anywhere in
                 // this app -- so the checkmark has to read as "done" and not just as a third icon.
                 .foregroundStyle(copied ? StatusLabel.Kind.ok.tint : Color.secondary)
+                .settingsHitTarget()
         }
         .buttonStyle(.borderless)
         .help(help)

@@ -77,7 +77,7 @@ func parsePerMonitorValues<T>(_ array: TOMLArray, _ backtrace: TomlBacktrace, _ 
             return nil
         }
 
-        let monitorDescriptionResult = parseMonitorDescription(key, backtrace)
+        let monitorDescriptionResult = parseMonitorDescription(key, backtrace, &errors)
 
         guard let monitorDescription = monitorDescriptionResult.getOrNil(appendErrorTo: &errors) else { return nil }
 

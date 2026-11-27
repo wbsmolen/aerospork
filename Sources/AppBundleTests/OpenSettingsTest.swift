@@ -34,14 +34,7 @@ final class OpenSettingsTest: XCTestCase {
     /// looked like coverage. The difference exists solely in a real app, where `sendAction` returns
     /// true for a selector that opens nothing.
     func testTheSelectorFallbackIsNotReachedOnModernMacOS() throws {
-        let source = try String(
-            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/MenuBar.swift"),
-            encoding: .utf8,
-        )
-        let body = try XCTUnwrap(
-            source.range(of: "func openSettingsWindow()").map { String(source[$0.lowerBound...].prefix(1400)) },
-            "openSettingsWindow() not found",
-        )
+        let body = try sourceBody("func openSettingsWindow()", in: "Sources/AppBundle/ui/MenuBar.swift")
         let guardIndex = try XCTUnwrap(body.range(of: "#available(macOS 14, *) { return false }")?.lowerBound)
         let selectorIndex = try XCTUnwrap(body.range(of: "showPreferencesWindow:")?.lowerBound)
         XCTAssertLessThan(
@@ -60,5 +53,33 @@ final class OpenSettingsTest: XCTestCase {
 
         XCTAssertTrue(openSettingsWindow())
         assertEquals(called, 1)
+    }
+
+    /// "Open in…" creates and opens the file the server reads. With `--config-path` naming a file not
+    /// created yet, it used to create `~/.aerospork.toml` instead, which the server never reads, and a
+    /// failed copy said nothing.
+    func testOpenInEditorTargetsTheFileTheServerReads() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "open-in-editor-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let target = dir.appending(path: "explicit.toml")
+        var opened: [URL] = []
+
+        XCTAssertNil(openConfigInExternalEditor(target: .success(target)) { opened.append($0) })
+        assertEquals(opened, [target])
+        assertEquals(try String(contentsOf: target, encoding: .utf8), try String(contentsOf: defaultConfigUrl, encoding: .utf8))
+
+        // An existing file is opened as it is, not replaced by the default.
+        try "accordion-padding = 7\n".write(to: target, atomically: true, encoding: .utf8)
+        XCTAssertNil(openConfigInExternalEditor(target: .success(target)) { opened.append($0) })
+        assertEquals(opened, [target, target])
+        assertEquals(try String(contentsOf: target, encoding: .utf8), "accordion-padding = 7\n")
+
+        // A copy that fails, and a target that cannot be resolved, are reported, and nothing opens.
+        let unwritable = dir.appending(path: "missing-folder/explicit.toml")
+        let copyFailure = try XCTUnwrap(openConfigInExternalEditor(target: .success(unwritable)) { opened.append($0) })
+        XCTAssertTrue(copyFailure.contains(unwritable.path(percentEncoded: false)), copyFailure)
+        assertEquals(openConfigInExternalEditor(target: .failure("Several config files exist")) { opened.append($0) }, "Several config files exist")
+        assertEquals(opened.count, 2)
     }
 }

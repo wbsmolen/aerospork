@@ -25,14 +25,14 @@ struct KeyBindingsTab: View {
             id: "move", title: "Move & workspace", icon: "rectangle.3.group",
             commandPrefixes: [
                 "move", "move-mouse", "move-node-to-monitor", "move-node-to-workspace",
-                "move-workspace-to-monitor", "summon-workspace", "workspace", "workspace-back-and-forth",
+                "move-workspace-to-monitor", "summon-workspace", "swap", "workspace", "workspace-back-and-forth",
             ],
         ),
         BindingCategory(
             id: "layout", title: "Layout & resize", icon: "rectangle.split.2x1",
             commandPrefixes: [
                 "balance-sizes", "flatten-workspace-tree", "fullscreen", "join-with", "layout",
-                "macos-native-fullscreen", "macos-native-minimize", "resize", "split",
+                "macos-native-fullscreen", "macos-native-minimize", "resize", "split", "sticky",
             ],
         ),
         BindingCategory(
@@ -49,9 +49,6 @@ struct KeyBindingsTab: View {
     @State private var selectedMode = mainModeId
     @State private var newKey = ""
     @State private var newCommand = ""
-    @State private var recording = false
-    /// Which row's recorder is armed, by key. One piece of state instead of one per row.
-    @State private var recordingRow: String?
     @State private var newMode = ""
     @State private var addingMode = false
     @State private var query = ""
@@ -64,12 +61,10 @@ struct KeyBindingsTab: View {
     /// shrinking a control that has a hard floor.
     static func modePickerIsSegmented(count: Int) -> Bool { count <= 5 }
 
-    private var allRows: [ConfigurationViewModel.DisplayBinding] { viewModel.displayBindings(mode: selectedMode) }
-
     /// A real keymap is 40-80 bindings -- and under config v2 most of them are *generated*, so the
     /// list is longer than anything written in the file. Scrolling it looking for "the one that
     /// moves a window to monitor 2" is the single slowest thing in this window.
-    private var rows: [ConfigurationViewModel.DisplayBinding] {
+    private func filtered(_ allRows: [ConfigurationViewModel.DisplayBinding]) -> [ConfigurationViewModel.DisplayBinding] {
         let needle = normalizedQuery
         guard !needle.isEmpty else { return allRows }
         return allRows.filter { $0.key.lowercased().contains(needle) || $0.command.lowercased().contains(needle) }
@@ -81,9 +76,9 @@ struct KeyBindingsTab: View {
 
     /// Search is global even though editing remains scoped to the selected mode. A shortcut can
     /// otherwise look missing simply because the user forgot which mode owns it.
-    private var otherModeMatches: [OtherModeMatch] {
+    private func otherModeMatches(modes: [String]) -> [OtherModeMatch] {
         guard !normalizedQuery.isEmpty else { return [] }
-        return viewModel.allModeNames
+        return modes
             .filter { $0 != selectedMode }
             .flatMap { mode in
                 viewModel.displayBindings(mode: mode).compactMap { binding in
@@ -96,11 +91,15 @@ struct KeyBindingsTab: View {
     }
 
     var body: some View {
+        // Each of these walks the whole keymap. As computed properties they ran about 15 times per
+        // pass, and this body runs again on every edit in any pane, Raw TOML keystrokes included.
+        let modes = viewModel.allModeNames
+        let allRows = viewModel.displayBindings(mode: selectedMode)
         VStack(spacing: 0) {
-            modeBar
+            modeBar(modes: modes)
             Divider()
-            content
-            composer
+            content(modes: modes, rows: filtered(allRows))
+            composer(modes: modes, allRows: allRows)
         }
         .onAppear {
             let names = viewModel.allModeNames
@@ -108,13 +107,13 @@ struct KeyBindingsTab: View {
         }
     }
 
-    private var modeBar: some View {
+    private func modeBar(modes: [String]) -> some View {
         HStack(spacing: 10) {
-            if viewModel.allModeNames.isEmpty {
+            if modes.isEmpty {
                 Text("No modes").foregroundStyle(.secondary)
-            } else if Self.modePickerIsSegmented(count: viewModel.allModeNames.count) {
+            } else if Self.modePickerIsSegmented(count: modes.count) {
                 Picker("Mode", selection: $selectedMode) {
-                    ForEach(viewModel.allModeNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(modes, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -124,7 +123,7 @@ struct KeyBindingsTab: View {
                 // it -- past this many modes it overflows the window no matter what its neighbours
                 // give up. `.menu` is bounded to one control's width regardless of option count.
                 Picker("Mode", selection: $selectedMode) {
-                    ForEach(viewModel.allModeNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(modes, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
@@ -188,8 +187,9 @@ struct KeyBindingsTab: View {
     }
 
     @ViewBuilder
-    private var content: some View {
-        if viewModel.allModeNames.isEmpty {
+    private func content(modes: [String], rows: [ConfigurationViewModel.DisplayBinding]) -> some View {
+        let others = otherModeMatches(modes: modes)
+        if modes.isEmpty {
             ContentUnavailableViewCompat(
                 icon: "keyboard",
                 title: "No key bindings",
@@ -199,8 +199,8 @@ struct KeyBindingsTab: View {
                 message: "Your config binds nothing and generates nothing. Record a shortcut below to add the first binding.",
             )
         } else if rows.isEmpty {
-            let matchingModeSet = Set(otherModeMatches.map(\.mode))
-            let matchingModes = viewModel.allModeNames.filter { matchingModeSet.contains($0) }
+            let matchingModeSet = Set(others.map(\.mode))
+            let matchingModes = modes.filter { matchingModeSet.contains($0) }
             ContentUnavailableViewCompat(
                 icon: query.isEmpty ? "keyboard" : "magnifyingglass",
                 title: query.isEmpty ? "“\(selectedMode)” has no bindings" : "No matches",
@@ -220,18 +220,17 @@ struct KeyBindingsTab: View {
         } else {
             List {
                 if normalizedQuery.isEmpty {
-                    let populated = Self.categories.filter { category in
-                        rows.contains { self.category(for: $0.command) == category.id }
-                    }
+                    let grouped = Dictionary(grouping: rows) { category(for: $0.command) }
+                    let populated = Self.categories.filter { grouped[$0.id] != nil }
                     if populated.count < 2 {
                         ForEach(rows) { row($0) }
                     } else {
                         ForEach(populated) { category in
-                            let categoryRows = rows.filter { self.category(for: $0.command) == category.id }
+                            let categoryRows = grouped[category.id] ?? []
                             Section {
                                 ForEach(categoryRows) { row($0) }
                             } header: {
-                                Label("\(category.title) — \(categoryRows.count)", systemImage: category.icon)
+                                Label("\(category.title) (\(categoryRows.count))", systemImage: category.icon)
                             }
                         }
                     }
@@ -241,9 +240,9 @@ struct KeyBindingsTab: View {
                             ForEach(rows) { row($0) }
                         }
                     }
-                    if !otherModeMatches.isEmpty {
-                        Section("In other modes — \(otherModeMatches.count)") {
-                            ForEach(otherModeMatches) { otherModeRow($0) }
+                    if !others.isEmpty {
+                        Section("In other modes (\(others.count))") {
+                            ForEach(others) { otherModeRow($0) }
                         }
                     }
                 }
@@ -292,7 +291,7 @@ struct KeyBindingsTab: View {
                 .truncationMode(.middle)
             Spacer(minLength: 8)
             if match.binding.origin == .generated {
-                Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+                Badge.generated
             }
             Button("Go") { selectedMode = match.mode }
                 .buttonStyle(.borderless)
@@ -308,11 +307,13 @@ struct KeyBindingsTab: View {
     private func row(_ b: ConfigurationViewModel.DisplayBinding) -> some View {
         HStack(spacing: 8) {
             if let rowId = b.rowId {
-                KeyRecorderField(notation: key(rowId, b.key), isRecording: recorder(b.key), showsClear: false)
-                    .frame(width: 170, height: 22)
+                KeyRecorderField(
+                    notation: key(rowId, b.key), keys: recorderKeys, showsClear: false,
+                )
+                .frame(width: 170, height: 22)
                 SettingsField("Command", prompt: "focus left", text: command(rowId, b.command))
                     .accessibilityLabel("Command for \(b.key)")
-                IconButton(systemImage: "doc.on.doc", label: "Duplicate “\(b.command)”") { duplicate(b) }
+                IconButton(systemImage: "plus.square.on.square", label: "Duplicate “\(b.command)”") { duplicate(b) }
                 IconButton(systemImage: "minus.circle", label: "Remove “\(b.key)”", role: .destructive) {
                     remove(rowId)
                 }
@@ -334,8 +335,8 @@ struct KeyBindingsTab: View {
                 Spacer(minLength: 8)
                 // Generated bindings appear nowhere in the config file, so without this the tab
                 // shows dozens of rows the user cannot find when they go looking.
-                Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
-                IconButton(systemImage: "doc.on.doc", label: "Duplicate “\(b.command)”") { duplicate(b) }
+                Badge.generated
+                IconButton(systemImage: "plus.square.on.square", label: "Duplicate “\(b.command)”") { duplicate(b) }
                 Button("Override") { override(b) }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Override \(b.key)")
@@ -374,21 +375,23 @@ struct KeyBindingsTab: View {
         )
     }
 
-    private func recorder(_ key: String) -> Binding<Bool> {
-        Binding(get: { recordingRow == key }, set: { recordingRow = $0 ? key : nil })
+    /// The layout the General pane shows now, not the one last loaded, plus the custom notations
+    /// the parser honours: the recorder names a key the way the parser will read it back.
+    private var recorderKeys: KeyMapping {
+        KeyMapping(
+            preset: KeyMapping.Preset(rawValue: viewModel.settings.keyMappingPreset) ?? .qwerty,
+            rawKeyNotationToKeyCode: config.keyMapping.customKeyNotations,
+        )
     }
 
-    /// What the shortcut in the composer is bound to *right now*, if anything. Recomputed per
-    /// keystroke over ~80 rows, which is nothing next to the SwiftUI update it rides along with.
-    private var conflict: ConfigurationViewModel.DisplayBinding? {
-        viewModel.existingBinding(mode: selectedMode, key: newKey)
-    }
-
-    private var composer: some View {
-        VStack(spacing: 0) {
+    private func composer(modes: [String], allRows: [ConfigurationViewModel.DisplayBinding]) -> some View {
+        // What the shortcut in the composer is bound to *right now*, if anything.
+        let conflict = viewModel.existingBinding(mode: selectedMode, key: newKey)
+        let hint = summary(allRows)
+        return VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
-                KeyRecorderField(notation: $newKey, isRecording: $recording)
+                KeyRecorderField(notation: $newKey, keys: recorderKeys)
                     .frame(width: 170, height: 22)
                 SettingsField("New command", prompt: "command, e.g. focus left", text: $newCommand)
                     .onSubmit(add)
@@ -406,7 +409,7 @@ struct KeyBindingsTab: View {
                     .padding(.top, 7)
             }
 
-            if let otherModeSummary {
+            if let otherModeSummary = otherModeSummary(modes: modes) {
                 StatusLabel(otherModeSummary, kind: .neutral)
                     .padding(.horizontal, 14)
                     .padding(.top, 7)
@@ -417,9 +420,9 @@ struct KeyBindingsTab: View {
             // sentences) and the tab has no ScrollView wrapping modeBar+composer, so an unbounded
             // hint could push the composer past the window edge. Capped at two lines with the full
             // text on hover/VoiceOver instead.
-            SettingsHint(summary)
+            SettingsHint(hint)
                 .lineLimit(2)
-                .help(summary)
+                .help(hint)
                 .padding(.horizontal, 14)
                 .padding(.top, 7)
                 .padding(.bottom, 10)
@@ -442,7 +445,7 @@ struct KeyBindingsTab: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             if conflict.origin == .generated {
-                Badge("generated", help: "Generated from mod and workspaces. It is not written in your config file.")
+                Badge.generated
             }
             Button("Show") { query = conflict.key }
                 .buttonStyle(.borderless)
@@ -454,14 +457,14 @@ struct KeyBindingsTab: View {
     /// Says out loud how many of the listed bindings are written in the file and how many are not.
     /// Without it the tab looks like a config with 91 binding lines, which is the misconception
     /// config v2 exists to kill.
-    private var summary: String {
+    private func summary(_ allRows: [ConfigurationViewModel.DisplayBinding]) -> String {
         let generated = allRows.count { $0.origin == .generated }
         var parts: [String] = []
         if generated > 0 { parts.append("\(generated) generated by mod") }
         parts.append("\(allRows.count { $0.origin == .explicit }) written in your config")
         let separator = ConfigurationViewModel.commandSeparator.trimmingCharacters(in: .whitespaces)
         return parts.joined(separator: ", ") +
-            (generated > 0 ? ". Generated bindings have no line to edit — Override copies one here first." : "") +
+            (generated > 0 ? ". Generated bindings have no line to edit: Override copies one here first." : "") +
             " Chain commands with `\(separator)`. A workspace named by a binding stays available even with no windows."
     }
 
@@ -484,18 +487,17 @@ struct KeyBindingsTab: View {
     private func duplicate(_ binding: ConfigurationViewModel.DisplayBinding) {
         newKey = ""
         newCommand = binding.command
-        recording = false
     }
 
-    private var otherModeOwners: [String] {
+    private func otherModeOwners(modes: [String]) -> [String] {
         guard !newKey.isEmpty else { return [] }
-        return viewModel.allModeNames.filter { mode in
+        return modes.filter { mode in
             mode != selectedMode && viewModel.existingBinding(mode: mode, key: newKey) != nil
         }
     }
 
-    private var otherModeSummary: String? {
-        let owners = otherModeOwners
+    private func otherModeSummary(modes: [String]) -> String? {
+        let owners = otherModeOwners(modes: modes)
         guard !owners.isEmpty else { return nil }
         if owners.count == 1 { return "Also bound in “\(owners[0])” mode." }
         let named = owners.prefix(2).map { "“\($0)”" }.joined(separator: ", ")
@@ -527,13 +529,13 @@ struct KeyBindingsTab: View {
 /// Click, then press a shortcut. Beats typing `alt-shift-h` by hand and guessing the notation.
 private struct KeyRecorderField: View {
     @Binding var notation: String
-    @Binding var isRecording: Bool
+    var keys: KeyMapping
     /// Off for an existing row: clearing it would leave a binding with no key, which is not a
     /// thing that can be written, so the button would be visibly dead.
     var showsClear = true
 
     var body: some View {
-        Recorder(notation: $notation, isRecording: $isRecording)
+        Recorder(notation: $notation, keys: keys)
             .overlay(alignment: .trailing) {
                 if showsClear, !notation.isEmpty {
                     IconButton(systemImage: "xmark.circle.fill", label: "Clear this shortcut") { notation = "" }
@@ -545,150 +547,189 @@ private struct KeyRecorderField: View {
 
     private struct Recorder: NSViewRepresentable {
         @Binding var notation: String
-        @Binding var isRecording: Bool
+        let keys: KeyMapping
 
         func makeNSView(context: Context) -> RecorderView {
             let v = RecorderView(frame: .zero)
-            v.onCapture = { notation = $0; isRecording = false }
+            v.onCapture = { notation = $0 }
+            v.keys = keys
             return v
         }
 
         func updateNSView(_ nsView: RecorderView, context: Context) {
-            nsView.onCapture = { notation = $0; isRecording = false }
+            nsView.onCapture = { notation = $0 }
+            nsView.keys = keys
             nsView.displayed = notation
             nsView.needsDisplay = true
         }
     }
+}
 
-    final class RecorderView: NSView {
-        var onCapture: ((String) -> Void)?
-        var displayed = "" {
-            didSet { setAccessibilityValue(displayed.isEmpty ? "" : KeyNotation.pretty(displayed)) }
+/// The drawn control inside `KeyRecorderField`. Internal so a test can drive it without a window.
+final class RecorderView: NSView {
+    var onCapture: ((String) -> Void)?
+    var keys = KeyMapping()
+    var displayed = "" {
+        didSet { setAccessibilityValue(displayed.isEmpty ? "" : KeyNotation.pretty(displayed)) }
+    }
+
+    /// Focus alone never arms. A keyboard user who tabbed onto a row and pressed Tab again
+    /// re-keyed that binding to plain `tab` and saved it, and in `main` mode that took the Tab
+    /// key away from every app.
+    private(set) var isArmed = false
+
+    /// A hand-drawn `NSView` is invisible to accessibility unless it says otherwise, and this
+    /// one is the primary control of the tab. A button, not a text field: VoiceOver's press
+    /// arms a button, and nothing can be typed into this.
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Shortcut recorder")
+        setAccessibilityHelp(
+            "Press to record, then press the key combination you want to bind. "
+                + "Esc and Tab are recorded like any other key. Click elsewhere to cancel.",
+        )
+    }
+
+    required init?(coder: NSCoder) { die("RecorderView is never loaded from a nib") }
+
+    private func arm() {
+        guard !isArmed else { return }
+        isArmed = true
+        needsDisplay = true
+        settingsAnnounce("Recording. Press a shortcut.")
+        clickAwayMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            self?.disarmIfOutside(event)
+            return event
         }
+    }
 
-        private var recording = false
+    /// A click on blank background takes no focus, so losing first responder alone left the recorder armed,
+    /// and the ⌘W that followed was recorded and saved as a global binding instead of closing the window.
+    private var clickAwayMonitor: Any?
 
-        /// A hand-drawn `NSView` is invisible to accessibility unless it says otherwise, and this
-        /// one is the primary control of the tab.
-        override init(frame: NSRect) {
-            super.init(frame: frame)
-            setAccessibilityElement(true)
-            setAccessibilityRole(.textField)
-            setAccessibilityLabel("Shortcut recorder")
-            setAccessibilityHelp("Click, then press the key combination you want to bind")
+    func disarmIfOutside(_ event: NSEvent) {
+        guard isArmed else { return }
+        if event.window === window, bounds.contains(convert(event.locationInWindow, from: nil)) { return }
+        disarm()
+        if window?.firstResponder === self { window?.makeFirstResponder(nil) }
+    }
+
+    private func disarm() {
+        isArmed = false
+        needsDisplay = true
+        if let clickAwayMonitor { NSEvent.removeMonitor(clickAwayMonitor) }
+        clickAwayMonitor = nil
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func becomeFirstResponder() -> Bool { needsDisplay = true; return true }
+    override func resignFirstResponder() -> Bool { disarm(); return true }
+    override func mouseDown(with event: NSEvent) { arm(); window?.makeFirstResponder(self) }
+    override func accessibilityPerformPress() -> Bool { arm(); window?.makeFirstResponder(self); return true }
+
+    /// Unarmed, the accent fill is off, so the system focus ring shows where keyboard focus is.
+    override var focusRingMaskBounds: NSRect { bounds }
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5).fill()
+    }
+
+    /// Without this, a shortcut that is also a menu equivalent never reaches `keyDown` -- so
+    /// trying to record ⌘Q quit the app and ⌘W closed the settings window instead of being
+    /// captured. While recording, we are the only thing that gets to see the key.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isArmed, window?.firstResponder === self else { return false }
+        keyDown(with: event)
+        return true
+    }
+
+    /// Unarmed, Space or Return arms, as they press a focused button, and every other key goes
+    /// on up the responder chain, so Tab still moves focus. Armed, Esc and Tab are recorded like
+    /// any other key: the stock config binds plain `esc`. Clicking elsewhere cancels.
+    override func keyDown(with event: NSEvent) {
+        guard isArmed else {
+            if event.keyCode == 36 || event.keyCode == 49 { arm() } else { super.keyDown(with: event) }
+            return
         }
+        guard let notation = KeyNotation.from(event: event, keys: keys) else { return }
+        displayed = notation
+        onCapture?(notation)
+        window?.makeFirstResponder(nil)
+    }
 
-        required init?(coder: NSCoder) { die("RecorderView is never loaded from a nib") }
+    /// Made once and kept, never asked for while drawing. In a debug build on macOS 27 a fresh system font
+    /// was now and then a broken object. CoreText raised an exception copying the attributes, which nothing
+    /// here can catch, so it took the app down within a few pane switches. With a row per binding, every
+    /// redraw of this pane asked.
+    private static let promptFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    private static let notationFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
-        override var acceptsFirstResponder: Bool { true }
-        override func becomeFirstResponder() -> Bool { recording = true; needsDisplay = true; return true }
-        override func resignFirstResponder() -> Bool { recording = false; needsDisplay = true; return true }
-        override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
+        (isArmed ? NSColor.controlAccentColor.withAlphaComponent(0.14) : NSColor.textBackgroundColor).setFill()
+        path.fill()
+        (isArmed ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        path.lineWidth = isArmed ? 2 : 1
+        path.stroke()
 
-        /// Without this, a shortcut that is also a menu equivalent never reaches `keyDown` -- so
-        /// trying to record ⌘Q quit the app and ⌘W closed the settings window instead of being
-        /// captured. While recording, we are the only thing that gets to see the key.
-        override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            guard recording, window?.firstResponder === self else { return false }
-            keyDown(with: event)
-            return true
-        }
-
-        override func keyDown(with event: NSEvent) {
-            guard let notation = KeyNotation.from(event: event) else { return }
-            displayed = notation
-            onCapture?(notation)
-            window?.makeFirstResponder(nil)
-        }
-
-        /// Made once and kept, never asked for while drawing. In a debug build on macOS 27 a fresh system font
-        /// was now and then a broken object. CoreText raised an exception copying the attributes, which nothing
-        /// here can catch, so it took the app down within a few pane switches. With a row per binding, every
-        /// redraw of this pane asked.
-        private static let promptFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        private static let notationFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-
-        override func draw(_ dirtyRect: NSRect) {
-            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
-            (recording ? NSColor.controlAccentColor.withAlphaComponent(0.14) : NSColor.textBackgroundColor).setFill()
-            path.fill()
-            (recording ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
-            path.lineWidth = recording ? 2 : 1
-            path.stroke()
-
-            let text = !displayed.isEmpty ? KeyNotation.pretty(displayed) : (recording ? "Press a shortcut…" : "Click to record")
-            // Monospace is for the captured notation -- something the user could type into their
-            // config. The instructional placeholder is prose and takes the system face, the same
-            // split the colour below already makes.
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineBreakMode = .byTruncatingTail
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: displayed.isEmpty ? Self.promptFont : Self.notationFont,
-                .foregroundColor: displayed.isEmpty ? NSColor.placeholderTextColor : NSColor.labelColor,
-                .paragraphStyle: paragraph,
-            ]
-            let size = (text as NSString).size(withAttributes: attrs)
-            let inset: CGFloat = 8
-            let rect = NSRect(x: inset, y: (bounds.height - size.height) / 2,
-                              width: max(0, bounds.width - inset * 2), height: size.height)
-            // `draw(with:options:attributes:context:)`, not `draw(in:withAttributes:)`: the latter
-            // ignores `paragraph.lineBreakMode` entirely and hard-clips at the rect edge mid-glyph
-            // with no ellipsis, so a binding like `alt-shift-leftSquareBracket` sheared off instead
-            // of truncating. This overload honours the paragraph style. The 3-arg sibling without
-            // `context:` does too, but is in `NSStringDrawingDeprecated`.
-            (text as NSString).draw(
-                with: rect,
-                options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
-                attributes: attrs,
-                context: nil,
-            )
-        }
+        let text = !displayed.isEmpty ? KeyNotation.pretty(displayed) : (isArmed ? "Press a shortcut…" : "Click to record")
+        // Monospace is for the captured notation -- something the user could type into their
+        // config. The instructional placeholder is prose and takes the system face, the same
+        // split the colour below already makes.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: displayed.isEmpty ? Self.promptFont : Self.notationFont,
+            .foregroundColor: displayed.isEmpty ? NSColor.placeholderTextColor : NSColor.labelColor,
+            .paragraphStyle: paragraph,
+        ]
+        let size = (text as NSString).size(withAttributes: attrs)
+        let inset: CGFloat = 8
+        let rect = NSRect(x: inset, y: (bounds.height - size.height) / 2,
+                          width: max(0, bounds.width - inset * 2), height: size.height)
+        // `draw(with:options:attributes:context:)`, not `draw(in:withAttributes:)`: the latter
+        // ignores `paragraph.lineBreakMode` entirely and hard-clips at the rect edge mid-glyph
+        // with no ellipsis, so a binding like `alt-shift-leftSquareBracket` sheared off instead
+        // of truncating. This overload honours the paragraph style. The 3-arg sibling without
+        // `context:` does too, but is in `NSStringDrawingDeprecated`.
+        (text as NSString).draw(
+            with: rect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: attrs,
+            context: nil,
+        )
     }
 }
 
 enum KeyNotation {
-    /// Build aerospork key notation (`alt-shift-h`) from a real key event.
-    static func from(event: NSEvent) -> String? {
+    /// Build aerospork key notation (`alt-shift-h`) from a real key event, naming the key the way
+    /// `keys` (the effective `key-mapping`) reads it back.
+    static func from(event: NSEvent, keys: KeyMapping = KeyMapping()) -> String? {
         var parts: [String] = []
         let flags = event.modifierFlags
         if flags.contains(.control) { parts.append("ctrl") }
         if flags.contains(.option) { parts.append("alt") }
         if flags.contains(.shift) { parts.append("shift") }
         if flags.contains(.command) { parts.append("cmd") }
-        guard let key = keyName(for: event) else { return nil }
+        guard let key = keyName(keyCode: event.keyCode, keys: keys) else { return nil }
         parts.append(key)
         return parts.joined(separator: "-")
     }
 
-    private static func keyName(for event: NSEvent) -> String? {
-        // Named keys first; charactersIgnoringModifiers is empty or unhelpful for these.
-        switch Int(event.keyCode) {
-            case 36: return "enter"
-            case 48: return "tab"
-            case 49: return "space"
-            case 51: return "backspace"
-            case 53: return "esc"
-            case 123: return "left"
-            case 124: return "right"
-            case 125: return "down"
-            case 126: return "up"
-            default: break
-        }
-        guard let chars = event.charactersIgnoringModifiers?.lowercased(), let first = chars.first else { return nil }
-        switch first {
-            case "-": return "minus"
-            case "=": return "equal"
-            case ".": return "period"
-            case ",": return "comma"
-            case "/": return "slash"
-            case "\\": return "backslash"
-            case "'": return "quote"
-            case ";": return "semicolon"
-            case "`": return "backtick"
-            case "[": return "leftSquareBracket"
-            case "]": return "rightSquareBracket"
-            default: return first.isLetter || first.isNumber ? String(first) : nil
-        }
+    /// The physical key code through the inverse of `KeyMapping.resolve()`, which is also what the
+    /// Carbon hotkey fires on. Characters were wrong here: `charactersIgnoringModifiers` still
+    /// applies Shift (⌥⇧1 gave `!`, so nothing was recorded), ignores the preset, and gave letters
+    /// such as `ö` that the parser rejects. Several names can share a key: the preset's own name
+    /// wins over a custom alias, then the alphabetically first, so the choice is stable.
+    private static func keyName(keyCode: UInt16, keys: KeyMapping) -> String? {
+        let preset = getKeysPreset(KeyMapping.Preset(rawValue: keys.presetName) ?? .qwerty)
+        return keys.resolve()
+            .filter { $0.value.carbonKeyCode == UInt32(keyCode) }
+            .min { a, b in
+                let (aOwn, bOwn) = (preset[a.key] == a.value, preset[b.key] == b.value)
+                return aOwn != bOwn ? aOwn : a.key < b.key
+            }?.key
     }
 
     /// Render notation with real modifier glyphs. Only the leading modifier tokens are replaced, so

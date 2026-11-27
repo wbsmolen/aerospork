@@ -15,11 +15,6 @@ final class LayoutRecursiveTest: XCTestCase {
         config.accordionPadding = 30
     }
 
-    override func tearDown() {
-        testMonitors = [defaultTestMonitor]
-        super.tearDown()
-    }
-
     /// A monitor anchored at the origin, so `mainMonitor` and `monitorApproximation` both pick it.
     private func monitor(width: CGFloat) -> MonitorImpl {
         let rect = Rect(topLeftX: 0, topLeftY: 0, width: width, height: 1080)
@@ -298,5 +293,27 @@ final class LayoutRecursiveTest: XCTestCase {
         assertEquals(windows[0].singleAppliedFrame(), CGRect(x: 0, y: 0, width: 1920, height: 1020))
         assertEquals(windows[1].singleAppliedFrame(), CGRect(x: 0, y: 30, width: 1920, height: 1020))
         assertEquals(windows[2].singleAppliedFrame(), CGRect(x: 0, y: 60, width: 1920, height: 1020))
+    }
+
+    // MARK: - monitors
+
+    /// A workspace on a second monitor is laid out on that monitor throughout the pass: tiles, the fullscreen
+    /// window, and a floating window that was on the other monitor. The pass resolves the monitor once.
+    func testAWorkspaceOnTheSecondMonitorIsLaidOutOnIt() async throws {
+        let right = Rect(topLeftX: 1920, topLeftY: 0, width: 1000, height: 800)
+        testMonitors = [monitor(width: 1920), MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "Right", rect: right, visibleRect: right)]
+        let workspace = Workspace.get(byName: "on-right")
+        assertTrue(testMonitors[1].setActiveWorkspace(workspace))
+        let tiles = (0 ..< 2).map { LayoutTestWindow.new(id: UInt32($0), parent: workspace.rootTilingContainer) }
+        let fullscreen = LayoutTestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        fullscreen.isFullscreen = true
+        let floating = LayoutTestWindow.new(id: 3, parent: workspace, adaptiveWeight: WEIGHT_AUTO, axRect: Rect(topLeftX: 960, topLeftY: 540, width: 100, height: 100))
+
+        try await workspace.layoutWorkspace()
+
+        assertEquals(tiles[0].singleAppliedFrame(), CGRect(x: 1920, y: 0, width: 333.3333333333333, height: 800))
+        assertEquals(fullscreen.singleAppliedFrame(), CGRect(x: 1920, y: 0, width: 1000, height: 800))
+        // Halfway across the left monitor, so halfway across the right one.
+        assertEquals(floating.singleAppliedFrame().origin, CGPoint(x: 2420, y: 400))
     }
 }

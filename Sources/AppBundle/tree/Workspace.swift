@@ -129,11 +129,14 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         // must not hijack a bound name -- but that needs only the NAME SET.
         let persistent = config.persistentWorkspaces
         for name in persistent { _ = get(byName: name) }
+        // Once, before the filter: `focus` creates the focused workspace when it is missing, and inside the
+        // filter that write went into the dictionary being replaced, so the workspace was created and lost.
+        let focusedName = focus.workspace.name
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
             persistent.contains(workspace.name) ||
                 !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
-                workspace.name == focus.workspace.name
+                workspace.name == focusedName
         }
     }
 
@@ -160,6 +163,10 @@ class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 extension Workspace {
     @MainActor
     var isVisible: Bool { visibleWorkspaceToScreenPoint.keys.contains(self) }
+    /// Where the workspace is shown, raw: no monitor approximation, and never creates anything, unlike
+    /// `Monitor.activeWorkspace`. For `debug-windows --tree`, which must report a stale point as stale.
+    @MainActor
+    var visibleScreenPoint: CGPoint? { visibleWorkspaceToScreenPoint[self] }
     @MainActor
     var workspaceMonitor: Monitor {
         forceAssignedMonitor
@@ -267,6 +274,12 @@ extension CGPoint {
         if !isValidAssignment(workspace: workspace, screen: self) {
             return false
         }
+        // Already shown here, as on every focus change inside a workspace. Going on would record the
+        // workspace as this monitor's previous one, and the monitor would forget what it showed before.
+        if screenPointToVisibleWorkspace[self] == workspace {
+            workspace.assignedMonitorPoint = self
+            return true
+        }
         let prevMonitorPoint = visibleWorkspaceToScreenPoint[workspace]
         if let prevMonitorPoint {
             visibleWorkspaceToScreenPoint.removeValue(forKey: workspace)
@@ -292,6 +305,13 @@ extension CGPoint {
 
 /// The stable id of the panel at each screen point, as of the last rearrange. See `matchMonitors`.
 @MainActor private var screenPointToMonitorUuid: [CGPoint: String] = [:]
+
+/// Forgets which workspace each screen point showed before and which panel was at it, so a test's stub
+/// workspace is never a name an earlier test left behind. Production never calls it.
+@MainActor func resetWorkspaceScreensForTests() {
+    screenPointToPrevVisibleWorkspace = [:]
+    screenPointToMonitorUuid = [:]
+}
 
 /// Which old screen each new screen continues: the same panel by UUID, then the same position, then the
 /// nearest. Position alone sends every workspace to the wrong panel when two monitors trade places, and
@@ -320,6 +340,11 @@ func matchMonitors(
 @MainActor
 func rearrangeWorkspacesOnMonitors() {
     let monitors = monitors
+    // No screens is transient (displays asleep, a DisplayLink dock mid-reconnect). Rearranging onto
+    // nothing would make every workspace invisible and erase the UUID map, so the reconnect could
+    // only match by position. Here, not in a caller: `gcMonitors`, the monitor-change observer and
+    // `Monitor.activeWorkspace` all come through this function.
+    guard !monitors.isEmpty else { return }
     let newScreens = monitors.map(\.rect.topLeftCorner)
     let newUuids = monitors.map { $0.fingerprint?.displayUUID }
     let newScreenToOldScreenMapping = matchMonitors(

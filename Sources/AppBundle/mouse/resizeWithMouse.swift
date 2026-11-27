@@ -7,7 +7,7 @@ private var resizeWithMouseTask: Task<(), any Error>? = nil
 func resizedObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: UnsafeMutableRawPointer?) {
     let notif = notif as String
     // Almost all of these are our own frame writes. Only a drag needs to know which window resized.
-    let windowId = isLeftMouseButtonDown ? ax.containingWindowId() : nil
+    let windowId = isLeftMouseButtonDown ? axRefconWindowId(data) : nil
     runDetached("resizeWithMouse") {
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
@@ -23,6 +23,11 @@ func resizedObs(_ obs: AXObserver, ax: AXUIElement, notif: CFString, data: Unsaf
         }
     }
 }
+
+/// Only the global mouse-up monitor cleared the flag, and a global monitor never sees a mouse-up that
+/// went to AeroSpork's own windows or was lost to a lock mid-drag. The window then stayed out of
+/// layout until the next click anywhere. A real drag keeps the button down, so it is never cut short.
+func shouldResetMouseManipulation(flag: Bool, buttonDown: Bool) -> Bool { flag && !buttonDown }
 
 @MainActor
 func resetManipulatedWithMouseIfPossible() async throws {
@@ -84,7 +89,7 @@ extension TreeNode {
         let currentWeight = getWeight(orientation) // Check assertions
         return weightBeforeResizeWithMouse
             ?? (lastAppliedLayoutVirtualRect?.getDimension(orientation) ?? currentWeight)
-            .also { weightBeforeResizeWithMouse = $0 }
+            .apply { weightBeforeResizeWithMouse = $0 }
     }
 
     fileprivate func resetResizeWeightBeforeResizeRecursive() {

@@ -26,6 +26,8 @@ enum CliAction: Equatable {
     /// `-v` / `--version`. Answered by the client alone when the server is unreachable.
     case version
     case send([String], readsStdin: Bool)
+    /// `subscribe`: many answers, each printed as it comes, with no timeout.
+    case stream([String])
 }
 
 /// Whether the command takes its `next`/`prev` list from stdin. Nothing else may touch it: in a
@@ -47,7 +49,7 @@ func plan(args: [String]) -> CliAction {
     // still answer when there is no server to ask.
     if args.first == "--version" || args.first == "-v" { return .version }
     return switch parseCmdArgs(args) {
-        case .cmd(let cmd): .send(args, readsStdin: readsStdin(cmd))
+        case .cmd(let cmd): cmd is SubscribeCmdArgs ? .stream(args) : .send(args, readsStdin: readsStdin(cmd))
         case .help(let help): .help(help)
         case .failure(let e): .badArgs(e)
     }
@@ -74,15 +76,80 @@ func readStdin(limitLines: Int = 1000) -> Result<String, CliFailure> {
     return .success(stdin)
 }
 
-func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Result<ServerAnswer, CliFailure> {
+/// How long the CLI waits for an answer before it gives up with exit 3. A wedged server used to hang
+/// every call, so a status bar that polls stacked up processes. 60 s is far above any real session:
+/// each Accessibility call gives up after 1 s. The server still finishes the command.
+let replyTimeout: Duration = .seconds(60)
+
+/// `timeout` nil waits forever, for a long-lived stream that is quiet between frames.
+func run(
+    _ socket: UnixSocketConnection,
+    _ args: [String],
+    stdin: String,
+    timeout: Duration? = replyTimeout,
+) -> Result<ServerAnswer, CliFailure> {
     guard let request = try? JSONEncoder().encode(ClientRequest(args: args, stdin: stdin)) else {
         return .failure(CliFailure(message: "Can't encode the request", exitCode: ExitCode.badArgs))
     }
+    // The server refuses a frame over the limit and hangs up, which read as "Can't send request".
+    guard request.count <= Int(UnixSocketConnection.maxFrameSize) else {
+        return .failure(CliFailure(
+            message: "The request is too large to send to AeroSpork server (\(request.count) bytes, the limit is \(UnixSocketConnection.maxFrameSize) bytes)",
+            exitCode: ExitCode.badArgs,
+        ))
+    }
+    // The frame deadline starts at each call, so it covers the whole wait for the reply, session included.
+    if let timeout { socket.setFrameTimeout(timeout) }
     guard socket.sendMessage(request) else {
         return .failure(CliFailure(message: "Can't send request to AeroSpork server", exitCode: ExitCode.serverUnreachable))
     }
-    guard let answer = try? socket.recvMessage() else {
-        return .failure(CliFailure(message: "No response from AeroSpork server", exitCode: ExitCode.serverUnreachable))
+    return receive(socket, timeout: timeout)
+}
+
+/// `subscribe`: hands each answer to `onAnswer` until the stream ends, then returns why. No timeout, because a
+/// stream is quiet for as long as nothing happens.
+func runStream(_ socket: UnixSocketConnection, _ args: [String], onAnswer: (ServerAnswer) -> Void) -> CliFailure {
+    var next = run(socket, args, stdin: "", timeout: nil)
+    while true {
+        switch next {
+            case .failure(let failure): return failure
+            case .success(let answer):
+                // The server ends a stream it refuses or closes with a failure that says why.
+                if answer.exitCode != ExitCode.success { return CliFailure(message: answer.stderr, exitCode: answer.exitCode) }
+                onAnswer(answer)
+        }
+        next = receive(socket, timeout: nil, noAnswer: "AeroSpork server ended the stream")
+    }
+}
+
+/// The next answer from the server, decoded. `timeout` nil waits forever.
+func receive(
+    _ socket: UnixSocketConnection,
+    timeout: Duration?,
+    noAnswer: String = "No response from AeroSpork server",
+) -> Result<ServerAnswer, CliFailure> {
+    let reply: Data?
+    let waitStart = ContinuousClock.now
+    do {
+        reply = try socket.recvMessage()
+    } catch UnixSocketError.frameTooLarge(let size) {
+        return .failure(CliFailure(
+            message: "The answer from AeroSpork server is too large to receive (\(size) bytes, the limit is \(UnixSocketConnection.maxFrameSize) bytes)",
+            exitCode: ExitCode.serverUnreachable,
+        ))
+    } catch {
+        reply = nil
+    }
+    guard let answer = reply else {
+        // The socket reports a timeout and a hang-up alike, so the clock tells them apart. The 0.9
+        // allows for a kernel timer that fires a little early.
+        if let timeout, waitStart.duration(to: .now) >= timeout * 0.9 {
+            return .failure(CliFailure(
+                message: "No response from AeroSpork server within \(timeout.components.seconds) s",
+                exitCode: ExitCode.serverUnreachable,
+            ))
+        }
+        return .failure(CliFailure(message: noAnswer, exitCode: ExitCode.serverUnreachable))
     }
     guard let decoded = try? JSONDecoder().decode(ServerAnswer.self, from: answer) else {
         // This used to be `getOrDie()` -- a fatalError with a twenty-line "please report a bug"
@@ -91,7 +158,7 @@ func run(_ socket: UnixSocketConnection, _ args: [String], stdin: String) -> Res
         return .failure(CliFailure(
             message: """
                 Can't decode the answer from AeroSpork server. The server is probably a different
-                version than this client (client: \(cliClientVersionAndHash)).
+                version than this client (client: \(aeroSporkVersionAndHash)).
                 Restart AeroSpork.app -- a server restart is required after each update.
                 """,
             exitCode: ExitCode.failure,
@@ -116,16 +183,30 @@ struct Main {
             // Before connecting: whatever feeds the pipe can take as long as it likes, and the server
             // hangs up on a connection that says nothing.
             case .send(_, readsStdin: true): stdin = readStdin().orExit()
-            case .version, .send: break
+            case .version, .send, .stream: break
         }
 
-        let socketFile = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock"
+        let socketFile = cliSocketPath(appId: aeroSporkAppId)
         guard let socket = UnixSocketConnection.connect(to: socketFile) else {
             if action == .version { printVersionAndExit(serverVersion: nil) }
             printStderr("Can't connect to AeroSpork server. Is AeroSpork.app running?")
             exit(ExitCode.serverUnreachable)
         }
         defer { socket.close() }
+
+        if case .stream(let args) = action {
+            var first = true
+            let end = runStream(socket, args) { answer in
+                if first, let warning = versionMismatchWarning(client: aeroSporkVersionAndHash, server: answer.serverVersionAndHash) {
+                    printStderr(warning)
+                }
+                first = false
+                print(answer.stdout)
+                fflush(stdout) // a pipe is block-buffered, and a status bar reads line by line
+            }
+            printStderr(end.message)
+            exit(end.exitCode)
+        }
 
         // `--version` carries no subcommand, so the server is asked for nothing but its version.
         let ans = run(socket, action == .version ? [] : args, stdin: stdin).orExit()
@@ -135,7 +216,7 @@ struct Main {
         if !ans.stderr.isEmpty { printStderr(ans.stderr) }
         // Unconditional: a mismatched client that happens to succeed is exactly the case that
         // silently does the wrong thing, so it needs the warning most.
-        if let warning = versionMismatchWarning(client: cliClientVersionAndHash, server: ans.serverVersionAndHash) {
+        if let warning = versionMismatchWarning(client: aeroSporkVersionAndHash, server: ans.serverVersionAndHash) {
             printStderr(warning)
         }
         exit(ans.exitCode)
@@ -154,7 +235,7 @@ extension Result where Failure == CliFailure {
 func printVersionAndExit(serverVersion: String?) -> Never {
     print(
         """
-        AeroSpork CLI client version: \(cliClientVersionAndHash)
+        AeroSpork CLI client version: \(aeroSporkVersionAndHash)
         AeroSpork.app server version: \(serverVersion ?? "Unknown. The server is not running")
         """,
     )

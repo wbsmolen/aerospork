@@ -74,7 +74,7 @@ final class ConfigTest: XCTestCase {
         assertEquals(
             errors.descriptions,
             [
-                "mode.main.binding.aalt-j: Can\'t parse modifiers in \'aalt-j\' binding",
+                "mode.main.binding.aalt-j: \'aalt\' is not a modifier. Use cmd, alt, ctrl or shift",
                 "mode.main.binding.alt-hh: Can\'t parse the key in \'alt-hh\' binding",
             ],
         )
@@ -126,6 +126,29 @@ final class ConfigTest: XCTestCase {
             ["gaps.unknownKey: Unknown key"],
         )
         // assertEquals(config.enableNormalizationFlattenContainers, false)
+    }
+
+    func testUnknownKeySuggestsTheNearMiss() {
+        assertEquals(parseConfigForTest("[gaps]\niner = 8").1.descriptions, ["gaps.iner: Unknown key. Did you mean 'inner'?"])
+        assertEquals(
+            parseConfigForTest("acordion-padding = 4").1.descriptions,
+            ["acordion-padding: Unknown top-level key. Did you mean 'accordion-padding'?"],
+        )
+    }
+
+    func testUnknownBindingKeySuggestsTheNearMiss() {
+        assertEquals(
+            parseConfigForTest("[mode.main.binding]\nalt-escape = 'close'").1.descriptions,
+            ["mode.main.binding.alt-escape: Can't parse the key in 'alt-escape' binding. Did you mean 'esc'?"],
+        )
+    }
+
+    /// The same words as `mod = 'meta'` says, for the same rule.
+    func testBadModifierInABindingNamesTheWord() {
+        assertEquals(
+            parseConfigForTest("[mode.main.binding]\nsuper-a = 'close'").1.descriptions,
+            ["mode.main.binding.super-a: 'super' is not a modifier. Use cmd, alt, ctrl or shift"],
+        )
     }
 
     /// Deprecated, but no longer a *lie*: the value now reaches `config`, where `focus.swift`
@@ -210,25 +233,41 @@ final class ConfigTest: XCTestCase {
         }
     }
 
-    func testSplitCommandAndFlattenContainersNormalization() {
+    /// The type error was parsed as a command: "Unrecognized subcommand 'Expected'", with no index.
+    func testNonStringItemInCommandArrayReportsTypeAndIndex() {
         let (_, errors) = parseConfigForTest(
+            """
+            [mode.main.binding]
+                alt-x = ['focus left', 42]
+            """,
+        )
+        assertEquals(errors.descriptions, ["mode.main.binding.alt-x: [1]: Expected type is 'string'. But actual type is 'integer'"])
+    }
+
+    /// A warning: it was fatal, so one `split` binding cost the user every binding they had, and the
+    /// text said "disabled" where `SplitCommand` refuses when the flag is enabled.
+    func testSplitCommandAndFlattenContainersNormalization() {
+        var warnings: [TomlParseError] = []
+        let result = parseConfig(
             """
             enable-normalization-flatten-containers = true
             [mode.main.binding]
             [mode.foo.binding]
                 alt-s = 'split horizontal'
             """,
+            warnings: &warnings,
         )
+        assertEquals(try? result.get().modes["foo"]?.bindings.count, 1)
         assertEquals(
             ["""
                 The config contains:
                 1. usage of 'split' command
                 2. enable-normalization-flatten-containers = true
-                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is disabled.
+                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is enabled.
 
                 My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
                 """],
-            errors.descriptions,
+            warnings.descriptions,
         )
     }
 
@@ -318,36 +357,12 @@ final class ConfigTest: XCTestCase {
                 run = ['move-node-to-workspace S', 'layout h_tiles']
             """,
         )
-        /*assertEquals(parsed.onWindowDetected, [
-             WindowDetectedCallback(
-                 matcher: WindowDetectedCallbackMatcher(
-                     appId: nil,
-                     appNameRegexSubstring: nil,
-                     windowTitleRegexSubstring: nil,
-                 ),
-                 checkFurtherCallbacks: true,
-                 rawRun: [
-                     LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.floating])),
-                     MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W")),
-                 ],
-             ),
-             WindowDetectedCallback(
-                 matcher: WindowDetectedCallbackMatcher(
-                     appId: "com.apple.systempreferences",
-                     appNameRegexSubstring: nil,
-                     windowTitleRegexSubstring: nil,
-                 ),
-                 checkFurtherCallbacks: false,
-                 rawRun: [],
-             ),
-         ])*/
-
         assertEquals(errors.descriptions, [
             "on-window-detected[2]: \'run\' is mandatory key",
-            "on-window-detected[3]: For now, \'move-node-to-workspace\' must be the latest instruction in the callback (otherwise it\'s error-prone). Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
-            "on-window-detected[4]: For now, \'move-node-to-workspace\' can be mentioned only once in \'run\' callback. Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
-            "on-window-detected[5]: For now, \'layout floating\', \'layout tiling\' and \'move-node-to-workspace\' are the only commands that are supported in \'on-window-detected\'. Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
-            "on-window-detected[5]: For now, \'move-node-to-workspace\' must be the latest instruction in the callback (otherwise it\'s error-prone). Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
+            "on-window-detected[3]: For now, \'move-node-to-workspace\' or \'move-node-to-monitor\' must be the latest instruction in the callback (otherwise it\'s error-prone). Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
+            "on-window-detected[4]: For now, only one \'move-node-to-workspace\' or \'move-node-to-monitor\' can be mentioned in \'run\' callback. Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
+            "on-window-detected[5]: For now, \'layout floating\', \'layout tiling\', \'fullscreen on\', \'sticky on\', \'move-node-to-workspace\' and \'move-node-to-monitor\' are the only commands that are supported in \'on-window-detected\'. Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
+            "on-window-detected[5]: For now, \'move-node-to-workspace\' or \'move-node-to-monitor\' must be the latest instruction in the callback (otherwise it\'s error-prone). Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ])
     }
 
@@ -1081,7 +1096,7 @@ final class ConfigTest: XCTestCase {
             "q": .q,
             "unicorn": .u,
         ]))
-        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))])
+        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("wonderland").getOrDie())))])
         assertEquals(config.modes[mainModeId]?.bindings, [binding.descriptionWithKeyCode: binding])
 
         let (_, errors1) = parseConfigForTest(

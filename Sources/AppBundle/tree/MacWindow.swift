@@ -67,6 +67,7 @@ final class MacWindow: Window {
                 // Running it again would undo a move made by hand since. `during-aerospork-startup = true`
                 // is a request to run at startup, so those still do.
                 if !isNewTab { try await tryOnWindowDetected(window, onlyStartupRules: isRemembered) }
+                window.applyNewWindowPlacement(isRemembered: isRemembered, isNewTab: isNewTab)
             }
         }
         // A window that arrives looking like a popup is re-checked by `validateStillPopups` -- but only
@@ -95,7 +96,7 @@ final class MacWindow: Window {
     }
 
     @MainActor
-    func getAxUiElementWindowType() async throws -> AxUiElementWindowType {
+    override func getAxUiElementWindowType() async throws -> AxUiElementWindowType {
         try await macApp.getAxUiElementWindowType(windowId)
     }
 
@@ -104,7 +105,7 @@ final class MacWindow: Window {
         try await macApp.dumpWindowAxInfo(windowId: windowId)
     }
 
-    func setNativeFullscreen(_ value: Bool) {
+    override func setNativeFullscreen(_ value: Bool) {
         macApp.setNativeFullscreen(windowId, value)
     }
 
@@ -123,6 +124,7 @@ final class MacWindow: Window {
         if MacWindow.allWindowsMap.removeValue(forKey: windowId) == nil {
             return
         }
+        macApp.forget(windowId)
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded(window: self) }
         for workspace in Workspace.all { workspace.rootTilingContainer.forgetAway { $0 == windowId } }
         passTabPlaceOn()
@@ -181,12 +183,17 @@ final class MacWindow: Window {
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent
         // `hideEmulation` calls
         if !isHiddenInCorner {
-            guard let windowRect = try await getAxRect() else { return }
-            let topLeftCorner = windowRect.topLeftCorner
-            let monitorRect = windowRect.center.monitorApproximation.rect // Similar to layoutFloatingWindow. Non idempotent
-            let absolutePoint = topLeftCorner - monitorRect.topLeftCorner
-            prevUnhiddenProportionalPositionInsideWorkspaceRect =
-                CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
+            // A tiled window's position is only ever used if it turns floating while parked, and layout put it
+            // where it last applied, so that answers without an awaited round trip per departing window.
+            let needsRead = parkNeedsFrameRead(
+                parentIsTiling: parent is TilingContainer,
+                lastApplied: lastAppliedLayoutPhysicalRect,
+                appTimedOut: MacApp.timedOutThisPass.contains(macApp.pid),
+            )
+            // An unreadable frame leaves the window alone, as does an app that timed out this pass: parking it
+            // would queue a job that waits out the timeout on that app's thread.
+            guard let windowRect = needsRead ? try await getAxRect() : lastAppliedLayoutPhysicalRect else { return }
+            prevUnhiddenProportionalPositionInsideWorkspaceRect = proportionalPosition(of: windowRect)
         }
         // Zoom will jump off if you do one pixel offset https://github.com/wbsmolen/aerospork/issues/527
         let sliver: CGFloat = macApp.isZoom ? 0 : 1
@@ -259,20 +266,69 @@ final class MacWindow: Window {
     }
 }
 
+/// Does parking a window need its frame read from the app? Not for a tiled window that layout has placed, of an
+/// app that has answered this pass.
+func parkNeedsFrameRead(parentIsTiling: Bool, lastApplied: Rect?, appTimedOut: Bool) -> Bool {
+    !parentIsTiling || lastApplied == nil || appTimedOut
+}
+
+/// Where `rect` sits on its monitor, as a share of the monitor's size. Similar to layoutFloatingWindow. Non idempotent.
+func proportionalPosition(of rect: Rect) -> CGPoint {
+    let monitorRect = rect.center.monitorApproximation.rect
+    let absolutePoint = rect.topLeftCorner - monitorRect.topLeftCorner
+    return CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
+}
+
 extension Window {
     @MainActor
     func relayoutWindow(on workspace: Workspace, forceTile: Bool = false) async throws {
         let data = forceTile
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
-            : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self)
+            : unbindAndGetBindingDataForNewWindow(try await getAxUiElementWindowType(), workspace, window: self)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+    }
+
+    /// `new-window-placement = 'nest'`: a new tiled window shares the tile of the focused window with it, in a
+    /// container of their own, instead of taking a share of the whole row. Called once, at registration, after
+    /// the window rules, so a window a rule moved nests where it lands, beside that workspace's focused window.
+    ///
+    /// Never for a window from workspace memory (the file has its place), a new native tab (it took its
+    /// group's tile), or the windows already open at startup. A window macOS gives back comes through
+    /// `takeAwaySlot`, and `layout tiling` through `relayoutWindow`: neither calls this.
+    @MainActor
+    func applyNewWindowPlacement(isRemembered: Bool, isNewTab: Bool) {
+        guard config.newWindowPlacement == .nest, !isRemembered, !isNewTab, !isStartup,
+              layoutReason == .standard, parent is TilingContainer, let workspace = nodeWorkspace else { return }
+        let own = unbindFromParent()
+        // Alone in its container, the tile already is that container's whole space: nesting would only flip it.
+        guard let tile = workspace.mostRecentWindowRecursive, let row = tile.parent as? TilingContainer,
+              row.layout == .tiles, row.children.count > 1
+        else {
+            bind(to: own.parent, adaptiveWeight: own.adaptiveWeight, index: own.index)
+            return
+        }
+        let place = tile.unbindFromParent()
+        let orientation: Orientation = if !config.enableNormalizationOppositeOrientationForNestedContainers, let rect = tile.lastAppliedLayoutVirtualRect {
+            rect.width >= rect.height ? .h : .v
+        } else {
+            row.orientation.opposite
+        }
+        let nest = TilingContainer(parent: row, adaptiveWeight: place.adaptiveWeight, orientation, .tiles, index: place.index)
+        tile.bind(to: nest, adaptiveWeight: WEIGHT_AUTO, index: 0)
+        bind(to: nest, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     }
 }
 
 // The function is private because it's unsafe. It leaves the window in unbound state
 @MainActor
 private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _ workspace: Workspace, window: Window?) async throws -> BindingData {
-    switch try await macApp.getAxUiElementWindowType(windowId) {
+    unbindAndGetBindingDataForNewWindow(try await macApp.getAxUiElementWindowType(windowId), workspace, window: window)
+}
+
+// The function is private because it's unsafe. It leaves the window in unbound state
+@MainActor
+private func unbindAndGetBindingDataForNewWindow(_ type: AxUiElementWindowType, _ workspace: Workspace, window: Window?) -> BindingData {
+    switch type {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .dialog: BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
@@ -306,6 +362,11 @@ func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async
         case .tilingContainer, .workspace, .macosMinimizedWindowsContainer,
              .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
             try await onWindowDetected(window, onlyStartupRules: onlyStartupRules)
+            // After the rules, so `workspace` is where they put it.
+            EventBroadcaster.shared.emit(
+                .windowDetected,
+                subscribeWindowJson(window).merging(["workspace": window.nodeWorkspace.map { .string($0.name) } ?? .null]) { $1 },
+            )
         case .macosPopupWindowsContainer:
             break
     }
@@ -314,7 +375,15 @@ func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async
 @MainActor
 private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async throws {
     let rules = config.onWindowDetected.filter { !onlyStartupRules || $0.matcher.duringAeroSporkStartup == true }
-    for callback in rules where try await callback.matches(window) {
+    // An AX round trip, so read once for every title rule, and only if one asks.
+    var title: String?
+    func readTitle() async throws -> String {
+        if let title { return title }
+        let read = try await window.title
+        title = read
+        return read
+    }
+    for callback in rules where try await callback.matches(window, title: readTitle) {
         _ = try await callback.run.runCmdSeq(.defaultEnv.copy(\.windowId, window.windowId), .emptyStdin)
         if !callback.checkFurtherCallbacks {
             return
@@ -324,11 +393,11 @@ private func onWindowDetected(_ window: Window, onlyStartupRules: Bool) async th
 
 extension WindowDetectedCallback {
     @MainActor
-    func matches(_ window: Window) async throws -> Bool {
+    func matches(_ window: Window, title: () async throws -> String) async throws -> Bool {
         if let startupMatcher = matcher.duringAeroSporkStartup, startupMatcher != isStartup {
             return false
         }
-        if let regex = matcher.windowTitleRegexSubstring, !(try await window.title).contains(regex) {
+        if let regex = matcher.windowTitleRegexSubstring, !(try await title()).contains(regex) {
             return false
         }
         if let appId = matcher.appId, appId != window.app.bundleId {

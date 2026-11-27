@@ -29,16 +29,22 @@ import TOMLKit
     // happen -- and under `swift test` this resolves to the DEVELOPER'S own ~/.aerospork-debug.toml.
     guard !isUnitTest else { return }
     guard case .file(let url) = findCustomConfigUrl() else { return }
+    migrateConfigToV2(at: url)
+}
+
+@MainActor func migrateConfigToV2(at url: URL) {
     let backup = url.appendingPathExtension("pre-v2")
     // Already migrated, or the user deliberately went back to v1. Either way, migrating a second
     // time would overwrite the only copy of what they originally wrote.
     guard !FileManager.default.fileExists(atPath: backup.path) else { return }
     guard let original = try? String(contentsOf: url, encoding: .utf8),
           let migrated = migrateToConfigV2(original) else { return }
-    // Back up FIRST. If this fails there is no safe copy, so there is no migration either.
-    guard (try? original.write(to: backup, atomically: true, encoding: .utf8)) != nil else { return }
-    ConfigFileWatcher.suppressNextSelfWrite()
-    try? migrated.write(to: url, atomically: true, encoding: .utf8)
+    // Back up FIRST. If this fails there is no safe copy, so there is no migration either. A copy of
+    // the real file, not a fresh write: that got 0644 from the umask when the config was 0600, and
+    // `[exec.env-vars]` can hold secrets. Both go through a link, which a write to `url` replaced.
+    let real = url.resolvingSymlinksInPath()
+    guard (try? FileManager.default.copyItem(at: real, to: backup)) != nil else { return }
+    try? migrated.write(to: real, atomically: true, encoding: .utf8)
 }
 
 // MARK: - Rendering
@@ -172,8 +178,10 @@ private func compactRanges(_ names: [String]) -> [String] {
 /// and regexes are not), and because the comparison has to be deterministic -- dictionaries are
 /// flattened to sorted lines before anything is compared.
 ///
-/// Regex matchers in `on-window-detected` are NOT compared: `Regex` has no equality, and migration
-/// copies those tables across byte for byte, so there is nothing there to get wrong.
+/// Regex matchers in `on-window-detected` are compared only by presence: `Regex` has no equality and
+/// keeps no source text, and migration copies those tables across byte for byte.
+/// `ConfigV2MigrationTest.testEquivalenceCoversEveryConfigField` fails when a `Config` field is neither
+/// compared here nor exempted there.
 @MainActor func configsAreEquivalent(_ a: Config, _ b: Config) -> Bool {
     func cmds(_ commands: [any Command]) -> [String] { commands.map { $0.args.description } }
     func bindings(_ modes: [String: Mode]) -> [String] {
@@ -185,17 +193,24 @@ private func compactRanges(_ names: [String]) -> [String] {
         assignment.map { "\($0.key)\t\($0.value.map(\.humanDescription).joined(separator: ","))" }.sorted()
     }
     func windows(_ callbacks: [WindowDetectedCallback]) -> [String] {
-        callbacks.map { "\($0.matcher.appId ?? "")\t\($0.matcher.workspace ?? "")\t\($0.matcher.duringAeroSporkStartup?.description ?? "")\t\($0.checkFurtherCallbacks)\t\(cmds($0.run).joined(separator: " ; "))" }
+        callbacks.map {
+            let m = $0.matcher
+            let regexes = "\(m.appNameRegexSubstring != nil)\t\(m.windowTitleRegexSubstring != nil)"
+            return "\(m.appId ?? "")\t\(m.workspace ?? "")\t\(m.duringAeroSporkStartup?.description ?? "")\t\(regexes)\t\($0.checkFurtherCallbacks)\t\(cmds($0.run).joined(separator: " ; "))"
+        }
     }
 
     return a.enableNormalizationFlattenContainers == b.enableNormalizationFlattenContainers &&
         a.enableNormalizationOppositeOrientationForNestedContainers == b.enableNormalizationOppositeOrientationForNestedContainers &&
         a.defaultRootContainerLayout == b.defaultRootContainerLayout &&
         a.defaultRootContainerOrientation == b.defaultRootContainerOrientation &&
+        a.newWindowPlacement == b.newWindowPlacement &&
         a.startAtLogin == b.startAtLogin &&
         a.automaticallyUnhideMacosHiddenApps == b.automaticallyUnhideMacosHiddenApps &&
         a.accordionPadding == b.accordionPadding &&
         a.autoMoveWorkspacesOnMonitorConnect == b.autoMoveWorkspacesOnMonitorConnect &&
+        a.showMenuBarIcon == b.showMenuBarIcon &&
+        a.showDockIcon == b.showDockIcon &&
         a.gaps == b.gaps &&
         a.keyMapping == b.keyMapping &&
         a.execConfig == b.execConfig &&
@@ -204,6 +219,7 @@ private func compactRanges(_ names: [String]) -> [String] {
         cmds(a.onFocusChanged) == cmds(b.onFocusChanged) &&
         cmds(a.onFocusedWorkspaceChanged) == cmds(b.onFocusedWorkspaceChanged) &&
         cmds(a.onFocusedMonitorChanged) == cmds(b.onFocusedMonitorChanged) &&
+        cmds(a.onModeChanged) == cmds(b.onModeChanged) &&
         a.preservedWorkspaceNames.sorted() == b.preservedWorkspaceNames.sorted() &&
         // `persistentWorkspaces` is deliberately NOT compared. Folding a v1 keymap's `alt-1..9` pairs
         // into `workspaces` makes those workspaces persistent, which is a change -- but the one that

@@ -38,7 +38,8 @@ public enum UnixSocketError: Error, Equatable {
     case frameTooLarge(UInt32)
 }
 
-/// One connected AF_UNIX stream socket. Thread-confined to whoever owns it.
+/// One connected AF_UNIX stream socket. Thread-confined to whoever owns it, except that `shutdown` and
+/// `waitForHangUp` may run on other threads beside one that sends.
 public final class UnixSocketConnection: @unchecked Sendable {
     /// Largest frame we're willing to allocate for. A config file is the biggest legitimate
     /// payload, so 16 MiB is generous; uncapped, a 4-byte header of 0xFFFFFFFF would make the
@@ -66,13 +67,26 @@ public final class UnixSocketConnection: @unchecked Sendable {
 
     public func close() { _ = Darwin.close(fd) }
 
-    /// Give up on a frame, in either direction, that takes longer than `seconds` from start to finish,
+    /// Ends the connection both ways but keeps the descriptor, so a thread blocked on it wakes with a failure
+    /// instead of later using a descriptor that was closed and handed to someone else.
+    public func shutdown() { _ = Darwin.shutdown(fd, SHUT_RDWR) }
+
+    /// Blocks, with no deadline, until the peer hangs up or sends anything, or `shutdown` is called. For a
+    /// connection that only sends from here on, such as a `subscribe` stream, which is quiet between events.
+    public func waitForHangUp() {
+        var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        while poll(&pfd, 1, -1) < 0 && errno == EINTR {}
+    }
+
+    /// Give up on a frame, in either direction, that takes longer than `timeout` from start to finish,
     /// reporting it as a dropped connection. Without it a client that connects and never speaks, or
     /// never reads its reply, holds a server thread forever.
     ///
     /// The whole frame, not each call: SO_RCVTIMEO restarts with every `read`, so a client dripping
     /// one byte just inside it could keep a 16 MiB frame open for years.
-    public func setFrameTimeout(seconds: Int) { frameTimeout = .seconds(seconds) }
+    public func setFrameTimeout(_ timeout: Duration) { frameTimeout = timeout }
+
+    public func setFrameTimeout(seconds: Int) { setFrameTimeout(.seconds(seconds)) }
 
     private var frameDeadline: ContinuousClock.Instant? { frameTimeout.map { ContinuousClock.now + $0 } }
 
@@ -132,9 +146,11 @@ public final class UnixSocketConnection: @unchecked Sendable {
         return out
     }
 
-    /// Send a framed message (4-byte big-endian length + payload).
+    /// Send a framed message (4-byte big-endian length + payload). false, with nothing written, for a
+    /// payload over `maxFrameSize`: the peer would refuse it, and past 4 GiB the length would trap.
     @discardableResult
     public func sendMessage(_ data: Data) -> Bool {
+        guard data.count <= Int(Self.maxFrameSize) else { return false }
         var len = UInt32(data.count).bigEndian
         var framed = Data(bytes: &len, count: 4)
         framed.append(data)
@@ -154,7 +170,7 @@ public final class UnixSocketConnection: @unchecked Sendable {
 }
 
 /// A listening AF_UNIX stream socket.
-public final class UnixSocketListener: @unchecked Sendable {
+public final class UnixSocketListener: Sendable {
     private let fd: Int32
     private init(fd: Int32) { self.fd = fd }
 

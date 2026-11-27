@@ -29,7 +29,8 @@ create-marker() {
 }
 
 if test $all == 1 || test $bundler == 1; then
-    marker=$(get-marker bundler "$(cat ./Gemfile)" "$(cat ./.bundle/*)")
+    # The Gemfile reads .ruby-version, and a new Ruby needs its own gem path.
+    marker=$(get-marker bundler "$(cat ./Gemfile ./Gemfile.lock ./.ruby-version)" "$(cat ./.bundle/*)")
     if ! test -f "$marker"; then
         bundler install
         create-marker "$marker"

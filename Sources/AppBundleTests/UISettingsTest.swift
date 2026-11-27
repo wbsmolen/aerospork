@@ -1,5 +1,6 @@
 @testable import AppBundle
 import AppKit
+import Combine
 import Common
 import Foundation
 import XCTest
@@ -44,7 +45,14 @@ final class UISettingsTest: XCTestCase {
         return files
     }
 
-    private func keyEvent(_ chars: String, keyCode: UInt16, _ flags: NSEvent.ModifierFlags = []) -> NSEvent {
+    /// `ignoringModifiers` defaults to `chars`, but a real event differs: Shift still applies to
+    /// `charactersIgnoringModifiers`, which is how passing one string for both hid the Shift-digit bug.
+    private func keyEvent(
+        _ chars: String,
+        keyCode: UInt16,
+        _ flags: NSEvent.ModifierFlags = [],
+        ignoringModifiers: String? = nil,
+    ) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
@@ -53,10 +61,91 @@ final class UISettingsTest: XCTestCase {
             windowNumber: 0,
             context: nil,
             characters: chars,
-            charactersIgnoringModifiers: chars,
+            charactersIgnoringModifiers: ignoringModifiers ?? chars,
             isARepeat: false,
             keyCode: keyCode,
         ).orDie("NSEvent.keyEvent returned nil")
+    }
+
+    /// The stock config binds `alt-shift-semicolon`, and `mod` generates `<mod>-shift-<digit>`:
+    /// the recorder named keys from characters, got `!` and `:`, and recorded nothing.
+    func testRecorderNamesShiftedKeysFromTheKeyCode() {
+        assertEquals(KeyNotation.from(event: keyEvent("!", keyCode: 18, [.option, .shift], ignoringModifiers: "!")), "alt-shift-1")
+        assertEquals(KeyNotation.from(event: keyEvent(":", keyCode: 41, [.option, .shift], ignoringModifiers: ":")), "alt-shift-semicolon")
+        assertEquals(KeyNotation.from(event: keyEvent("", keyCode: 122)), "f1")
+        // A German layout's ö sits on the semicolon key; the parser has no `ö`.
+        assertEquals(KeyNotation.from(event: keyEvent("ö", keyCode: 41, [.option])), "alt-semicolon")
+    }
+
+    func testRecorderFollowsTheKeyMapping() {
+        let dvorak = KeyMapping(preset: .dvorak)
+        // The physical R key types p on Dvorak, and the Dvorak preset maps `p` to it.
+        assertEquals(KeyNotation.from(event: keyEvent("r", keyCode: 15, [.option]), keys: dvorak), "alt-p")
+        // A custom alias for a key the preset already names does not replace the preset's name.
+        let aliased = KeyMapping(rawKeyNotationToKeyCode: ["aaa": .semicolon])
+        assertEquals(KeyNotation.from(event: keyEvent(";", keyCode: 41), keys: aliased), "semicolon")
+        // A custom notation is used when it is the only name.
+        let renamed = KeyMapping(rawKeyNotationToKeyCode: ["h": .j])
+        assertNil(KeyNotation.from(event: keyEvent("h", keyCode: 4), keys: renamed))
+        assertEquals(KeyNotation.from(event: keyEvent("j", keyCode: 38), keys: renamed), "j")
+    }
+
+    /// Focus alone must not arm: a keyboard user who tabbed onto a row recorder and pressed Tab
+    /// re-keyed that binding to `tab`, which in `main` mode took Tab away from every app.
+    func testRecorderArmsOnlyOnAnExplicitAction() {
+        let recorder = RecorderView(frame: .zero)
+        // An unarmed key goes up the chain; with nothing above, AppKit would beep.
+        let sink = KeySink()
+        recorder.nextResponder = sink
+        var captured: [String] = []
+        recorder.onCapture = { captured.append($0) }
+        XCTAssertTrue(recorder.becomeFirstResponder())
+        XCTAssertFalse(recorder.isArmed)
+        recorder.keyDown(with: keyEvent("\t", keyCode: 48))
+        XCTAssertEqual(captured, [])
+        XCTAssertFalse(recorder.isArmed)
+        XCTAssertEqual(sink.passedOn, [48], "Tab goes on up the chain, so it still moves focus")
+
+        recorder.keyDown(with: keyEvent(" ", keyCode: 49))
+        XCTAssertTrue(recorder.isArmed)
+        XCTAssertEqual(captured, [], "the Space that arms is not recorded")
+        // Once armed, Tab is recorded like any other key.
+        recorder.keyDown(with: keyEvent("\t", keyCode: 48))
+        XCTAssertEqual(captured, ["tab"])
+
+        let clicked = RecorderView(frame: .zero)
+        let click = NSEvent.mouseEvent(
+            with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+        ).orDie("NSEvent.mouseEvent returned nil")
+        clicked.mouseDown(with: click)
+        XCTAssertTrue(clicked.isArmed)
+        _ = clicked.resignFirstResponder()
+        XCTAssertFalse(clicked.isArmed)
+        XCTAssertTrue(clicked.accessibilityPerformPress())
+        XCTAssertTrue(clicked.isArmed)
+        XCTAssertEqual(clicked.accessibilityRole(), .button)
+    }
+
+    /// A click on blank background takes no focus, so an armed recorder used to stay armed and record the
+    /// ⌘W that followed as a global binding. Any click outside it cancels.
+    func testAClickOutsideTheRecorderCancelsIt() {
+        func click(at point: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+            ).orDie("NSEvent.mouseEvent returned nil")
+        }
+        let recorder = RecorderView(frame: NSRect(x: 0, y: 0, width: 120, height: 22))
+        XCTAssertTrue(recorder.accessibilityPerformPress())
+        recorder.disarmIfOutside(click(at: NSPoint(x: 10, y: 10)))
+        XCTAssertTrue(recorder.isArmed, "a click on the recorder itself keeps it recording")
+        recorder.disarmIfOutside(click(at: NSPoint(x: 400, y: 300)))
+        XCTAssertFalse(recorder.isArmed)
+        var captured: [String] = []
+        recorder.onCapture = { captured.append($0) }
+        XCTAssertFalse(recorder.performKeyEquivalent(with: keyEvent("w", keyCode: 13, [.command])))
+        XCTAssertEqual(captured, [])
     }
 
     /// Modifier order is not cosmetic: it is the string written into the config, and `ctrl-alt-h`
@@ -81,6 +170,11 @@ final class UISettingsTest: XCTestCase {
         assertNil(KeyNotation.from(event: keyEvent("", keyCode: 999, [.option])))
     }
 
+    private final class KeySink: NSResponder {
+        var passedOn: [UInt16] = []
+        override func keyDown(with event: NSEvent) { passedOn.append(event.keyCode) }
+    }
+
     func testPrettyRendersModifiersAsGlyphsAndLeavesBareKeysAlone() {
         assertEquals(KeyNotation.pretty("alt-shift-h"), "⌥⇧h")
         assertEquals(KeyNotation.pretty("h"), "h")
@@ -90,6 +184,129 @@ final class UISettingsTest: XCTestCase {
     }
 
     // MARK: - Raw TOML editor
+
+    /// Supplies the undo manager a window would, so the text view registers real undo steps.
+    @MainActor private final class UndoHost: NSObject, NSTextViewDelegate {
+        let undo: UndoManager = {
+            let undo = UndoManager()
+            undo.groupsByEvent = false // no run loop here to close the groups
+            return undo
+        }()
+
+        func undoManager(for view: NSTextView) -> UndoManager? { undo }
+    }
+
+    /// Revert, Restore, a reload and every structured save replace the buffer. Assigning `string`
+    /// left the typing steps on the stack, recorded against the old text: undo then cut a run out
+    /// of a longer new text, or raised `NSRangeException` on a shorter one.
+    func testRawTomlReplacementIsOneUndoableStep() {
+        let typed = "[gaps]\ninner.horizontal = 8\nouter.left = 4\n"
+        for replacement in ["x = 1\n", typed + "[mode.main.binding]\nalt-h = 'focus left'\nalt-j = 'focus down'\n"] {
+            let host = UndoHost()
+            let textView = NSTextView()
+            textView.allowsUndo = true
+            textView.delegate = host
+            for line in typed.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                host.undo.beginUndoGrouping()
+                textView.insertText((line.offset == 0 ? "" : "\n") + line.element, replacementRange: textView.selectedRange())
+                host.undo.endUndoGrouping()
+            }
+            assertEquals(textView.string, typed)
+
+            host.undo.beginUndoGrouping()
+            CodeEditor.replaceText(in: textView, with: replacement)
+            host.undo.endUndoGrouping()
+            assertEquals(textView.string, replacement)
+
+            host.undo.undo()
+            assertEquals(textView.string, typed)
+            host.undo.redo()
+            assertEquals(textView.string, replacement)
+        }
+    }
+
+    /// In fallback mode Raw TOML holds the file that failed to load. It said "Matches the file on
+    /// disk", with no error line, until the user typed.
+    /// Every pane and the window observe the view model, so a keystroke that published there re-ran
+    /// all seven pane bodies. Only the buffer may announce a change, and edit detection still works.
+    func testRawTomlTypingPublishesOnTheBufferAlone() {
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: "accordion-padding = 30\n")
+        var viewModelChanges = 0
+        var bufferChanges = 0
+        let subscriptions = [
+            vm.objectWillChange.sink { viewModelChanges += 1 },
+            vm.raw.objectWillChange.sink { bufferChanges += 1 },
+        ]
+        defer { subscriptions.forEach { $0.cancel() } }
+
+        XCTAssertFalse(vm.rawTomlEdited)
+        vm.rawToml = "accordion-padding = 7\n"
+        XCTAssertEqual(viewModelChanges, 1, "the first edit flips hasPendingRawEdits, and only that")
+        vm.rawToml = "accordion-padding = 70\n"
+        vm.rawToml = "accordion-padding = 700\n"
+        XCTAssertEqual(viewModelChanges, 1, "a keystroke must not re-render every pane")
+        XCTAssertEqual(bufferChanges, 3)
+        XCTAssertTrue(vm.rawTomlEdited)
+    }
+
+    /// The window locks the structured panes on this flag. It follows `rawTomlEdited` but publishes
+    /// only when that flips, so the window does not re-render on every keystroke.
+    /// A structured edit made under 600 ms before opening Raw TOML would be refused once typing starts,
+    /// then dropped by the next Apply. Opening the pane writes it first.
+    func testOpeningRawTomlWritesAPendingAutosaveFirst() throws {
+        let source = try readRepoFile("Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift")
+        XCTAssertTrue(source.contains("await viewModel.flushPendingAutoSave()"))
+    }
+
+    func testPendingRawEditsFlipOnceEachWay() {
+        let loadedText = "accordion-padding = 30\n"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: loadedText)
+        var flips: [Bool] = []
+        let subscription = vm.$hasPendingRawEdits.dropFirst().sink { flips.append($0) }
+        defer { subscription.cancel() }
+
+        XCTAssertFalse(vm.hasPendingRawEdits)
+        vm.rawToml = "accordion-padding = 3\n"
+        vm.rawToml = "accordion-padding = 31\n"
+        vm.raw.text = "accordion-padding = 310\n" // the editor writes the buffer directly
+        XCTAssertTrue(vm.hasPendingRawEdits)
+        XCTAssertEqual(flips, [true])
+
+        vm.rawToml = loadedText
+        XCTAssertFalse(vm.hasPendingRawEdits)
+        XCTAssertEqual(flips, [true, false])
+
+        // A load makes the buffer the baseline again, so its edits are no longer pending.
+        vm.rawToml = "accordion-padding = 5\n"
+        vm.load(fromText: "accordion-padding = 5\n")
+        XCTAssertFalse(vm.hasPendingRawEdits)
+        XCTAssertEqual(flips, [true, false, true, false])
+    }
+
+    func testRawTomlValidatesTheBrokenFileInFallbackMode() {
+        assertTrue(RawTomlTab.needsValidation(edited: false, fallback: true))
+        assertTrue(RawTomlTab.needsValidation(edited: true, fallback: false))
+        assertFalse(RawTomlTab.needsValidation(edited: false, fallback: false))
+    }
+
+    /// "Show config error…" lands on Raw TOML at the line the pane's own diagnostic names. A request
+    /// is taken once; without one, a load moves nothing.
+    func testShowConfigErrorPublishesTheDiagnosticLine() {
+        let broken = "accordion-padding = 30\n[gaps\ninner.horizontal = 8\n"
+        let vm = ConfigurationViewModel()
+        vm.load(fromText: broken)
+        vm.takeErrorJumpRequest()
+        XCTAssertNil(vm.pendingJumpLine, "no request, no jump")
+
+        ConfigurationViewModel.errorJumpRequested = true
+        vm.takeErrorJumpRequest()
+        let expected = ConfigurationWriter.diagnostic(broken)?.line
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(vm.pendingJumpLine, expected)
+        XCTAssertFalse(ConfigurationViewModel.errorJumpRequested, "the request is spent")
+    }
 
     func testRawTomlSectionNavigationKeepsDocumentOrder() {
         let headers = RawTomlTab.sections(in: """
@@ -174,6 +391,26 @@ final class UISettingsTest: XCTestCase {
         )
     }
 
+    /// A flag on the move used to show as the workspace (`--focus-follows-window W`), and a second
+    /// move would have been dropped by the next guided edit. Both are custom, kept verbatim.
+    func testGuidedWindowRuleActionsTreatFlagsAndRepeatedMovesAsCustom() {
+        for command in [
+            "move-node-to-workspace --focus-follows-window W",
+            "layout floating ; move-node-to-workspace --focus-follows-window W",
+            "move-node-to-workspace 1 ; move-node-to-workspace 2",
+        ] {
+            let action = parseGuidedWindowAction(command)
+            XCTAssertTrue(action.isCustom, command)
+            XCTAssertFalse(action.workspace.hasPrefix("-"), "a flag is not a workspace name: \(command)")
+            XCTAssertEqual(
+                Set(composeGuidedWindowAction(action).components(separatedBy: " ; ")),
+                Set(command.components(separatedBy: " ; ")),
+                "every command must survive composition: \(command)",
+            )
+        }
+        XCTAssertEqual(parseGuidedWindowAction("move-node-to-workspace W").workspace, "W")
+    }
+
     func testLinkedGapSettersUpdateEveryEdgeAndAvoidNoOpSaves() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
@@ -211,6 +448,22 @@ final class UISettingsTest: XCTestCase {
         vm.definedWorkspaces = ["1", "2", "2", "3"]
         vm.settings.assignments = [.init(workspace: "2", monitor: "main")]
         XCTAssertEqual(vm.unpinnedDefinedWorkspaces, ["1", "3"], "dedupe, config order, assigned excluded")
+    }
+
+    /// Identify shows one overlay per connected monitor, numbered as the schematic numbers it, in the
+    /// middle of that monitor's AppKit frame (whose y axis goes up from the main screen's bottom).
+    func testIdentifyHasOneOverlayPerMonitorNumberedByPosition() {
+        let rows = Self.twoMonitors()
+        let entries = MonitorIdentifyOverlay.entries(for: rows, mainScreenHeight: 1440)
+        XCTAssertEqual(entries.count, rows.count)
+        XCTAssertEqual(entries.map(\.position), [1, 2])
+        XCTAssertEqual(entries.map(\.name), rows.map(\.name))
+        XCTAssertEqual(entries[0].screenFrame, CGRect(x: 0, y: 0, width: 2560, height: 1440))
+        XCTAssertEqual(entries[1].screenFrame, CGRect(x: 2560, y: 360, width: 1920, height: 1080))
+        XCTAssertEqual(
+            MonitorIdentifyOverlay.announcement(for: rows),
+            "Position 1: DELL U3223QE (1), main display. Position 2: LG HDR 4K.",
+        )
     }
 
     private static func twoMonitors() -> [ConfigurationViewModel.MonitorRow] {
@@ -269,6 +522,94 @@ final class UISettingsTest: XCTestCase {
         XCTAssertNil(vm.monitorRow(forToken: "secondary"))
     }
 
+    /// A screen-change notification fires for each DisplayLink connect step and Dock frame change.
+    /// Rows that came back with new identities tore down every monitor box (focus, hover) and
+    /// re-rendered every pane for a list that had not changed.
+    func testMonitorRowsKeepTheirIdentityAndAnUnchangedListDoesNotPublish() {
+        let vm = ConfigurationViewModel()
+        let first = vm.loadMonitors()
+        let second = vm.loadMonitors()
+        XCTAssertFalse(first.isEmpty)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.map(\.id), second.map(\.id))
+
+        vm.refreshLiveMonitors()
+        var changes = 0
+        let subscription = vm.objectWillChange.sink { changes += 1 }
+        defer { subscription.cancel() }
+        vm.refreshLiveMonitors()
+        XCTAssertEqual(changes, 0, "an unchanged monitor list must not publish")
+    }
+
+    /// General and Raw TOML read the path from here. General used to look it up in its body, which
+    /// ran file-system checks on every Raw TOML keystroke.
+    func testLoadingPublishesTheConfigPath() async {
+        let vm = ConfigurationViewModel()
+        XCTAssertEqual(vm.configPath, "")
+        await vm.loadConfiguration()
+        XCTAssertFalse(vm.configPath.isEmpty)
+    }
+
+    /// The first save creates the config. General and Raw TOML kept showing the bundled default's path,
+    /// and the copy button handed out a file AeroSpork no longer read.
+    func testTheFirstSaveMovesTheConfigPathToTheNewFile() async throws {
+        let url = try useTemporaryConfig("", for: self)
+        try FileManager.default.removeItem(at: url)
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        await vm.loadConfiguration()
+        XCTAssertEqual(vm.configPath, defaultConfigUrl.path(percentEncoded: false))
+
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+        XCTAssertNil(vm.errorMessage)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(vm.configPath, url.path(percentEncoded: false))
+    }
+
+    /// Two configs, or one that can't be read, are in no text Raw TOML has. The banner sent the user
+    /// there anyway, and Raw TOML showed the bundled default as "Matches the file on disk".
+    func testOnlyAParseErrorIsSentToRawToml() throws {
+        let broken = try useTemporaryConfig("accordion-padding = 'thirty'\n", for: self)
+        let other = broken.deletingLastPathComponent().appending(path: "other.toml")
+        try "accordion-padding = 31\n".write(to: other, atomically: true, encoding: .utf8)
+        let latin1 = broken.deletingLastPathComponent().appending(path: "latin1.toml")
+        try Data("accordion-padding = 31 # caf\u{E9}\n".data(using: .isoLatin1).orDie()).write(to: latin1)
+
+        let failures: [(String, Result<(Config, URL), String>, [URL])] = [
+            ("parse", readConfig(at: broken), [broken]),
+            ("ambiguous", readConfig(found: findCustomConfigUrl(among: [broken, other])), [broken, other]),
+            ("unreadable", readConfig(at: latin1), [latin1]),
+        ]
+        for (kind, read, files) in failures {
+            guard case .failure(let failure) = read else { return XCTFail("\(kind) loaded") }
+            configLoadFailure = failure
+            let banner = ConfigurationWindow.fallbackBanner(failure)
+            for file in files { XCTAssertTrue(banner.contains(file.path), "\(kind): \(banner)") }
+            XCTAssertEqual(configFailureIsInTheText, kind == "parse", kind)
+            XCTAssertEqual(banner.contains("Raw TOML"), kind == "parse", "\(kind): \(banner)")
+            XCTAssertEqual(banner.contains("Finder"), kind != "parse", "\(kind): \(banner)")
+        }
+    }
+
+    func testRawTomlDoesNotClaimAFileItCouldNotLoad() async throws {
+        let first = try useTemporaryConfig("accordion-padding = 1\n", for: self)
+        let second = first.deletingLastPathComponent().appending(path: "second.toml")
+        try "accordion-padding = 2\n".write(to: second, atomically: true, encoding: .utf8)
+        guard case .failure(let reason) = configBaseText(found: findCustomConfigUrl(among: [first, second])) else {
+            return XCTFail("two configs gave Raw TOML the bundled default")
+        }
+        XCTAssertTrue(reason.contains(second.path), reason)
+
+        let vm = ConfigurationViewModel()
+        await vm.loadConfiguration()
+        XCTAssertTrue(vm.rawTomlIsTheFile)
+        try Data("accordion-padding = 31 # caf\u{E9}\n".data(using: .isoLatin1).orDie()).write(to: first)
+        vm.revertChanges()
+        XCTAssertFalse(vm.rawTomlIsTheFile, "Raw TOML would say it matches a file it never loaded")
+        XCTAssertNotNil(vm.errorMessage)
+    }
+
     func testPinUnpinRoundTripThroughTheMenuFlow() {
         let vm = ConfigurationViewModel()
         defer { vm.cancelPendingAutoSave() }
@@ -304,6 +645,15 @@ final class UISettingsTest: XCTestCase {
         let workspace = TrayItem(type: .workspace, name: "R", isActive: true)
         XCTAssertNotEqual(mode.id, workspace.id)
         assertEquals(Set([mode, workspace]).count, 2)
+    }
+
+    /// VoiceOver read the tray text's `*` and `│` aloud, and "S" for a mode named "service".
+    func testTraySpokenTextNamesTheModeAndTheFocusedWorkspace() {
+        assertEquals(
+            traySpokenText(mode: "service", workspaces: [("1", true), ("2", false)]),
+            "Service mode. Workspace 1, focused. Workspace 2.",
+        )
+        assertEquals(traySpokenText(mode: nil, workspaces: [("1", true)]), "Workspace 1.")
     }
 
     // MARK: - Branding

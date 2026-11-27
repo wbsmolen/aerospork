@@ -44,24 +44,41 @@ func shouldRecheckPopup(registeredAt: Date, now: Date) -> Bool {
     now.timeIntervalSince(registeredAt) < 30
 }
 
-/// Both AX reads for every window concurrently, in one task group. These used to be two sequential
-/// `await`s inside the mutation loop, i.e. 2 serialized MainActor<->app-thread round trips per window per
-/// refresh, over every window of every workspace -- the dominant cost of a refresh. Same fan-out pattern
-/// as MacApp.refreshAllAndGetAliveWindowIds.
+/// Both native-state flags of every window, before the mutation loop. These used to be two sequential
+/// `await`s inside the loop, i.e. 2 serialized MainActor<->app-thread round trips per window per refresh,
+/// over every window of every workspace -- the dominant cost of a refresh.
 @MainActor
 private func prefetchNativeStates(_ windows: [Window]) async throws -> [UInt32: (full: Bool, mini: Bool)] {
-    try await withThrowingTaskGroup(of: (UInt32, Bool, Bool).self) { group in
-        for window in windows {
+    try await readEachAppInOrder(windows) { window in
+        // One hop per window, not two. `macosNativeState` reads both flags inside a single `runInLoop`, in
+        // one batched AX read.
+        let state = try await window.macosNativeState()
+        return (full: state.fullscreen, mini: state.minimized)
+    }
+}
+
+/// `read` for each window: the apps in parallel, each app's windows one after another, in the order given.
+///
+/// Not one task per window. `MacApp.withWindow` skips an app in `timedOutThisPass`, which a read joins only
+/// when it comes back, so reads started together all passed the check, then waited out the timeout one after
+/// another on the app's thread: a second per window of a hung app, instead of a second for the app.
+@MainActor
+func readEachAppInOrder<T: Sendable>(
+    _ windows: [Window],
+    _ read: @escaping @Sendable @MainActor (Window) async throws -> T,
+) async throws -> [UInt32: T] {
+    try await withThrowingTaskGroup(of: [(UInt32, T)].self) { group in
+        for appWindows in Dictionary(grouping: windows, by: \.app.pid).values {
             group.addTask { @Sendable @MainActor in
-                // One hop per window, not two. `macosNativeState` reads both flags inside a single
-                // `runInLoop` and keeps the same short-circuit (a fullscreen window is never asked
-                // whether it is minimized).
-                let state = try await window.macosNativeState()
-                return (window.windowId, state.fullscreen, state.minimized)
+                var values: [(UInt32, T)] = []
+                for window in appWindows { values.append((window.windowId, try await read(window))) }
+                return values
             }
         }
-        var result: [UInt32: (full: Bool, mini: Bool)] = [:]
-        for try await (id, full, mini) in group { result[id] = (full, mini) }
+        var result: [UInt32: T] = [:]
+        for try await values in group {
+            for (id, value) in values { result[id] = value }
+        }
         return result
     }
 }

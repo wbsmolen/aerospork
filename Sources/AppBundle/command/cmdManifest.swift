@@ -69,8 +69,14 @@ extension CmdArgs {
                 command = ResizeCommand(args: self as! ResizeCmdArgs)
             case .split:
                 command = SplitCommand(args: self as! SplitCmdArgs)
+            case .sticky:
+                command = StickyCommand(args: self as! StickyCmdArgs)
+            case .subscribe:
+                command = SubscribeCommand(args: self as! SubscribeCmdArgs)
             case .summonWorkspace:
                 command = SummonWorkspaceCommand(args: self as! SummonWorkspaceCmdArgs)
+            case .swap:
+                command = SwapCommand(args: self as! SwapCmdArgs)
             case .triggerBinding:
                 command = TriggerBindingCommand(args: self as! TriggerBindingCmdArgs)
             case .volume:
@@ -80,7 +86,6 @@ extension CmdArgs {
             case .workspaceBackAndForth:
                 command = WorkspaceBackAndForthCommand(args: self as! WorkspaceBackAndForthCmdArgs)
         }
-        check(command.info == Self.info)
         return command
     }
 }

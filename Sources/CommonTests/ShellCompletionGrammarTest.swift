@@ -1,6 +1,15 @@
 @testable import Common
+import CryptoKit
 import Foundation
 import XCTest
+
+/// Two levels above `Sources/CommonTests/`, not a `.git` walk, so a tree with no `.git` works too.
+let projectRoot = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
+func grammarText() throws -> String {
+    XCTAssertTrue(FileManager.default.fileExists(atPath: projectRoot.appending(component: "Package.swift").path), projectRoot.path)
+    return try String(contentsOf: projectRoot.appending(path: "grammar/commands-bnf-grammar.txt"), encoding: .utf8)
+}
 
 /// Shell completion must offer every command the CLI actually has.
 ///
@@ -9,21 +18,8 @@ import XCTest
 /// command could work while tab-completion did not know it existed -- which is how `open-settings`
 /// and two flags (`--show-secrets`, `--workspace` on `move-workspace-to-monitor`) went missing.
 final class ShellCompletionGrammarTest: XCTestCase {
-    private func grammar() throws -> String {
-        var url = URL(filePath: #filePath)
-        while !FileManager.default.fileExists(atPath: url.appending(component: ".git").path) {
-            let parent = url.deletingLastPathComponent()
-            // `deleteLastPathComponent()` does not stop at "/" -- it starts appending "..".
-            guard parent.pathComponents.count < url.pathComponents.count else {
-                XCTFail("no .git ancestor above \(#filePath)"); return ""
-            }
-            url = parent
-        }
-        return try String(contentsOf: url.appending(path: "grammar/commands-bnf-grammar.txt"), encoding: .utf8)
-    }
-
     func testEveryCommandIsCompletable() throws {
-        let text = try grammar()
+        let text = try grammarText()
         // A production head, i.e. `<name>` at the start of an alternative -- not a bare mention,
         // which would also match the command's name inside a comment or another command's args.
         let heads = Set(
@@ -43,8 +39,18 @@ final class ShellCompletionGrammarTest: XCTestCase {
     /// Counter-check: the parse must actually be finding production heads. Without it, a grammar
     /// that failed to load would make the test above pass with an empty `missing`.
     func testTheGrammarWasActuallyRead() throws {
-        let text = try grammar()
+        let text = try grammarText()
         XCTAssertGreaterThan(text.count, 500, "grammar file looks empty")
         XCTAssertTrue(text.contains("<subcommand> ::="), "not the grammar file we think it is")
+    }
+
+    /// The vendored `shell-completion/` was generated from this grammar. `build-shell-completion.sh`
+    /// writes the hash itself, so it cannot be bumped without regenerating.
+    func testShellCompletionWasGeneratedFromThisGrammar() throws {
+        let grammar = try Data(contentsOf: projectRoot.appending(path: "grammar/commands-bnf-grammar.txt"))
+        let actual = SHA256.hash(data: grammar).map { String(format: "%02x", $0) }.joined()
+        let recorded = try String(contentsOf: projectRoot.appending(path: "shell-completion/.grammar-sha256"), encoding: .utf8)
+            .split(separator: " ").first.map(String.init)
+        XCTAssertEqual(recorded, actual, "grammar/commands-bnf-grammar.txt changed: run ./build-shell-completion.sh and commit shell-completion/")
     }
 }

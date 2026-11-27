@@ -23,6 +23,7 @@ aerospork move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if
 `move-node-to-workspace` moves the focused window to `<workspace>`.
 Focus stays on the workspace where it was, unless you give `--focus-follows-window`.
 When no workspace has that name, AeroSpork creates it.
+A sticky window stops being sticky. See aerospork-sticky(1).
 
 `next` and `prev` pick the workspace as `workspace next` and `workspace prev` do, and they read the list from stdin in the same way.
 See aerospork-workspace(1).

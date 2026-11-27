@@ -62,7 +62,7 @@ final class RunLoopJob: Sendable, AeroAny {
     var isCancelled: Bool { _isCancelled.withLock { $0 } }
     func cancel() { _isCancelled.withLock { $0 = true } }
 
-    static let cancelled: RunLoopJob = RunLoopJob().also { $0.cancel() }
+    static let cancelled: RunLoopJob = RunLoopJob().apply { $0.cancel() }
 
     func checkCancellation() throws {
         if isCancelled {

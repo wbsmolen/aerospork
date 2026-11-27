@@ -80,6 +80,41 @@ a security boundary: a process that can reach the socket can already write the c
 explains the trust model. **Test.** `ServerProtocolTest.testExecOverSocketGetsBadArgs` pins the
 refusal.
 
+**Rule.** The app ignores SIGPIPE for the whole process (`ignoreSigpipe`, first in `initAppBundle`), on
+top of `SO_NOSIGPIPE` on each socket. **Reason.** A CLI that gave up on a paused or busy server left a
+SIGPIPE that reached the process when it resumed, and the default action of SIGPIPE ended the window
+manager. **Test.** `ServerProtocolTest.testTheAppIgnoresSigpipe`,
+`testAnAnswerToAClientThatHungUpDoesNotKillTheServer`.
+
+### The subscribe stream
+
+`aerospork subscribe` is the one connection that gets many answers: a snapshot, then one answer for
+each event, each carrying one line of JSON in its stdout. `subscribe/EventBroadcaster.swift` fans the
+events out. The event JSON, with `"version": 1` in every event, is a public contract that
+`docs/aerospork-subscribe.adoc` documents field by field. The framing around it stays private.
+
+**Rule.** The server branches on `subscribe` after the check for a disabled server and before
+`runSession`. It takes the main actor only to register the subscriber, which reads the snapshot in
+the same step, and never holds a session or `sessionGate`. Each subscriber has a queue of at most 256
+frames, written on a dispatch queue of its own. A full queue or a failed write drops the client, and
+the server keeps at most 16 subscribers. The frame timeout stays on every write, and the wait for the
+client to hang up has none. The CLI reads a stream with no reply timeout. A disabled server refuses
+`subscribe`, and `enable off` ends every stream with a last failure answer that says why. Every emit
+site passes its payload as an autoclosure behind a subscriber check, and the per-workspace window
+diff keeps no state, and walks no window, while no subscriber asks for `workspace-windows-changed`.
+
+**Reason.** A stream inside a session would hold `sessionGate` for as long as it stays connected,
+and every other session would wait behind it. A server that waited on a slow client would grow its
+memory or block the main actor. Each subscriber holds a thread and a file descriptor. The emit sites
+are on the focus and refresh paths, which run with nobody subscribed almost all the time. A stream is
+silent while nothing happens, so a receive deadline would end every idle status bar.
+
+**Test.** `ServerProtocolTest` (a snapshot then events, a client that stops reading is dropped and
+the others are not, the refusal while disabled, `enable off`),
+`CliConnectionTest.testAnIdleSubscriberOutlivesTheFrameTimeout`, `EventBroadcasterTest`,
+`PerfInvariantsTest.testSubscribeEventsCostNothingWithoutASubscriber`,
+`CliSurfaceTest.testAStreamKeepsReadingThroughSilence`.
+
 ## Commands
 
 Every command implements the `Command` protocol (`command/Command.swift`): it has its parsed
@@ -119,11 +154,14 @@ through a `WritableKeyPath`. `parseConfigV2.swift` reads the v2 spelling (`mod`,
 `monitors`, `on-window`). When a config has only the v1 spelling, `migrateConfigV2.swift` rewrites it
 in the v2 spelling on first start.
 
-`ConfigFileWatcher` watches the config file with a `DispatchSource` and reloads it when it changes.
-It watches the file the user edits, not `configUrl`: when a broken config makes AeroSpork use the
-bundled default, `configUrl` points into the app bundle, which never changes. After the Settings
-window writes the file, `suppressNextSelfWrite` makes the watcher ignore events for 500 ms, so one
-save causes one reload.
+`ConfigFileWatcher` watches the config file and the folders it may appear in (`$HOME`, the XDG
+config folder, the `--config-path` folder) with `DispatchSource`s, so it sees a config that appears,
+an atomic replace, a delete and a swapped link. It watches the candidates the user edits, not
+`configUrl`: when a broken config makes AeroSpork use the bundled default, `configUrl` points into
+the app bundle, which never changes. Each event re-arms and compares the config's path and bytes with
+the last ones `reloadConfig` applied, and reloads only when they differ. A Settings save applies
+itself, so one save causes one reload. A config that is gone gets one second to come back before the
+defaults apply.
 
 The default config exists twice: `resources/default-config.toml` (bundled in the app) and
 `docs/config-examples/default-config.toml` (included in the guide). **Test.**
@@ -475,7 +513,8 @@ writes at `.notice`, `.error` and `.fault`, which the unified log keeps, so
 
 **Rule.** Keep `AppLog` cheap and rare. Use it for the startup record, a config that loaded or was
 rejected, config warnings, bindings that did not register, socket events, a second copy that exits,
-CLI commands that exited with an error, and focus changes that AeroSpork made on its own (`session`).
+CLI commands that exited with an error (a run of identical failures is logged once, then once more with
+its count when it ends), and focus changes that AeroSpork made on its own (`session`).
 Never use it for each refresh or each window. **Reason.** It is unconditional, and the unified log
 keeps every record.
 

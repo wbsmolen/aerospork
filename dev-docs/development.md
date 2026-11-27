@@ -14,7 +14,7 @@ Use the Xcode that matches your macOS version, and build through Xcode's toolcha
    - Select it for the whole machine: `sudo xcode-select -s /Applications/Xcode.app`.
    - Select it for one command: put `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
      before the command.
-3. Route the build scripts through `xcrun`. Set `AEROSPORK_SWIFT=xcrun` before each script:
+3. Run the scripts. They build through `xcrun` by default:
 
    ```bash
    AEROSPORK_SWIFT=xcrun ./run-tests.sh
@@ -23,15 +23,18 @@ Use the Xcode that matches your macOS version, and build through Xcode's toolcha
    ```
 
 > [!NOTE]
-> Every script sources `script/setup.sh`. Its `swift` function runs `swiftly run swift` when
-> [swiftly](https://github.com/swiftlang/swiftly) is installed, and plain `swift` when it is not.
-> `AEROSPORK_SWIFT=xcrun` makes it run `xcrun swift` instead. `DEVELOPER_DIR` alone does not
-> change that choice.
+> Every script sources `script/setup.sh`. Its `swift` function runs `xcrun swift`, so the Xcode
+> that step 2 selected builds everything. `AEROSPORK_SWIFT=xcrun` asks for the same thing
+> explicitly: the commands in these documents keep it, and it is safe to drop.
+> `AEROSPORK_SWIFT=swiftly` is the only opt-in to `swiftly run swift`, the toolchain that
+> [swiftly](https://github.com/swiftlang/swiftly) and `.swift-version` pin. Having swiftly installed
+> does not change the choice.
 
 > [!WARNING]
 > If the toolchain does not match the macOS SDK, `swift build` can stop at 0 compiled files and use
 > 100% CPU with no error. The swiftly toolchain that `.swift-version` pins does this on a beta macOS,
-> on the TOMLKit manifest. If a build makes no progress for a minute, stop it and use the steps above.
+> on the TOMLKit manifest, which is why it is opt-in. If a build makes no progress for a minute, stop
+> it, unset `AEROSPORK_SWIFT=swiftly`, and check that step 2 selected the Xcode for your macOS.
 
 ## Dependencies
 
@@ -50,8 +53,8 @@ Some scripts need tools that `install-dep.sh` does not install:
 | Ruby 3 and bundler | `build-docs.sh` (asciidoctor for the site and the man pages) | `rbenv install "$(cat .ruby-version)"`, then `bundler install` |
 | Rust (`cargo`), bash, fish | `build-shell-completion.sh` | [rustup](https://www.rust-lang.org/tools/install), then `brew install bash fish` |
 | xcbeautify (optional) | `build-release.sh`, for a readable Xcode log | `brew install xcbeautify` |
-| swiftly (optional) | `script/setup.sh`, only when `AEROSPORK_SWIFT` is not set | `brew install swiftly` |
-| `gh`, `swa`, `az`, `node` | `script/publish-release.sh` | Homebrew or npm |
+| swiftly (optional) | `script/setup.sh`, only when `AEROSPORK_SWIFT=swiftly` | `brew install swiftly` |
+| `gh`, `gcloud`, `python3` | `script/publish-release.sh`, and `script/deploy-site.sh` (`gcloud`, `python3`) | `brew install gh`, `brew install --cask gcloud-cli`, then `gcloud auth login`. `python3` comes with Xcode |
 
 `script/setup.sh` replaces `PATH` with `.deps/bin:/bin:/usr/bin` so that a build cannot use whatever
 else is installed. It links each tool in this table into `.deps/bin` when it finds the tool.
@@ -60,11 +63,11 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 
 | Script | What it does | Output |
 |---|---|---|
-| `build-debug.sh` | Builds the app, the CLI and the test target with SwiftPM. Xcode is not involved. | `.debug/aerosporkApp`, `.debug/aerospork` |
+| `build-debug.sh` | Builds the app, the CLI and both test targets with one SwiftPM build. Xcode is not involved. | `.debug/aerosporkApp`, `.debug/aerospork` |
 | `build-debug-app.sh` | Runs `build-debug.sh`, then assembles and signs a debug `.app` bundle with Sparkle, `Info-Debug.plist`, the default config and the icon. A debug copy needs the bundle to get Accessibility permission. | `.debug/AeroSpork-Debug.app` |
 | `launch-debug-app.sh` | Opens the debug bundle. It builds the bundle first if it does not exist. | — |
-| `run-debug.sh` | Runs `build-debug.sh`, then runs the bare binary `.debug/aerosporkApp` in the terminal. Arguments go to the binary. | — |
-| `run-cli.sh` | Builds if needed, then runs the debug CLI. Arguments go to `aerospork`. | — |
+| `run-debug.sh` | Builds only the app, then runs the bare binary `.debug/aerosporkApp` in the terminal. Arguments go to the binary. | — |
+| `run-cli.sh` | Builds only the CLI, then runs it. Arguments go to `aerospork`. | — |
 | `run-tests.sh` | The full check. See [What run-tests.sh checks](#what-run-testssh-checks). | — |
 | `format.sh` | Runs SwiftFormat, which rewrites files in place, then SwiftLint, which only reports. | — |
 | `generate.sh` | Regenerates the `*Generated.swift` files and `aerospork.xcodeproj`. `--ignore-xcodeproj` skips the project. `--all` regenerates everything. | — |
@@ -85,14 +88,18 @@ else is installed. It links each tool in this table into `.deps/bin` when it fin
 
 `run-tests.sh` runs these steps in order and stops at the first failure:
 
-1. `build-debug.sh`.
-2. `swift test`, which runs `AppBundleTests` and `CommonTests`.
-3. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
-4. `swiftformat --lint`, `swiftlint lint` and `shellcheck -S warning ./*.sh script/*.sh`. None of
-   them rewrites a file.
-5. `generate.sh --all`. The script records `git status` before step 1 and compares it after step 5.
-   If the run changed the tree, the generated files are out of date and the script fails. Local
+1. `generate.sh --all`. The script records `git status` before this step and compares it right after.
+   If the tree changed, the generated files are out of date: commit what `generate.sh` wrote. Local
    work and untracked files do not fail it.
+2. `swiftformat --lint`, `swiftlint lint`, `shellcheck -S warning ./*.sh script/*.sh`,
+   `py_compile` of `script/*.py`, and the self-check of `script/release-notes-html.py`. None of them
+   rewrites a file.
+3. `build-debug.sh`, then a count of build warnings, which never fails the run.
+4. Smoke checks of the CLI: `-h`, `--help`, `-v` and `--version`.
+5. `swift test --skip-build`, which runs `AppBundleTests` and `CommonTests` from the build of step 3.
+   The run fails unless `AppBundleTests` actually ran.
+6. A second comparison with the `git status` of step 1. If it fails, "A test wrote into the tree":
+   a test created or changed a file in the repository, which regenerating will not fix. Find the test.
 
 The project has no CI service. `build-release.sh` is the only build of the Release configuration.
 
@@ -147,6 +154,17 @@ Do not use `open -a AeroSpork` for a debug copy. That command opens the release 
 find it later, so start `log stream` before you reproduce the problem. In Console.app, filter by the
 subsystem and enable **Action > Include Debug Messages**. `dev-docs/architecture.md`, "Logging",
 explains the two channels.
+
+To count the apps that move a parked window without a `kAXMoved` or `kAXResized` notification, set
+`AEROSPORK_DEBUG_LOG` and restart the debug copy as above, then leave this running during normal use:
+
+```bash
+log stream --debug --predicate 'subsystem == "com.wbs.aerospork.debug" AND eventMessage CONTAINS "Parked window moved without a notification"'
+```
+
+The message names the app's bundle ID and the window ID, for example
+`Parked window moved without a notification: com.apple.Terminal window 1234 was at (100.0, 100.0), parked at (-799.0, 900.0)`.
+The check that follows AeroSpork's own park write never counts, since that write notifies too.
 
 ## Code signing
 
@@ -216,15 +234,21 @@ syspolicy_check distribution .release/AeroSpork.app
 
 `script/publish-release.sh` builds, tags and publishes a release, signs the appcast, deploys the site
 and updates the Homebrew tap. It needs a Developer ID certificate, a notary profile, and the `gh`,
-`swa`, `az` and `node` tools.
+`gcloud` and `python3` tools.
 
 1. Write the release notes under `## Unreleased` in `CHANGELOG.md`, then rename that heading to
-   `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. Put
-   each bullet on one line.
-   The script converts the notes to HTML for the update dialog, and its converter turns the second
-   line of a wrapped bullet into a separate paragraph.
-2. Merge the changelog to `main`, and switch to a clean, up-to-date `main`. The script refuses a tree
-   with uncommitted or untracked files.
+   `## X.Y.Z (YYYY-MM-DD)`. The script reads that section and stops if it is missing or empty. It
+   converts the notes to HTML for the update dialog with `script/release-notes-html.py`. To wrap a
+   bullet, indent its next lines.
+2. Merge the changelog to `main`, and switch to a clean, up-to-date `main`. Before it builds, the
+   script refuses a tree with uncommitted or untracked files, a HEAD that is not `origin/main`, an
+   `updates-site/appcast.xml` that differs from the live feed (the previous release's appcast PR has
+   not merged), a version that is not above the newest in the feed, and a `vX.Y.Z` tag that exists
+   but is not at HEAD. A tag at HEAD is reused and an existing GitHub release gets the new archives,
+   so you can run the script again when a step before the site deploy fails. Restore
+   `updates-site/appcast.xml` first (`git checkout updates-site/appcast.xml`) if the run got as far as
+   signing it. Once the deploy has landed, the live feed names the new version and the script refuses
+   to run again; what is left is the appcast pull request.
 3. Run the script:
 
    ```bash

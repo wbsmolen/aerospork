@@ -77,7 +77,11 @@ enum FormatVar: Equatable {
     enum WindowFormatVar: String, Equatable, CaseIterable {
         case windowId = "window-id"
         case windowIsFullscreen = "window-is-fullscreen"
+        case windowIsSticky = "window-is-sticky"
         case windowTitle = "window-title"
+        case windowIsFloating = "window-is-floating"
+        case windowLayout = "window-layout"
+        case windowOrientation = "window-orientation"
     }
 
     enum WorkspaceFormatVar: String, Equatable, CaseIterable {
@@ -105,6 +109,24 @@ enum FormatVar: Equatable {
         case monitorWidth = "monitor-width"
         case monitorHeight = "monitor-height"
     }
+}
+
+/// The error that formatting any object of `kind` with `format` reports, or nil, without an object to
+/// format: which variables are known depends only on the kind. So a command can check before it reads
+/// the values. The same message as `format` (every unknown variable of the line) and `formatToJson` (the
+/// first one) give.
+func validateFormat(_ format: [StringInterToken], for kind: AeroObjKind, json: Bool) -> String? {
+    let known = getAvailableInterVars(for: kind)
+    let errors = format.compactMap { token -> String? in
+        guard case .interVar(let name) = token, !known.contains(name) else { return nil }
+        return unknownInterVarError(name, for: kind)
+    }
+    guard let first = errors.first else { return nil }
+    return json ? first : errors.joinErrors()
+}
+
+private func unknownInterVarError(_ name: String, for kind: AeroObjKind) -> String {
+    "Unknown interpolation variable '\(name)'. Possible values: \(getAvailableInterVars(for: kind).joined(separator: "|"))"
 }
 
 private func getAvailableInterVars(for kind: AeroObjKind) -> [String] {
@@ -157,7 +179,15 @@ extension String {
                 return switch f {
                     case .windowId: .success(.uint32(w.windowId))
                     case .windowIsFullscreen: .success(.bool(w.isFullscreen))
+                    case .windowIsSticky: .success(.bool(w.isSticky))
                     case .windowTitle: .success(.string(title))
+                    case .windowIsFloating: .success(.bool(w.isFloating))
+                    // Spelled the way the `layout` command takes them. Empty for a window that macOS took
+                    // out of the tiles (minimized, hidden or native fullscreen).
+                    case .windowLayout:
+                        .success(.string((w.parent as? TilingContainer)?.layout.rawValue ?? (w.isFloating ? "floating" : "")))
+                    case .windowOrientation:
+                        .success(.string((w.parent as? TilingContainer).map { $0.orientation == .h ? "horizontal" : "vertical" } ?? ""))
                 }
             case (.workspace(let w), .workspace(let f)):
                 return switch f {
@@ -209,8 +239,7 @@ extension String {
         }
         if self == PlainInterVar.newline.rawValue { return .success(.string("\n")) }
         if self == PlainInterVar.tab.rawValue { return .success(.string("\t")) }
-        return .failure("Unknown interpolation variable '\(self)'. " +
-            "Possible values: \(getAvailableInterVars(for: obj.kind).joined(separator: "|"))")
+        return .failure(unknownInterVarError(self, for: obj.kind))
     }
 
     private func toFormatVar() -> FormatVar? {

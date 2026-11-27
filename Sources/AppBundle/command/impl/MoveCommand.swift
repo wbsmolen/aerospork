@@ -122,8 +122,6 @@ private let floatingMoveStep: CGFloat = 50
     }
 }
 
-// moveOutMacosUnconventionalWindow is now defined in CommandErrors.swift
-
 @MainActor private func moveOut(
     window: Window,
     direction: CardinalDirection,

@@ -31,13 +31,11 @@ func upstreamConfigLeftBehindHint() -> String? {
 /// some, and an unknown top-level key is fatal -- so one of these used to cost the user the whole
 /// config, which then fell back to the default keymap. Reported and ignored instead.
 let upstreamOnlyKeyParsers: [String: any ParserProtocol<Config>] = [
-    "config-version": Parser(\._deprecatedNoOp, ignored(
+    "config-version": Parser(\._handledElsewhere, ignored(
         "config-version is an AeroSpace setting. AeroSpork has one config schema and ignores it.")),
-    "auto-reload-config": Parser(\._deprecatedNoOp, ignored(
+    "auto-reload-config": Parser(\._handledElsewhere, ignored(
         "auto-reload-config is an AeroSpace setting. AeroSpork always reloads a saved config, so it is ignored.")),
-    "on-mode-changed": Parser(\._deprecatedNoOp, ignored(
-        "on-mode-changed is an AeroSpace callback AeroSpork does not have. It is ignored.")),
-    "focus-follows-mouse": Parser(\._deprecatedNoOp, ignored(
+    "focus-follows-mouse": Parser(\._handledElsewhere, ignored(
         "focus-follows-mouse is an AeroSpace setting AeroSpork does not support. It is ignored.")),
 ]
 
@@ -55,16 +53,31 @@ let upstreamStringIfMessage =
 /// expands to nothing and `aerospace` is not on `PATH` -- so a migrated status-bar hook runs and does
 /// nothing. A warning, not an error: the rest of the config is fine. Comment lines are skipped, so a note
 /// about the rename does not warn about itself.
-func upstreamNameWarnings(_ rawToml: String) -> [TomlParseError] {
-    var warnings: [TomlParseError] = []
+///
+/// It runs on every parse, several times per autosave: a plain `contains` comes first, the regex is
+/// built once, and each kind is one warning that lists its lines, where the banner had one per line.
+@MainActor func upstreamNameWarnings(_ rawToml: String) -> [TomlParseError] {
+    var variableLines: [Int] = []
+    var cliLines: [Int] = []
     for (index, line) in rawToml.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+        let variable = line.contains("AEROSPACE_")
+        guard variable || line.contains("aerospace") else { continue }
         if line.trimmingCharacters(in: .whitespaces).hasPrefix("#") { continue }
-        if line.contains("AEROSPACE_") {
-            warnings.append(.deprecation(.emptyRoot, "Line \(index + 1): AEROSPACE_* variables are never set. AeroSpork exports AEROSPORK_* instead, for example AEROSPORK_FOCUSED_WORKSPACE."))
-        }
-        if line.range(of: #"(^|[^A-Za-z0-9_.-])aerospace\s"#, options: .regularExpression) != nil {
-            warnings.append(.deprecation(.emptyRoot, "Line \(index + 1): runs `aerospace`, which is AeroSpace's CLI. AeroSpork's is `aerospork`."))
-        }
+        if variable { variableLines.append(index + 1) }
+        if line.contains(aerospaceCliCall) { cliLines.append(index + 1) }
+    }
+    var warnings: [TomlParseError] = []
+    if !variableLines.isEmpty {
+        warnings.append(.deprecation(.emptyRoot, "\(linesLabel(variableLines)): AEROSPACE_* variables are never set. AeroSpork exports AEROSPORK_* instead, for example AEROSPORK_FOCUSED_WORKSPACE."))
+    }
+    if !cliLines.isEmpty {
+        warnings.append(.deprecation(.emptyRoot, "\(linesLabel(cliLines)): runs `aerospace`, which is AeroSpace's CLI. AeroSpork's is `aerospork`."))
     }
     return warnings
+}
+
+@MainActor private let aerospaceCliCall = #/(^|[^A-Za-z0-9_.-])aerospace\s/#
+
+private func linesLabel(_ lines: [Int]) -> String {
+    lines.count == 1 ? "Line \(lines[0])" : "Lines \(lines.map(String.init).joined(separator: ", "))"
 }

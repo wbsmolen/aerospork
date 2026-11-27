@@ -48,6 +48,30 @@ final class ListWindowsTest: XCTestCase {
         }
     }
 
+    /// Values spelled the way the `layout` command takes them, and empty where they do not apply.
+    func testLayoutFloatingAndOrientationVariables() throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer // h tiles
+        let tiled = TestWindow.new(id: 1, parent: root)
+        let column = TilingContainer(parent: root, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST)
+        let stacked = TestWindow.new(id: 2, parent: column)
+        let floating = TestWindow.new(id: 3, parent: workspace)
+        let minimized = TestWindow.new(id: 4, parent: macosMinimizedWindowsContainer)
+        defer { _ = minimized.unbindFromParent() }
+        let format: [StringInterToken] = [
+            .interVar("window-layout"), .literal(","), .interVar("window-orientation"), .literal(","), .interVar("window-is-floating"),
+        ]
+        let objs = [tiled, stacked, floating, minimized].map { AeroObj.window(window: $0, title: "") }
+        assertEquals(objs.format(format), .success([
+            "tiles,horizontal,false",
+            "accordion,vertical,false",
+            "floating,,true",
+            ",,false",
+        ]))
+        let json = try XCTUnwrap([objs[0]].formatToJson([.interVar("window-is-floating"), .interVar("window-layout")], ignoreRightPaddingVar: false).getOrNil())
+        assertEquals(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: AnyHashable]], [["window-is-floating": false, "window-layout": "tiles"]])
+    }
+
     func testFormat() {
         Workspace.get(byName: name).rootTilingContainer.apply {
             let windows = [
@@ -71,6 +95,69 @@ final class ListWindowsTest: XCTestCase {
                 AeroObj.window(window: TestWindow.new(id: 10, parent: $0), title: "title2"),
             ]
             assertEquals(windows.format([.interVar("window-id"), .interVar("right-padding"), .literal(" | "), .interVar("window-title")]), .success(["2  | title1", "10 | title2"]))
+        }
+    }
+
+    func testAnUnknownWorkspaceListsNothingAndCreatesNone() async throws {
+        let before = Workspace.all.map(\.name)
+        let result = try await parseCommand("list-windows --workspace nope").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+        assertEquals(result.stdout, [])
+        assertEquals(Workspace.all.map(\.name), before)
+    }
+
+    /// A bad variable is reported before any title is read, in the words the formatter itself uses.
+    func testABadFormatReadsNoTitle() async throws {
+        let window = CountingWindow(id: 1, parent: Workspace.get(byName: "W").rootTilingContainer, title: "zsh")
+        for json in [false, true] {
+            let format: [StringInterToken] = [.interVar("window-title"), .interVar("nope"), .interVar("nada")]
+            let result = try await parseCommand("list-windows --workspace W --format '%{window-title} %{nope} %{nada}'" + (json ? " --json" : ""))
+                .cmdOrDie.run(.defaultEnv, .emptyStdin)
+            assertEquals(result.exitCode, 1)
+            let objs = [AeroObj.window(window: window, title: "")]
+            let expected = json
+                ? objs.formatToJson(format, ignoreRightPaddingVar: false).failureOrNil
+                : objs.format(format).failureOrNil
+            assertEquals(result.stderr, [try XCTUnwrap(expected)])
+        }
+        assertEquals(window.reads, 0)
+    }
+
+    /// The titles are read concurrently. The window that answers first must not list first: with the same app
+    /// and the same title, only the tree order tells them apart, and it must not change between two polls.
+    func testSameTitledWindowsKeepTheirOrder() async throws {
+        let root = Workspace.get(byName: "W").rootTilingContainer
+        let slow = CountingWindow(id: 1, parent: root, title: "zsh", yields: 20)
+        let fast = CountingWindow(id: 2, parent: root, title: "zsh")
+        let app = TestApp.shared.name ?? ""
+        for _ in 1 ... 20 {
+            let result = try await parseCommand("list-windows --workspace W").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            assertEquals(result.stdout, ["1 | \(app) | zsh", "2 | \(app) | zsh"])
+        }
+        assertEquals(slow.reads, 20)
+        assertEquals(fast.reads, 20)
+    }
+}
+
+/// A window whose title read can be counted and delayed.
+private final class CountingWindow: Window {
+    private let fixedTitle: String
+    private let yields: Int
+    @MainActor var reads = 0
+
+    @MainActor
+    init(id: UInt32, parent: NonLeafTreeNodeObject, title: String, yields: Int = 0) {
+        fixedTitle = title
+        self.yields = yields
+        super.init(id: id, TestApp.shared, lastFloatingSize: nil, parent: parent, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+    }
+
+    @MainActor
+    override var title: String {
+        get async throws {
+            reads += 1
+            for _ in 0 ..< yields { await Task.yield() }
+            return fixedTitle
         }
     }
 }

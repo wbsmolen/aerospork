@@ -13,21 +13,21 @@ import XCTest
 @MainActor
 final class WindowDetectionRetryTest: XCTestCase {
     func testAFailedRegistrationSchedulesItsRetry() throws {
-        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift", length: 5000)
+        let body = try sourceBody("static func getOrRegister(_ nsApp: NSRunningApplication)", in: "Sources/AppBundle/tree/MacApp.swift")
         let failure = try XCTUnwrap(body.range(of: "failedPids[pid] = (nextAttempt:"))
         let retry = try XCTUnwrap(body.range(of: "scheduleFollowUpRefresh(after: backoff"), "a failed registration no longer schedules a look back")
         XCTAssertLessThan(failure.lowerBound, retry.lowerBound)
     }
 
     func testAWindowThatArrivesLookingLikeAPopupIsLookedAtAgain() throws {
-        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift", length: 4800)
+        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(body.contains("if window.isPopup {"))
         XCTAssertTrue(body.contains(#"scheduleFollowUpRefresh(after: 1, "popupRecheck")"#))
     }
 
     /// Promoted a second or three after it appeared, by when the user may have switched away.
     func testAPopupThatTurnsOutToBeAWindowGoesWhereItAppeared() throws {
-        let body = try sourceBody("private func validateStillPopups", in: "Sources/AppBundle/normalizeLayoutReason.swift", length: 800)
+        let body = try sourceBody("private func validateStillPopups", in: "Sources/AppBundle/normalizeLayoutReason.swift")
         XCTAssertTrue(body.contains("popup.workspaceNameAtRegistration"))
         XCTAssertFalse(body.contains("relayoutWindow(on: focus.workspace)"))
     }
@@ -35,7 +35,7 @@ final class WindowDetectionRetryTest: XCTestCase {
     /// `close` may only raise an unsaved-changes sheet. Skipping the cache brought the window back as a
     /// new one, on the focused workspace, with its rules run a second time.
     func testAWindowThatSurvivesItsCloseIsPutBack() throws {
-        let body = try sourceBody("override func closeAxWindow()", in: "Sources/AppBundle/tree/MacWindow.swift", length: 600)
+        let body = try sourceBody("override func closeAxWindow()", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(body.contains("garbageCollect(skipClosedWindowsCache: false)"))
     }
 
@@ -63,11 +63,43 @@ final class WindowDetectionRetryTest: XCTestCase {
             ("Sources/AppBundle/normalizeLayoutReason.swift", "private func validateStillPopups"),
         ]
         for (file, declaration) in sites {
-            let body = try sourceBody(declaration, in: file, length: 3600)
+            let body = try sourceBody(declaration, in: file)
             let shield = try XCTUnwrap(body.range(of: "shieldedFromCancellation {"), "\(file): window rules run unshielded")
             let rules = try XCTUnwrap(body.range(of: "tryOnWindowDetected("), "\(file): \(declaration) no longer runs window rules")
             XCTAssertLessThan(shield.lowerBound, rules.lowerBound, "\(file): window rules run before the shield")
         }
+    }
+
+    /// The move ends the rule and takes the window off the workspace the rest of it worked on, so a
+    /// cancellation that stopped short of it would leave the window fullscreen on the wrong monitor.
+    func testARuleEndingInMoveNodeToMonitorRunsToTheEndUnderCancellation() async throws {
+        setUpWorkspacesForTests()
+        let savedMonitors = testMonitors
+        defer {
+            testMonitors = savedMonitors
+            config.onWindowDetected = []
+        }
+        let left = Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080)
+        let right = Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080)
+        testMonitors = [
+            MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "Left", rect: left, visibleRect: left),
+            MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "Right", rect: right, visibleRect: right),
+        ]
+        config.onWindowDetected = [
+            WindowDetectedCallback(rawRun: ["fullscreen on", "move-node-to-monitor right"].map { parseCommand($0).cmdOrDie }),
+        ]
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer)
+        let target = testMonitors[1].activeWorkspace
+        XCTAssertFalse(window.nodeWorkspace === target, "the test needs the window to start on the other monitor")
+
+        let caller = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await shieldedFromCancellation { try await tryOnWindowDetected(window) }
+        }
+        _ = await caller.result
+
+        XCTAssertTrue(window.isFullscreen)
+        assertEquals(window.nodeWorkspace?.name, target.name, additionalMsg: "a cancelled refresh stopped the rule before its move")
     }
 
     /// A rule runs once, when a window first appears. Running it again after a restart undid a move made
@@ -91,6 +123,24 @@ final class WindowDetectionRetryTest: XCTestCase {
         assertEquals(remembered.nodeWorkspace?.name, "startup")
         assertEquals(new.nodeWorkspace?.name, "everyTime")
         config.onWindowDetected = []
+    }
+
+    /// Each title read is an AX round trip, so every title rule shares one.
+    func testTitleRulesReadTheTitleOnce() async throws {
+        setUpWorkspacesForTests()
+        var byTitle = WindowDetectedCallbackMatcher()
+        byTitle.windowTitleRegexSubstring = try Regex("TestWindow")
+        config.onWindowDetected = [
+            WindowDetectedCallback(matcher: byTitle, checkFurtherCallbacks: true, rawRun: [parseCommand("move-node-to-workspace first").cmdOrDie]),
+            WindowDetectedCallback(matcher: byTitle, rawRun: [parseCommand("move-node-to-workspace second").cmdOrDie]),
+        ]
+        defer { config.onWindowDetected = [] }
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer)
+
+        try await tryOnWindowDetected(window)
+
+        assertEquals(window.nodeWorkspace?.name, "second") // both rules matched
+        assertEquals(window.titleReads, 1)
     }
 
     /// A status bar asks what is on screen all the time, and that isn't anyone changing a layout.

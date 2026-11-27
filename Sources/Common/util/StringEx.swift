@@ -24,7 +24,7 @@ public enum TomlParseError: Error, CustomStringConvertible, Equatable {
 
 public typealias ParsedToml<T> = Result<T, TomlParseError>
 
-public indirect enum TomlBacktrace: CustomStringConvertible, Equatable, Sendable { // Added Sendable
+public indirect enum TomlBacktrace: CustomStringConvertible, Equatable, Sendable {
     case emptyRoot
     case rootKey(String)
     case key(String)
@@ -172,7 +172,7 @@ extension Array {
 
 extension String {
     public func interpolate(with variables: [String: String], interpolationChar: Character = "$") -> Result<String, [String]> {
-        interpolationTokens()
+        interpolationTokens(interpolationChar: interpolationChar)
             .mapError { [$0] }
             .flatMap { tokens in
                 tokens.mapAllOrFailures { token in

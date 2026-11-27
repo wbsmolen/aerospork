@@ -13,6 +13,7 @@ import TOMLKit
 ///   * under `.ambiguousConfigError` the base text fell back to the *bundled default*, so a save
 ///     would overwrite a real user config with defaults-plus-edits.
 @MainActor func userConfigTargetUrl() -> Result<URL, String> {
+    if isUnitTest { return testConfigOverride.map { .success($0) } ?? .failure("tests may not write a real config") }
     // An explicit --config-path is the only file the server reads; honour it even if absent.
     if let explicit = serverArgs.configLocation { return .success(URL(filePath: explicit)) }
     switch findCustomConfigUrl() {
@@ -30,10 +31,30 @@ import TOMLKit
 
 /// The text we edit in place. The user config if present, else the shipped default config so a
 /// first save produces a full, commented config seeded from the defaults.
-@MainActor func configBaseText() -> String {
-    let url = findCustomConfigUrl().urlOrNil ?? defaultConfigUrl
-    return (try? String(contentsOf: url)) ?? ""
+///
+/// A user config that exists and can't be read is a failure, never "". An empty base has no keys for
+/// `refusal` to protect, so a save replaced the whole file with the one edited key.
+@MainActor func configBaseText(found: ConfigFile? = nil) -> Result<String, String> {
+    // Through the same search as `readConfig`, so under XCTest a missing `testConfigOverride` is "no
+    // config yet", as a missing `~/.aerospork.toml` is outside it.
+    guard let found = found ?? searchUserConfig() else { return .failure("tests may not touch a real config") }
+    // Not the bundled default: Raw TOML showed it under the failed config's banner as "Matches the
+    // file on disk".
+    if case .ambiguousConfigError(let candidates) = found {
+        return .failure("Several config files exist, so Settings can't tell which one to edit:\n" +
+            candidates.map(\.path).joined(separator: "\n"))
+    }
+    guard let url = found.urlOrNil else {
+        // No user file, so nothing to protect.
+        return .success((try? readConfigText(at: defaultConfigUrl).get()) ?? "")
+    }
+    return readConfigText(at: url)
 }
+
+/// Under XCTest, the one config file that reads and writes may touch. With none set, the URL-less
+/// reads and writes fail: under `swift test` they resolved to the developer's own
+/// `~/.aerospork-debug.toml`, and a save test that slipped past its refusal overwrote it.
+@MainActor var testConfigOverride: URL?
 
 /// The one and only config writer.
 ///
@@ -43,6 +64,14 @@ import TOMLKit
 @MainActor
 enum ConfigurationWriter {
     private typealias Settings = ConfigurationViewModel.Settings
+
+    /// The config a check parsed from `text`, with its warnings. A save applies it when the file reads
+    /// back as exactly `text` (`applySavedConfig`), instead of parsing the same bytes again.
+    struct Validated {
+        let text: String
+        let config: Config
+        let warnings: [String]
+    }
 
     struct ValidationDiagnostic: Equatable {
         let message: String
@@ -59,19 +88,26 @@ enum ConfigurationWriter {
     }
 
     static func write(_ result: String) throws {
-        let target: URL
         switch userConfigTargetUrl() {
-            case .success(let url): target = url
+            case .success(let url): try write(result, to: url)
             case .failure(let reason): throw WriteRefused(reason: reason)
         }
+    }
 
-        let existed = FileManager.default.fileExists(atPath: target.path)
-        if existed { backUpOncePerSession(target) }
-        ConfigFileWatcher.suppressNextSelfWrite()
-        try result.write(to: target, atomically: true, encoding: .utf8)
-        // The watcher bails when the file doesn't exist, and only re-arms from its own event
-        // handler -- so the first-ever GUI save left hot-reload dead until an app restart.
-        if !existed { ConfigFileWatcher.start() }
+    /// `target` stays the path the user configured (messages, backups and the watcher use it). Only
+    /// the write goes through a link: an atomic write to the link path replaced it with a regular
+    /// file, which detached a stow, chezmoi or home-manager config from its dotfiles repo.
+    static func write(_ result: String, to target: URL) throws {
+        let isLink = (try? FileManager.default.destinationOfSymbolicLink(atPath: target.path)) != nil
+        let resolved = target.resolvingSymlinksInPath()
+        // The Nix store. The atomic write needs the directory, and its Cocoa error named neither file.
+        if isLink, !FileManager.default.isWritableFile(atPath: resolved.deletingLastPathComponent().path) {
+            throw WriteRefused(reason: "\(target.path) is a link to a read-only file. Edit it where it is managed.")
+        }
+        if FileManager.default.fileExists(atPath: target.path) { try backUpOncePerSession(target) }
+        // The watcher sees this write and re-arms on the new file, through a link too. The caller's
+        // apply records these bytes as applied, so the watcher does not reload them a second time.
+        try result.write(to: resolved, atomically: true, encoding: .utf8)
     }
 
     // MARK: - Backups
@@ -105,20 +141,28 @@ enum ConfigurationWriter {
     /// anyone wanted it.
     static func startBackupSession() { sessionHasBackup = false }
 
-    static func backUpOncePerSession(_ target: URL, now: Date = Date()) {
+    static func backUpOncePerSession(_ target: URL, now: Date = Date()) throws {
         guard !sessionHasBackup else { return }
+        try backUp(target, now: now)
         sessionHasBackup = true
-        backUp(target, now: now)
     }
 
-    /// Copies `target` aside and prunes to `backupsToKeep`. Best-effort: a config we could not back
-    /// up is not a reason to refuse the user's edit, and the pre-write validation already ran.
-    static func backUp(_ target: URL, now: Date = Date()) {
+    /// Copies `target` aside and prunes to `backupsToKeep`. A copy that fails refuses the write: the
+    /// file exists and its text was just read, so a failure means something is wrong with it, and the
+    /// write would then replace it with no copy kept. Pruning stays best-effort.
+    static func backUp(_ target: URL, now: Date = Date()) throws {
+        // Named next to the link, where the Restore menu lists them and out of the user's dotfiles
+        // repo. The copy is of the file: `copyItem` on a link copies the link, which follows the
+        // live file and so backs up nothing.
         let backup = target.appendingPathExtension("\(timestamp(now))\(backupSuffix)")
         // Same second as an existing backup (a debounced save burst): keep the older copy, which is
         // further from whatever went wrong.
         if !FileManager.default.fileExists(atPath: backup.path) {
-            try? FileManager.default.copyItem(at: target, to: backup)
+            do {
+                try FileManager.default.copyItem(at: target.resolvingSymlinksInPath(), to: backup)
+            } catch {
+                throw WriteRefused(reason: "Could not back up \(target.path), so it was left as it is: \(error.localizedDescription)")
+            }
         }
         for stale in backups(of: target).dropFirst(backupsToKeep) {
             try? FileManager.default.removeItem(at: stale)
@@ -218,6 +262,12 @@ enum ConfigurationWriter {
     /// what the panes say, and every other top-level key has to say what it said before. A spelling
     /// the writer can't edit is refused only when the edit actually touches it.
     static func refusal(rendered: String, base: String, from vm: ConfigurationViewModel) -> String? {
+        var validated: Validated?
+        return refusal(rendered: rendered, base: base, from: vm, validated: &validated)
+    }
+
+    /// `validated` is what `rendered` parsed to, for the save to apply when nil comes back.
+    static func refusal(rendered: String, base: String, from vm: ConfigurationViewModel, validated: inout Validated?) -> String? {
         if vm.hasUnsavedChanges, let shape = unsupportedShapeReason(base) { return shape }
         let cannotEdit = "This change can't be made to how the config file is written, so nothing was saved. Use the Raw TOML tab."
         let baseTable = try? TOMLTable(string: base)
@@ -225,10 +275,12 @@ enum ConfigurationWriter {
         // broken by the surgery, and the parser's complaint about a stray line would only confuse.
         guard let table = try? TOMLTable(string: rendered) else { return baseTable == nil ? validate(rendered) : cannotEdit }
         let parsed: Config
-        switch parseConfig(rendered) {
+        var warnings: [TomlParseError] = []
+        switch parseConfig(table: table, rawToml: rendered, warnings: &warnings) {
             case .success(let config): parsed = config
             case .failure(let errors): return errors.map(\.description).joined(separator: "\n")
         }
+        validated = Validated(text: rendered, config: parsed, warnings: warnings.map(\.description))
         let want = vm.settings.asWritten
         if let row = firstDuplicate(want.assignments.map(\.workspace)) { return "Two rows pin workspace '\(row)'. Remove one, and this change will save." }
         if let row = firstDuplicate(want.exec.envVars.map(\.name)) { return "Two rows set '\(row)'. Remove one, and this change will save." }
@@ -277,8 +329,16 @@ enum ConfigurationWriter {
     /// Validate before writing. A config that fails to parse used to land on disk anyway and only
     /// then pop a separate error dialog, leaving the user with a broken file and two error surfaces.
     static func validate(_ text: String) -> String? {
-        switch parseConfig(text) {
-            case .success: return nil
+        var validated: Validated?
+        return validate(text, validated: &validated)
+    }
+
+    static func validate(_ text: String, validated: inout Validated?) -> String? {
+        var warnings: [TomlParseError] = []
+        switch parseConfig(text, warnings: &warnings) {
+            case .success(let config):
+                validated = Validated(text: text, config: config, warnings: warnings.map(\.description))
+                return nil
             case .failure(let errors): return errors.map(\.description).joined(separator: "\n")
         }
     }
@@ -288,8 +348,9 @@ enum ConfigurationWriter {
     /// localized error string. Semantic config errors still carry their key path in `message` and
     /// intentionally have no pretend source position.
     static func diagnostic(_ text: String) -> ValidationDiagnostic? {
+        let table: TOMLTable
         do {
-            _ = try TOMLTable(string: text)
+            table = try TOMLTable(string: text)
         } catch let error as TOMLParseError {
             return ValidationDiagnostic(
                 message: error.debugDescription,
@@ -299,7 +360,9 @@ enum ConfigurationWriter {
         } catch {
             return ValidationDiagnostic(message: error.localizedDescription, line: nil, column: nil)
         }
-        return validate(text).map { ValidationDiagnostic(message: $0, line: nil, column: nil) }
+        var warnings: [TomlParseError] = []
+        guard case .failure(let errors) = parseConfig(table: table, rawToml: text, warnings: &warnings) else { return nil }
+        return ValidationDiagnostic(message: errors.map(\.description).joined(separator: "\n"), line: nil, column: nil)
     }
 
     /// A file with both line endings can't be given back the way it arrived: `render` normalizes to
@@ -332,7 +395,8 @@ enum ConfigurationWriter {
             for section in spellings { removeKey(&lines, section: section, key: old.workspace) }
         }
         for row in now where !before.contains(row) {
-            setKey(&lines, section: section(for: row.workspace, among: spellings, in: lines), key: row.workspace, value: formatMonitorValue(row.monitor))
+            // `[monitors]` wins in `applyConfigV2`.
+            setKey(&lines, section: section(for: row.workspace, among: spellings, winner: "monitors", in: lines), key: row.workspace, value: formatMonitorValue(row.monitor))
         }
     }
 
@@ -502,10 +566,12 @@ enum ConfigurationWriter {
         if let i = keyLine(lines, section, key) { lines.remove(at: i) }
     }
 
-    /// Which of a table's spellings, v2 first, `key` belongs in: where its line already is, else a
-    /// section the file already has, else the v2 spelling, which `setKey` creates.
-    private static func section(for key: String, among spellings: [String], in lines: [String]) -> String {
-        spellings.last { keyLine(lines, $0, key) != nil } ?? spellings.first { headerIndex(lines, $0) != nil } ?? spellings[0]
+    /// Which of a table's spellings, v2 first, `key` belongs in: where its line already is (`winner`'s
+    /// first, the spelling the parser lets win when both have it), else a section the file already
+    /// has, else the v2 spelling, which `setKey` creates.
+    private static func section(for key: String, among spellings: [String], winner: String, in lines: [String]) -> String {
+        ([winner] + spellings).first { keyLine(lines, $0, key) != nil }
+            ?? spellings.first { headerIndex(lines, $0) != nil } ?? spellings[0]
     }
 
     // MARK: - Gaps
@@ -578,7 +644,8 @@ enum ConfigurationWriter {
             // Only what changed: `formatCommand` normalizes quoting, so rewriting an untouched line
             // would turn `key = "cmd"` into `key = 'cmd'`.
             for row in new where !old.contains(row) {
-                setKey(&lines, section: section(for: row.key, among: sections, in: lines), key: row.key, value: formatCommand(row.command))
+                // `[mode.*]` wins in `applyConfigV2`.
+                setKey(&lines, section: section(for: row.key, among: sections, winner: sections[1], in: lines), key: row.key, value: formatCommand(row.command))
             }
         }
     }

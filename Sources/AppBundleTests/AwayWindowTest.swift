@@ -70,6 +70,20 @@ final class AwayWindowTest: XCTestCase {
         assertEquals(order, [1, 2, 3, 4, 5])
     }
 
+    /// A place is the window that preceded it, not a slot, so it follows that window through a `swap`.
+    func testAfterASwapItComesBackAfterTheWindowThatPrecededIt() async throws {
+        let windows = row([1, 2, 3])
+        leave(windows[1])
+        check(windows[0].focusWindow())
+
+        assertEquals(try await parseCommand("swap right").cmdOrDie.run(.defaultEnv, .emptyStdin).exitCode, 0)
+        assertEquals(order, [3, 1])
+        try await comeBack(windows[1])
+
+        assertEquals(order, [3, 1, 2])
+        XCTAssertTrue(root.awayWindows.isEmpty)
+    }
+
     /// The split, too: it used to come back at an average weight, whatever it had been.
     func testSizesComeBackInAnyOrder() async throws {
         for returning in [[0, 1], [1, 0]] {
@@ -148,7 +162,7 @@ final class AwayWindowTest: XCTestCase {
         config.enableNormalizationFlattenContainers = true
         let nested = TilingContainer(parent: root, adaptiveWeight: 1, .v, .tiles, index: INDEX_BIND_LAST)
         let inner = row([2, 3], in: nested)
-        row([1])
+        _ = row([1])
         leave(inner[1])
         workspace.normalizeContainers()
         XCTAssertNotNil(inner[0].parent as? TilingContainer)

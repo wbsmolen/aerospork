@@ -17,6 +17,8 @@ const WORKSPACES = {
   ],
 };
 
+const HINT_LINK = { background: 'none', border: 'none', color: 'var(--brand-focused)', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-system)' };
+
 function Tile({ w, focused, style }) {
   return (
     <div className={'win' + (focused ? ' focused' : '')} style={style}>
@@ -34,15 +36,24 @@ function MenuBarKit() {
   const [open, setOpen] = React.useState(false);
   const [enabled, setEnabled] = React.useState(true);
   const [mode, setMode] = React.useState(null);
+  const [configFailed, setConfigFailed] = React.useState(false);
+  // A debug build has no update feed, so the Swift hides the row there (`Updater.shared.isEnabled`).
+  const canCheckForUpdates = true;
   const gap = 8;
   const wins = WORKSPACES[workspace];
 
+  // The mode chip comes first, as in TrayMenuModel.
   const chips = [
-    ...Object.keys(WORKSPACES).map((n) => ({ name: n, active: n === workspace })),
     ...(mode ? [{ name: mode, type: 'mode', active: true }] : []),
+    ...Object.keys(WORKSPACES).map((n) => ({ name: n, active: n === workspace })),
   ];
 
   const items = [
+    ...(configFailed ? [
+      { label: <><Icon sf="exclamationmark.octagon.fill" size={12} style={{ marginRight: 6 }} />Config not loaded: running defaults</>, disabled: true },
+      { label: 'Show config error…', onClick: () => { setOpen(false); window.alert('AeroSpork config error\n\n~/.aerospork.toml: line 12: unknown key "gapz"'); } },
+      { divider: true },
+    ] : []),
     ...(mode ? [{ label: 'Leave “' + mode + '” mode', onClick: () => { setMode(null); setOpen(false); } }, { divider: true }] : []),
     ...Object.keys(WORKSPACES).map((n) => ({
       label: n, mono: true, checked: n === workspace,
@@ -52,6 +63,7 @@ function MenuBarKit() {
     { label: enabled ? 'Pause tiling' : 'Resume tiling', shortcut: '⌘E', onClick: () => { setEnabled(!enabled); setOpen(false); } },
     { divider: true },
     { label: 'Settings…', shortcut: '⌘,', onClick: () => { window.open('../settings_app/index.html', '_blank'); setOpen(false); } },
+    ...(canCheckForUpdates ? [{ label: 'Check for updates…', onClick: () => setOpen(false) }] : []),
     { label: 'Quit AeroSpork', shortcut: '⌘Q', onClick: () => setOpen(false) },
   ];
 
@@ -98,10 +110,12 @@ function MenuBarKit() {
       <div className="hint">
         Click the chips in the menu bar. Workspaces switch instantly — no macOS Spaces animation.
         {mode ? '' : ' '}
-        {!mode && <button onClick={(e) => { e.stopPropagation(); setMode('service'); }}
-          style={{ background: 'none', border: 'none', color: 'var(--brand-focused)', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-system)' }}>
+        {!mode && <button onClick={(e) => { e.stopPropagation(); setMode('service'); }} style={HINT_LINK}>
           Enter “service” mode
         </button>}
+        <button onClick={(e) => { e.stopPropagation(); setConfigFailed(!configFailed); }} style={HINT_LINK}>
+          {configFailed ? 'Fix the config' : 'Break the config'}
+        </button>
       </div>
     </div>
   );

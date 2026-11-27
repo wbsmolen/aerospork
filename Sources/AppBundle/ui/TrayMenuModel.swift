@@ -7,6 +7,8 @@ public class TrayMenuModel: ObservableObject {
     private init() {}
 
     @Published var trayText: String = ""
+    /// What VoiceOver reads for the label. `trayText` would be read as "asterisk 1, box drawing 2".
+    @Published var traySpokenText: String = ""
     @Published var trayItems: [TrayItem] = []
     /// Is "layouting" enabled
     @Published var isEnabled: Bool = true
@@ -93,6 +95,10 @@ struct AppVisibility: Equatable {
             ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + $0.activeWorkspace.name
         }
         .joined(separator: " │ "))
+    setIfChanged(\.traySpokenText, traySpokenText(
+        mode: activeMode?.takeIf { $0 != mainModeId },
+        workspaces: sortedMonitors.map { ($0.activeWorkspace.name, $0.activeWorkspace == focus.workspace) },
+    ))
     let workspaces = Workspace.all.map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
@@ -112,6 +118,17 @@ struct AppVisibility: Equatable {
         items.insert(mode, at: 0)
     }
     setIfChanged(\.trayItems, items)
+}
+
+/// The menu bar label as a sentence: "Service mode. Workspace 1, focused. Workspace 2." The tray text
+/// has VoiceOver read its `*` and `│` aloud, and keeps only the first letter of the mode, which names
+/// nothing. With one monitor, focus says nothing the single workspace does not, as in the tray text.
+func traySpokenText(mode: String?, workspaces: [(name: String, isFocused: Bool)]) -> String {
+    let modeSentence = mode.map { ["\($0.prefix(1).uppercased())\($0.dropFirst()) mode."] } ?? []
+    let workspaceSentences = workspaces.map { workspace in
+        "Workspace \(workspace.name)" + (workspace.isFocused && workspaces.count > 1 ? ", focused." : ".")
+    }
+    return (modeSentence + workspaceSentences).joined(separator: " ")
 }
 
 struct WorkspaceViewModel: Hashable {

@@ -1,5 +1,7 @@
 @testable import Cli
 @testable import Common
+import Darwin
+import Foundation
 import XCTest
 
 /// `exec-and-forget` is config-only by design (see CmdArgsParsingTest), so it is neither parseable
@@ -109,6 +111,95 @@ final class CliSurfaceTest: XCTestCase {
         guard case .badArgs = plan(args: ["exec-and-forget", "true"]) else {
             return XCTFail("exec-and-forget reached the server")
         }
+    }
+
+    private func socketPair() -> (client: UnixSocketConnection, peerFd: Int32) {
+        var fds: [Int32] = [0, 0]
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
+        return (UnixSocketConnection(fd: fds[0]), fds[1])
+    }
+
+    /// The server refused it and hung up, so the CLI said "Can't send request", exit 3, as if the
+    /// server were gone. One huge stdin line is enough: stdin is capped by lines, not bytes.
+    func testAnOversizeRequestIsBadArgsAndIsNotSent() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        let stdin = String(repeating: "x", count: Int(UnixSocketConnection.maxFrameSize))
+        guard case .failure(let failure) = Cli.run(client, ["workspace", "next"], stdin: stdin) else { return XCTFail("sent") }
+        assertEquals(failure.exitCode, ExitCode.badArgs)
+        XCTAssertTrue(failure.message.contains("too large"), failure.message)
+        var byte: UInt8 = 0
+        XCTAssertEqual(recv(peerFd, &byte, 1, MSG_DONTWAIT), -1, "something was written")
+    }
+
+    /// An answer over the limit was reported as "No response from AeroSpork server". It keeps exit
+    /// code 3, so the exit-code contract does not move.
+    func testAnOversizeAnswerIsReportedAsSuch() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        var header = (UnixSocketConnection.maxFrameSize + 1).bigEndian // a header, the way a peer writes it
+        XCTAssertEqual(withUnsafeBytes(of: &header) { Darwin.write(peerFd, $0.baseAddress, 4) }, 4)
+        guard case .failure(let failure) = Cli.run(client, ["focus", "left"], stdin: "") else { return XCTFail("answered") }
+        assertEquals(failure.exitCode, ExitCode.serverUnreachable)
+        XCTAssertTrue(failure.message.contains("too large"), failure.message)
+    }
+
+    /// A server that never answers (a wedged main actor) used to hang the CLI forever, and a status
+    /// bar that polls stacked up one process per poll.
+    func testAServerThatNeverAnswersIsUnreachableAfterTheTimeout() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        let start = ContinuousClock.now
+        guard case .failure(let failure) = Cli.run(client, ["focus", "left"], stdin: "", timeout: .seconds(1)) else { return XCTFail("answered") }
+        XCTAssertLessThan(start.duration(to: .now), .seconds(2))
+        assertEquals(failure, CliFailure(message: "No response from AeroSpork server within 1 s", exitCode: ExitCode.serverUnreachable))
+    }
+
+    func testSubscribeIsStreamed() {
+        assertEquals(plan(args: ["subscribe", "--all"]), .stream(["subscribe", "--all"]))
+        assertEquals(plan(args: ["subscribe", "mode-changed", "focus-changed"]), .stream(["subscribe", "mode-changed", "focus-changed"]))
+    }
+
+    /// A stream is quiet for as long as nothing happens, so the reply timeout must not end it. The pause here is
+    /// longer than the one that ends `run` in the test above.
+    func testAStreamKeepsReadingThroughSilence() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close() }
+        let peer = UnixSocketConnection(fd: peerFd)
+        Thread.detachNewThread {
+            for line in ["{\"event\":\"snapshot\"}", "{\"event\":\"mode-changed\"}"] {
+                let answer = ServerAnswer(exitCode: ExitCode.success, stdout: line, serverVersionAndHash: aeroSporkVersionAndHash)
+                peer.sendMessage(try! JSONEncoder().encode(answer))
+                Thread.sleep(forTimeInterval: 1.5)
+            }
+            peer.close()
+        }
+        var lines: [String] = []
+        let end = runStream(client, ["subscribe", "--all"]) { lines.append($0.stdout) }
+        assertEquals(lines, ["{\"event\":\"snapshot\"}", "{\"event\":\"mode-changed\"}"])
+        assertEquals(end, CliFailure(message: "AeroSpork server ended the stream", exitCode: ExitCode.serverUnreachable))
+    }
+
+    /// The server refuses a stream, or ends it on `enable off`, with a failure that says why.
+    func testAStreamEndsWithTheServersReason() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close(); Darwin.close(peerFd) }
+        let refusal = ServerAnswer(exitCode: ExitCode.failure, stderr: "disabled", serverVersionAndHash: aeroSporkVersionAndHash)
+        UnixSocketConnection(fd: peerFd).sendMessage(try JSONEncoder().encode(refusal))
+        var lines: [String] = []
+        let end = runStream(client, ["subscribe", "--all"]) { lines.append($0.stdout) }
+        assertEquals(lines, [])
+        assertEquals(end, CliFailure(message: "disabled", exitCode: ExitCode.failure))
+    }
+
+    /// A hang-up is not a timeout, so it must not claim to be one.
+    func testAServerThatHangsUpSaysNoResponse() throws {
+        let (client, peerFd) = socketPair()
+        defer { client.close() }
+        Darwin.shutdown(peerFd, SHUT_WR)
+        guard case .failure(let failure) = Cli.run(client, ["focus", "left"], stdin: "", timeout: .seconds(1)) else { return XCTFail("answered") }
+        assertEquals(failure, CliFailure(message: "No response from AeroSpork server", exitCode: ExitCode.serverUnreachable))
+        Darwin.close(peerFd)
     }
 }
 

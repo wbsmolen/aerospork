@@ -142,6 +142,82 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertTrue(pane.contains("enum TomlSyntaxHighlighter"))
     }
 
+    /// The window's error strip is the only place a failed Apply or Restore, or the changed-on-disk
+    /// conflict, is shown. Hiding it on Raw TOML made Apply look like it did nothing there. The
+    /// `Settings` scene cannot be rendered headlessly, so this reads the source.
+    func testTheErrorStripShowsOnEveryPane() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationWindow.swift"),
+            encoding: .utf8,
+        ))
+        let strip = try XCTUnwrap(
+            source.split(separator: "\n").first { $0.contains("if let error = viewModel.errorMessage") },
+            "the error strip moved: update this test",
+        )
+        XCTAssertFalse(strip.contains("selectedPane"), "the error strip is hidden on some pane: \(strip)")
+    }
+
+    /// The window locks the structured panes on `hasPendingRawEdits`, which publishes only when the
+    /// buffer's edited state flips. Reading the buffer or `rawTomlEdited` would make the window observe
+    /// every keystroke and re-run all seven pane bodies again.
+    func testTheWindowDoesNotReadTheRawBuffer() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationWindow.swift"),
+            encoding: .utf8,
+        ))
+        for read in ["viewModel.raw\\b", "viewModel.rawToml\\b", "rawTomlEdited"] {
+            XCTAssertNil(source.range(of: read, options: .regularExpression), "ConfigurationWindow reads \(read)")
+        }
+        XCTAssertTrue(source.contains(".disabled(viewModel.hasPendingRawEdits)"), "the structured panes lost their lock")
+    }
+
+    /// The product voice keeps the em dash for the rare interruption nothing else handles
+    /// (`.claude/skills/aerospork-design/readme.md`), and the panes had 17 of them in their copy. A
+    /// colon, a comma or a full stop says each of these better. Comments are not copy.
+    func testUiCopyHasNoEmDashes() throws {
+        var offenders: [String] = []
+        try forEachCodeLine { path, line, code in
+            // The odd segments between quotes are the string literals on the line.
+            let literals = code.split(separator: "\"", omittingEmptySubsequences: false).enumerated().filter { $0.offset % 2 == 1 }
+            if literals.contains(where: { $0.element.contains("—") }) { offenders.append("\(path):\(line)") }
+        }
+        XCTAssertEqual(offenders, [], "rewrite with a colon, a comma or a full stop")
+    }
+
+    /// A debug build has no feed, so an update control there is a permanent dead control. The test
+    /// process runs with the updater disabled, so a render cannot see the gate: this reads the source.
+    func testUpdateControlsAreGatedOnTheUpdaterBeingEnabled() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs/GeneralSettingsTab.swift"),
+            encoding: .utf8,
+        ))
+        let gate = try XCTUnwrap(source.range(of: "if Updater.shared.isEnabled {"), "the update gate moved: update this test")
+        // The gate's block, up to its matching brace.
+        var depth = 1
+        let end = source[gate.upperBound...].firstIndex { char in
+            if char == "{" { depth += 1 } else if char == "}" { depth -= 1 }
+            return depth == 0
+        } ?? source.endIndex
+        let gated = source[gate.upperBound ..< end]
+        for control in ["Toggle(\"Automatically check for updates\"", "Button(\"Check for updates…\")"] {
+            XCTAssertTrue(gated.contains(control), "\(control) is missing from the isEnabled gate")
+            XCTAssertEqual(source.components(separatedBy: control).count, 2, "\(control) also appears outside the gate")
+        }
+    }
+
+    /// Reload replaces the Raw TOML buffer with the file, which threw away unapplied typing with no
+    /// warning. A headless render cannot tell whether a button is disabled, so this reads the source.
+    func testRawTomlReloadIsDisabledWhileThereAreUnappliedEdits() throws {
+        let source = withoutComments(try String(
+            contentsOf: projectRoot.appending(path: "Sources/AppBundle/ui/ConfigurationTabs/RawTomlTab.swift"),
+            encoding: .utf8,
+        ))
+        let reload = try XCTUnwrap(source.range(of: "Button(\"Reload\")"), "the Reload button moved: update this test")
+        let modifiers = source[reload.upperBound...].prefix(600)
+        XCTAssertTrue(modifiers.contains(".disabled(viewModel.rawTomlEdited)"), String(modifiers))
+        XCTAssertTrue(modifiers.contains("Apply or revert your edits first"), String(modifiers))
+    }
+
     /// Both badges are the same shape; only the wash differs. Pinning the geometry in one place is
     /// the entire point of the shared component.
     func testBadgeTonesDifferOnlyInTheirFill() throws {
@@ -150,6 +226,40 @@ final class UIChromeConsistencyTest: XCTestCase {
         XCTAssertTrue(source.contains(".padding(.vertical, 2)"), "Badge should keep its 2pt vertical padding")
         XCTAssertTrue(source.contains("case .standard: Color.primary.opacity(0.08)"))
         XCTAssertTrue(source.contains("case .muted: Color.secondary.opacity(0.2)"))
+    }
+
+    /// Icon-only controls get the 24pt hit shape from the one place that defines it, and that shape
+    /// must not change layout: a `frame(minWidth:)` there made the Keys filter pill jump when its
+    /// clear button appeared. A headless render cannot hit-test, so this reads the source.
+    func testIconControlsGetTheHitTargetWithoutGrowingLayout() throws {
+        for name in ["struct IconButton", "struct CopyButton"] {
+            let body = try sourceBody(name, in: Self.chrome)
+            XCTAssertTrue(body.contains(".settingsHitTarget()"), "\(name) has no settingsHitTarget")
+        }
+        let hitTarget = try sourceBody("func settingsHitTarget()", in: Self.chrome)
+        XCTAssertFalse(hitTarget.contains("frame("), "settingsHitTarget must not change layout: \(hitTarget)")
+        let actionBar = try sourceBody("struct ListActionBar", in: Self.chrome)
+        XCTAssertFalse(
+            actionBar.replacingOccurrences(of: "IconButton(", with: "").contains("Button"),
+            "ListActionBar's +/- should be IconButtons: \(actionBar)",
+        )
+    }
+
+    /// The window's error strip was a hand-made `Banner`: its tint, its own padding, and no way to
+    /// offer the recovery. A banner wash outside the chrome file is that copy growing back.
+    func testNoPaneMakesItsOwnBanner() throws {
+        let wash = try Regex(#"Banner\.Kind\.\w+\.tint\.opacity\("#)
+        try forEachCodeLine { path, line, code in
+            XCTAssertFalse(code.contains(wash), "\(path):\(line) paints its own banner -- use Banner from SettingsChrome: \(code)")
+        }
+    }
+
+    /// macOS buttons do not use a pointing hand, and a hovered view torn down before its pop left the
+    /// cursor stack unbalanced.
+    func testNoPaneUsesAPointingHandCursor() throws {
+        try forEachCodeLine { path, line, code in
+            XCTAssertFalse(code.contains("NSCursor.pointingHand.push"), "\(path):\(line): \(code)")
+        }
     }
 
     /// The chip is rasterized at 40pt and scaled to the menu bar's ~22pt. At 0.72 the glyphs come

@@ -46,7 +46,7 @@ final class InvoluntaryFocusTest: XCTestCase {
     /// `.cannotComplete` (the app missed the 1s `axMessagingTimeout`) into the same `nil`, and using
     /// it to decide liveness is what collected live windows out of busy apps.
     func testTheAliveWindowFilterDoesNotDecideLivenessFromContainingWindowId() throws {
-        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
+        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertTrue(body.contains("isDestroyed()"), "the alive-window filter stopped using isDestroyed()")
         XCTAssertFalse(
             body.contains("containingWindowId() != nil"),
@@ -59,22 +59,14 @@ final class InvoluntaryFocusTest: XCTestCase {
     /// `MacosNativeMinimizeCommand` binds straight into the global `macosMinimizedWindowsContainer`,
     /// so by the time `normalizeLayoutReason` sees the window its `nodeWorkspace` is already nil and
     /// the recorded name would be nil too -- leaving `macos-native-minimize` to teleport the window
-    /// on restore while cmd-M and the Dock send it home. A source check, for the same reason as the
-    /// one above: the command needs a real `MacApp` and cannot be driven headlessly.
-    func testTheMinimizeCommandRecordsTheWorkspaceBeforeLeavingIt() throws {
-        let source = try String(
-            contentsOf: projectRoot.appending(path: "Sources/AppBundle/command/impl/MacosNativeMinimizeCommand.swift"),
-            encoding: .utf8,
-        )
-        let record = try XCTUnwrap(
-            source.range(of: "prevWorkspaceName: window.nodeWorkspace?.name"),
-            "the minimize command stopped recording the workspace it is leaving",
-        )
-        let bind = try XCTUnwrap(source.range(of: "leaveTilesForMacos(macosMinimizedWindowsContainer"))
-        XCTAssertTrue(
-            record.upperBound < bind.lowerBound,
-            "the workspace must be recorded BEFORE the bind -- afterwards `nodeWorkspace` is already nil",
-        )
+    /// on restore while cmd-M and the Dock send it home. So it must record the workspace BEFORE the bind.
+    func testTheMinimizeCommandRecordsTheWorkspaceBeforeLeavingIt() async throws {
+        let window = TestWindow.new(id: 1, parent: Workspace.get(byName: "W").rootTilingContainer)
+        defer { window.unbindFromParent() } // the minimized container is global and outlives the test
+        let result = try await parseCommand("macos-native-minimize --window-id 1").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode, 0)
+        XCTAssertTrue(window.parent === macosMinimizedWindowsContainer, "the window did not leave the tiles for the minimized container")
+        assertEquals(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: "W"))
     }
 
     // MARK: - Focus only follows the window that actually had it
@@ -184,7 +176,7 @@ final class InvoluntaryFocusTest: XCTestCase {
     /// would leave the keyboard on a window parked off screen.
     /// A source check: `garbageCollect` needs a real `MacApp`.
     func testTheRestorePushesFocusWhenMacOsMovedUsToAnotherWorkspaceEvenInTheSameApp() throws {
-        let body = try sourceBody("func garbageCollect(skipClosedWindowsCache", in: "Sources/AppBundle/tree/MacWindow.swift", length: 3200)
+        let body = try sourceBody("func garbageCollect(skipClosedWindowsCache", in: "Sources/AppBundle/tree/MacWindow.swift")
         XCTAssertTrue(
             body.contains("if focus.workspace != deadWindowWorkspace || focus.windowOrNil?.app.pid != app.pid"),
             "the #201 pid guard no longer lets the push through when focus is on another workspace",
@@ -248,6 +240,22 @@ final class InvoluntaryFocusTest: XCTestCase {
             stays.windowId,
             additionalMsg: "a window going fullscreen became the workspace's focus fallback",
         )
+    }
+
+    /// A rule can run seconds after its window appeared, on a retry, when the user is typing in
+    /// another window. `fullscreen` promotes its window in the workspace's MRU, which is not focus.
+    func testFullscreenOnFromARuleDoesNotMoveFocus() async throws {
+        defer { config.onWindowDetected = [] }
+        let workspace = focus.workspace
+        let typingIn = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        XCTAssertTrue(typingIn.focusWindow())
+        config.onWindowDetected = [WindowDetectedCallback(rawRun: [parseCommand("fullscreen on").cmdOrDie])]
+
+        let arriving = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await tryOnWindowDetected(arriving)
+
+        XCTAssertTrue(arriving.isFullscreen, "the test needs the rule to have run")
+        assertEquals(focusedWindowId, typingIn.windowId, additionalMsg: "a rule's 'fullscreen on' took focus")
     }
 
     /// The third bookkeeping rebind, cmd-H with `automatically-unhide-macos-hidden-apps` off. Its
@@ -457,6 +465,26 @@ final class InvoluntaryFocusTest: XCTestCase {
             there.name,
             additionalMsg: "a slow app undid the workspace switch",
         )
+    }
+
+    /// A sticky window macOS still has focused follows the switch in the same refresh, so macOS naming it
+    /// afterwards is a window on the workspace the user went to: no adopt across workspaces, and nothing
+    /// recorded that could later explain a window death as macOS moving the user.
+    func testASwitchAwayFromAFocusedStickyWindowIsNotUndone() {
+        let here = Workspace.get(byName: "here")
+        let there = Workspace.get(byName: "there")
+        let sticky = TestWindow.new(id: 1, parent: here)
+        sticky.isSticky = true
+        TestWindow.new(id: 2, parent: there.rootTilingContainer)
+
+        updateFocusCache(sticky) // macOS and the model agree
+        XCTAssertTrue(there.focusWorkspace()) // the user switches workspace
+        refreshModel()
+        XCTAssertTrue(sticky.parent === there, "the test needs the sticky window to have followed")
+        updateFocusCache(sticky) // macOS still names the sticky window
+
+        assertEquals(focus.workspace.name, there.name, additionalMsg: "the sticky window dragged the user back")
+        XCTAssertNil(focusAdoptedAwayFrom, "following the screen was recorded as macOS moving the user")
     }
 
     /// `closedWindowsCache` reapplies every monitor's visible workspace when a cached window is

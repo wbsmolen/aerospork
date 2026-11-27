@@ -45,7 +45,7 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
 /// side by side as designed.
 @MainActor private func exitIfAnotherCopyIsRunning() {
     let others = NSRunningApplication.runningApplications(withBundleIdentifier: aeroSporkAppId)
-        .filter { !$0.isTerminated }
+        .filter { !$0.isGone } // a copy that exited mid-update can stay listed. See `isGone`.
         .map { (pid: $0.processIdentifier, launchDate: processStartDate($0.processIdentifier)) }
     guard let running = runningCopyToYieldTo(me: currentCopyIdentity(), others: others) else { return }
     let message = "\(aeroSporkAppName) is already running (pid \(running)), so this copy is exiting. Quit that one first to restart."
@@ -55,6 +55,7 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
 }
 
 @MainActor public func initAppBundle() {
+    ignoreSigpipe()
     initTerminationHandler()
     isCli = false
     initServerArgs()
@@ -114,8 +115,8 @@ func currentCopyIdentity() -> (pid: pid_t, launchDate: Date?) {
 }
 
 @TaskLocal
-var _isStartup: Bool? = false
-var isStartup: Bool { _isStartup ?? dieT("isStartup is not initialized") }
+var _isStartup: Bool = false
+var isStartup: Bool { _isStartup }
 
 struct ServerArgs: Sendable {
     var configLocation: String? = nil
@@ -162,3 +163,10 @@ private func initServerArgs() {
         cliError("\(path) doesn't exist")
     }
 }
+
+/// A write to a socket or pipe whose reader is gone must fail with EPIPE, never kill the window manager.
+///
+/// `SO_NOSIGPIPE` on each CLI socket was not enough: a CLI that gave up on a paused server (its 60 s
+/// timeout) left a SIGPIPE that reached the process as a whole when it resumed, on the main run loop, and
+/// its default action ended AeroSpork. Ignored for the whole process, every such write just returns EPIPE.
+func ignoreSigpipe() { signal(SIGPIPE, SIG_IGN) }

@@ -15,10 +15,6 @@ import XCTest
 final class DesignKitParityTest: XCTestCase {
     private var kitRoot: URL { projectRoot.appending(path: ".claude/skills/aerospork-design") }
 
-    private func read(_ relativePath: String) throws -> String {
-        try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
-    }
-
     private func readKit(_ relativePath: String) throws -> String {
         try String(contentsOf: kitRoot.appending(path: relativePath), encoding: .utf8)
     }
@@ -43,6 +39,9 @@ final class DesignKitParityTest: XCTestCase {
         .init(phrase: "Pause tiling",
               swiftFile: "Sources/AppBundle/ui/MenuBar.swift",
               kitFile: "ui_kits/menu_bar/MenuBarKit.jsx"),
+        .init(phrase: "Show config error…",
+              swiftFile: "Sources/AppBundle/ui/MenuBar.swift",
+              kitFile: "ui_kits/menu_bar/MenuBarKit.jsx"),
         .init(phrase: "Pin a workspace here",
               swiftFile: "Sources/AppBundle/ui/ConfigurationTabs/WorkspacesMonitorsTab.swift",
               kitFile: "ui_kits/settings_app/MonitorsTab.jsx"),
@@ -52,7 +51,7 @@ final class DesignKitParityTest: XCTestCase {
     /// is what tells you the kit needs the same change.
     func testTheSharedPhrasesAreStillInTheSwift() throws {
         for entry in shared {
-            let source = try read(entry.swiftFile)
+            let source = try readRepoFile(entry.swiftFile)
             XCTAssertTrue(
                 source.contains(entry.phrase),
                 """
@@ -81,7 +80,7 @@ final class DesignKitParityTest: XCTestCase {
     /// stale copy there is the same defect one layer down.
     func testTheBuiltBundleIsNotStale() throws {
         let bundle = try readKit("_ds_bundle.js")
-        for phrase in ["Add rule", "Add assignment", "Pause tiling", "Pin a workspace here"] {
+        for phrase in ["Add rule", "Add assignment", "Pause tiling", "Pin a workspace here", "Show config error…"] {
             XCTAssertTrue(
                 bundle.contains(phrase),
                 "_ds_bundle.js is stale: it does not contain \"\(phrase)\". Rebuild it from the component sources.",

@@ -11,6 +11,27 @@ func checkAccessibilityPermissions() {
     }
 }
 
+/// Accessibility can be revoked while AeroSpork runs, and trust is checked only at startup. Untrusted, AX
+/// answers may read as "destroyed", and a refresh would collect every window and save a memory file
+/// without them. So the background refresh is skipped until trust returns. Sessions are not: they collect
+/// nothing and save nothing, and the CLI and status bars keep answering.
+@MainActor private var trustLost = false
+
+/// The background refresh found trust revoked. True, and one record, only at the start of an episode.
+@MainActor @discardableResult func noteTrustLost() -> Bool {
+    if trustLost { return false }
+    trustLost = true
+    AppLog.session.fault("Accessibility permission is revoked: windows are not refreshed until it is granted again")
+    return true
+}
+
+/// The 30 s sweep's half: true once, when trust is back after an episode, so the sweep refreshes.
+@MainActor func noteTrustRegained(isTrusted: Bool) -> Bool {
+    guard trustLost, isTrusted else { return false }
+    trustLost = false
+    return true
+}
+
 private func resetAccessibility() {
     _ = try? Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", aeroSporkAppId])
 }
@@ -127,14 +148,10 @@ enum Ax {
             return ($0.windowId, casted)
         } ?? [] },
     )
-    /// An app's windows going by its children, for an app whose `windowsAttr` says nothing. Its other
-    /// children are a menu bar and, for Finder, the desktop.
-    static let childWindowsAttr = ReadableAttrImpl<[WindowIdAndAxUiElement]>(
-        key: kAXChildrenAttribute,
-        getter: { ($0 as? NSArray)?.compactMap(windowOrNil).compactMap {
-            guard let casted = $0.ax.cast, casted.get(Ax.roleAttr) == kAXWindowRole else { return nil }
-            return ($0.windowId, casted)
-        } ?? [] },
+    /// The raw `kAXWindowsAttribute` list, with no window id read per element. `identifyWindows` names them.
+    static let windowElementsAttr = ReadableAttrImpl<[AXUIElement]>(
+        key: kAXWindowsAttribute,
+        getter: { ($0 as? NSArray)?.compactMap { castToAxUiElementMock($0 as AnyObject)?.cast } ?? [] },
     )
     static let childrenAttr = ReadableAttrImpl<[any AxUiElementMock]>(
         key: kAXChildrenAttribute,
@@ -207,6 +224,27 @@ private func windowOrNil(_ any: Any?) -> WindowIdAndAxUiElementMock? {
     }
 }
 
+/// Each element's window id, keeping only the elements that are windows. An element AeroSpork already tracks
+/// answers from `known`, a local `CFHash`/`CFEqual` lookup of tens of nanoseconds. Only a miss pays
+/// `containingWindowId()`, an `_AXUIElementGetWindow` IPC (about 71 µs, the whole `axMessagingTimeout` for a busy
+/// app), and only a miss is asked `isWindow`.
+///
+/// Safe because an element's window id never changes, and AppKit never hands a new window a dead window's element
+/// (dev-docs/performance.md item 22). It says which window an element is, never whether a window is alive: that
+/// stays with `isDestroyed()` and the `.cannotComplete` rule (#39).
+func identifyWindows<E: AxUiElementMock & Hashable>(
+    _ elements: [E],
+    known: [E: UInt32],
+    isWindow: (E) -> Bool = { _ in true },
+) -> [(windowId: UInt32, ax: E)] {
+    elements.compactMap { element in
+        if let id = known[element] { return (id, element) }
+        // Filters out non-window objects (e.g. Finder's desktop)
+        guard let id = element.containingWindowId(), isWindow(element) else { return nil }
+        return (id, element)
+    }
+}
+
 extension AXUIElement: AxUiElementMock {
     func get<Attr: ReadableAttr>(_ attr: Attr) -> Attr.T? {
         let state = signposter.beginInterval(#function, id: signposter.makeSignpostID(), "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
@@ -215,6 +253,31 @@ extension AXUIElement: AxUiElementMock {
         return AXUIElementCopyAttributeValue(self, attr.key as CFString, &raw) == .success
             ? raw.flatMap(attr.getter)
             : nil
+    }
+
+    /// One `AXUIElementCopyMultipleAttributeValues` costs what one single read does; two reads cost 2-10x.
+    ///
+    /// Options `[]`, never `.stopOnError`: that mode was the pessimization in the deleted `AxBatchFetcher`
+    /// (dev-docs/performance.md). Without it a failed attribute comes back as an `AXValue` of type
+    /// `kAXValueAXErrorType`, which the getters below decode to nil, as a failed single read would.
+    /// Signposted as `get(_:)`, so Instruments counts stay comparable with the single reads it replaces.
+    private func get<A: ReadableAttr, B: ReadableAttr>(_ a: A, _ b: B) -> (A.T?, B.T?) {
+        let state = signposter.beginInterval("get(_:)", id: signposter.makeSignpostID(), "attr: \(a.key)+\(b.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        defer { signposter.endInterval("get(_:)", state) }
+        var raw: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(self, [a.key, b.key] as CFArray, [], &raw) == .success,
+              let values = raw as? [AnyObject], values.count == 2
+        else { return (nil, nil) }
+        return (a.getter(values[0]), b.getter(values[1]))
+    }
+
+    func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
+        get(Ax.topLeftCornerAttr, Ax.sizeAttr)
+    }
+
+    /// On Finder `AXFullScreen` comes back as an error slot, which decodes to nil, as its single read did.
+    func getNativeFlags() -> (fullscreen: Bool?, minimized: Bool?) {
+        get(Ax.isFullscreenAttr, Ax.minimizedAttr)
     }
 
     @discardableResult func set<Attr: WritableAttr>(_ attr: Attr, _ value: Attr.T) -> Bool {

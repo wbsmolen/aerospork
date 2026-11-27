@@ -31,10 +31,16 @@ struct FrozenWorkspace: Sendable {
         monitor = FrozenMonitor(workspace.workspaceMonitor)
         rootTilingNode = FrozenContainer(workspace.rootTilingContainer)
         floatingWindows = workspace.floatingWindows.map(FrozenWindow.init)
+        // Found among the children, not through the `macOsNative...WindowsContainer` getters: those create and
+        // bind the container when there is none, and a snapshot must not change the tree it takes.
         macosUnconventionalWindows =
-            workspace.macOsNativeHiddenAppsWindowsContainer.children.map { FrozenWindow($0 as! Window) } +
-            workspace.macOsNativeFullscreenWindowsContainer.children.map { FrozenWindow($0 as! Window) }
+            unconventionalWindows(in: MacosHiddenAppsWindowsContainer.self, of: workspace) +
+            unconventionalWindows(in: MacosFullscreenWindowsContainer.self, of: workspace)
     }
+}
+
+@MainActor private func unconventionalWindows(in kind: (some TreeNode).Type, of workspace: Workspace) -> [FrozenWindow] {
+    (workspace.children.filterIsInstance(of: kind).first?.children ?? []).filterIsInstance(of: Window.self).map(FrozenWindow.init)
 }
 
 @MainActor func cacheClosedWindowIfNeeded(window: Window) {
@@ -71,9 +77,11 @@ struct FrozenWorkspace: Sendable {
 
     for frozenWorkspace in closedWindowsCache.workspaces {
         let workspace = Workspace.get(byName: frozenWorkspace.name)
-        _ = topLeftCornerToMonitor[frozenWorkspace.monitor.topLeftCorner]?
-            .singleOrNil()?
-            .setActiveWorkspace(workspace)
+        // Its monitor, without showing it: showing it would make it each monitor's previous workspace, which
+        // picks the next stub. The visible ones are shown below.
+        if let monitor = topLeftCornerToMonitor[frozenWorkspace.monitor.topLeftCorner]?.singleOrNil() {
+            workspace.assignMonitor(monitor)
+        }
         for frozenWindow in frozenWorkspace.floatingWindows {
             MacWindow.get(byId: frozenWindow.id)?.bindAsFloatingWindow(to: workspace)
         }
@@ -83,10 +91,13 @@ struct FrozenWorkspace: Sendable {
         try await restoreTilingTree(of: workspace, from: frozenWorkspace.rootTilingNode) { MacWindow.get(byId: $0) }
     }
 
-    for monitor in closedWindowsCache.monitors {
-        _ = topLeftCornerToMonitor[monitor.topLeftCorner]?
-            .singleOrNil()?
-            .setActiveWorkspace(Workspace.get(byName: monitor.visibleWorkspace))
+    for frozenMonitor in closedWindowsCache.monitors {
+        guard let monitor = topLeftCornerToMonitor[frozenMonitor.topLeftCorner]?.singleOrNil() else { continue }
+        let workspace = Workspace.get(byName: frozenMonitor.visibleWorkspace)
+        // Showing it again where it already is would record it as its own previous workspace.
+        if workspace.visibleScreenPoint != monitor.rect.topLeftCorner {
+            _ = monitor.setActiveWorkspace(workspace)
+        }
     }
     return true
 }

@@ -1044,6 +1044,7 @@ const SF_TO_LUCIDE = {
   'xmark.circle.fill': 'circle-x',
   'magnifyingglass': 'search',
   'doc.on.doc': 'copy',
+  'plus.square.on.square': 'copy-plus',
   'checkmark': 'check',
   'checkmark.circle': 'circle-check',
   'equal.circle': 'circle-equal',
@@ -1094,6 +1095,7 @@ const ICON_SHAPES = {
   "circle-minus": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M8 12h8\" />",
   "circle-x": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m15 9-6 6\" /><path d=\"m9 9 6 6\" />",
   "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />",
+  "copy-plus": "<line x1=\"15\" x2=\"15\" y1=\"12\" y2=\"18\" /><line x1=\"12\" x2=\"18\" y1=\"15\" y2=\"15\" /><rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />",
   "circle-equal": "<path d=\"M7 10h10\" /><path d=\"M7 14h10\" /><circle cx=\"12\" cy=\"12\" r=\"10\" />",
   "git-branch": "<line x1=\"6\" x2=\"6\" y1=\"3\" y2=\"15\" /><circle cx=\"18\" cy=\"6\" r=\"3\" /><circle cx=\"6\" cy=\"18\" r=\"3\" /><path d=\"M18 9a9 9 0 0 1-9 9\" />",
   "list": "<path d=\"M3 5h.01\" /><path d=\"M3 12h.01\" /><path d=\"M3 19h.01\" /><path d=\"M8 5h13\" /><path d=\"M8 12h13\" /><path d=\"M8 19h13\" />",
@@ -2113,6 +2115,14 @@ const {
   MenuPanel,
   Icon
 } = window.AeroSporkDesignSystem_078bd7;
+const HINT_LINK = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--brand-focused)',
+  cursor: 'pointer',
+  fontSize: 11,
+  fontFamily: 'var(--font-system)'
+};
 const WORKSPACES = {
   '1': [{
     title: 'Ghostty',
@@ -2183,17 +2193,38 @@ function MenuBarKit() {
   const [open, setOpen] = React.useState(false);
   const [enabled, setEnabled] = React.useState(true);
   const [mode, setMode] = React.useState(null);
+  const [configFailed, setConfigFailed] = React.useState(false);
+  // A debug build has no update feed, so the Swift hides the row there (`Updater.shared.isEnabled`).
+  const canCheckForUpdates = true;
   const gap = 8;
   const wins = WORKSPACES[workspace];
-  const chips = [...Object.keys(WORKSPACES).map(n => ({
-    name: n,
-    active: n === workspace
-  })), ...(mode ? [{
+  // The mode chip comes first, as in TrayMenuModel.
+  const chips = [...(mode ? [{
     name: mode,
     type: 'mode',
     active: true
-  }] : [])];
-  const items = [...(mode ? [{
+  }] : []), ...Object.keys(WORKSPACES).map(n => ({
+    name: n,
+    active: n === workspace
+  }))];
+  const items = [...(configFailed ? [{
+    label: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Icon, {
+      sf: "exclamationmark.octagon.fill",
+      size: 12,
+      style: {
+        marginRight: 6
+      }
+    }), "Config not loaded: running defaults"),
+    disabled: true
+  }, {
+    label: 'Show config error…',
+    onClick: () => {
+      setOpen(false);
+      window.alert('AeroSpork config error\n\n~/.aerospork.toml: line 12: unknown key "gapz"');
+    }
+  }, {
+    divider: true
+  }] : []), ...(mode ? [{
     label: 'Leave “' + mode + '” mode',
     onClick: () => {
       setMode(null);
@@ -2227,7 +2258,10 @@ function MenuBarKit() {
       window.open('../settings_app/index.html', '_blank');
       setOpen(false);
     }
-  }, {
+  }, ...(canCheckForUpdates ? [{
+    label: 'Check for updates…',
+    onClick: () => setOpen(false)
+  }] : []), {
     label: 'Quit AeroSpork',
     shortcut: '⌘Q',
     onClick: () => setOpen(false)
@@ -2330,15 +2364,14 @@ function MenuBarKit() {
       e.stopPropagation();
       setMode('service');
     },
-    style: {
-      background: 'none',
-      border: 'none',
-      color: 'var(--brand-focused)',
-      cursor: 'pointer',
-      fontSize: 11,
-      fontFamily: 'var(--font-system)'
-    }
-  }, "Enter \u201Cservice\u201D mode")));
+    style: HINT_LINK
+  }, "Enter \u201Cservice\u201D mode"), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setConfigFailed(!configFailed);
+    },
+    style: HINT_LINK
+  }, configFailed ? 'Fix the config' : 'Break the config')));
 }
 Object.assign(window, {
   MenuBarKit
@@ -2390,7 +2423,7 @@ function SettingsApp({ framed = true, initialTab = "general", banner = null, wid
   const [inherit, setInherit] = React.useState(true);
   const [toml, setToml] = React.useState(D.toml);
 
-  const body = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(TabBar, { tabs: TABS, value: tab, onChange: setTab }), /*#__PURE__*/React.createElement("div", { className: "tab-body" }, banner === "error" && /*#__PURE__*/React.createElement(Banner, { kind: "error" }, "Your config was not loaded — AeroSpork is running built-in defaults. Fix the errors below and save; the config reloads by itself.\nline 12: unknown key ‘mods’"), tab === "general" && /*#__PURE__*/React.createElement(GeneralTab, { s: settings, set }), tab === "gaps" && /*#__PURE__*/React.createElement(GapsTab, { s: settings, set }), tab === "keys" && /*#__PURE__*/React.createElement(KeysTab, { bindings, setBindings }), tab === "monitors" && /*#__PURE__*/React.createElement(MonitorsTab, { monitors: D.monitors, assignments, setAssignments, workspaces: D.workspaces }), tab === "events" && /*#__PURE__*/React.createElement(EventsTab, { events, setEvents, env, setEnv, inherit, setInherit }), tab === "rules" && /*#__PURE__*/React.createElement(RulesTab, { rules, setRules }), tab === "raw" && /*#__PURE__*/React.createElement(RawTomlTab, { toml, setToml, original: D.toml })));
+  const body = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(TabBar, { tabs: TABS, value: tab, onChange: setTab }), /*#__PURE__*/React.createElement("div", { className: "tab-body" }, banner === "error" && /*#__PURE__*/React.createElement(Banner, { kind: "error" }, "Your config was not loaded, so AeroSpork is running built-in defaults. Fix the error in Raw TOML or your editor; the config reloads by itself.\nline 12: unknown key ‘mods’"), tab === "general" && /*#__PURE__*/React.createElement(GeneralTab, { s: settings, set }), tab === "gaps" && /*#__PURE__*/React.createElement(GapsTab, { s: settings, set }), tab === "keys" && /*#__PURE__*/React.createElement(KeysTab, { bindings, setBindings }), tab === "monitors" && /*#__PURE__*/React.createElement(MonitorsTab, { monitors: D.monitors, assignments, setAssignments, workspaces: D.workspaces }), tab === "events" && /*#__PURE__*/React.createElement(EventsTab, { events, setEvents, env, setEnv, inherit, setInherit }), tab === "rules" && /*#__PURE__*/React.createElement(RulesTab, { rules, setRules }), tab === "raw" && /*#__PURE__*/React.createElement(RawTomlTab, { toml, setToml, original: D.toml })));
   if (!framed) return /*#__PURE__*/React.createElement("div", { className: "settings-plain" }, body);
   return /*#__PURE__*/React.createElement(WindowChrome, { title: currentTab.label, width, height }, body);
 }
@@ -2431,7 +2464,7 @@ function CommandRows({
       fontSize: 'var(--text-callout)',
       color: 'var(--label-tertiary)'
     }
-  }, "Nothing here yet. Anything you add runs every time this event fires \u2014 exec-and-forget for a shell command, or an aerospork command directly.") : /*#__PURE__*/React.createElement("div", {
+  }, "Nothing here yet. Anything you add runs every time this event fires: exec-and-forget for a shell command, or an aerospork command directly.") : /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       display: 'flex',
@@ -2503,7 +2536,7 @@ function EventsTab({
     list: events.focusChanged,
     onChange: set('focusChanged'),
     placeholder: "move-mouse window-lazy-center",
-    footer: "Any focus change at all: window, workspace or monitor. Fires the most often \u2014 keep it cheap."
+    footer: "Any focus change at all: window, workspace or monitor. Fires the most often, so keep it cheap."
   }), /*#__PURE__*/React.createElement(FormSection, {
     header: /*#__PURE__*/React.createElement(SectionLabel, {
       title: "Environment for exec commands",
@@ -2572,7 +2605,6 @@ const {
   FormSection,
   SectionLabel,
   NumberField,
-  SettingsFooter,
   GapsPreview,
   Toggle,
   StatusLabel
@@ -2597,7 +2629,7 @@ function GapsTab({
     }),
     footer: D.gapsHavePerMonitorOverrides ? /*#__PURE__*/React.createElement(StatusLabel, {
       kind: "neutral"
-    }, "Some of these gaps have per-monitor rules set in Raw TOML \u2014 editing any value below replaces the whole section with flat numbers.") : null
+    }, "Some gaps have per-monitor rules in Raw TOML. Editing any value below replaces the whole section with flat numbers.") : null
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -2645,7 +2677,7 @@ function GapsTab({
       title: "Around the screen",
       sf: "rectangle.inset.filled"
     }),
-    footer: "The top gap is measured below the menu bar, so 0 is flush with the usable area."
+    footer: D.gapsHavePerMonitorOverrides ? 'The top gap is measured below the menu bar, so 0 is flush with the usable area.' : 'The top gap is measured below the menu bar, so 0 is flush with the usable area. Per-monitor gaps are set in Raw TOML.'
   }, /*#__PURE__*/React.createElement(Toggle, {
     label: "Same on all sides",
     checked: outerLinked,
@@ -2682,7 +2714,7 @@ function GapsTab({
     title: "Right",
     value: s.outerRight,
     onChange: v => set('outerRight', v)
-  }))), /*#__PURE__*/React.createElement(SettingsFooter, null, "Raw TOML can set a different value per monitor for any of these six gaps. Editing a gap here always writes one flat number for every monitor. Use Raw TOML for per-monitor rules."));
+  }))));
 }
 Object.assign(window, {
   GapsTab
@@ -3085,7 +3117,7 @@ function BindingRow({
   }, b.origin === 'generated' && /*#__PURE__*/React.createElement(Badge, {
     help: "Generated from mod and workspaces. It is not written in your config file."
   }, "generated"), /*#__PURE__*/React.createElement(IconButton, {
-    systemImage: "doc.on.doc",
+    systemImage: "plus.square.on.square",
     label: 'Duplicate “' + b.command + '”',
     onClick: () => onDuplicate(b)
   }), b.origin === 'explicit' ? /*#__PURE__*/React.createElement(IconButton, {
@@ -3370,7 +3402,7 @@ function KeysTab({
       padding: '8px 14px 4px'
     }
   }, /*#__PURE__*/React.createElement(SectionLabel, {
-    title: 'In other modes — ' + crossModeRowMatches.length,
+    title: 'In other modes (' + crossModeRowMatches.length + ')',
     sf: "arrow.triangle.branch"
   })), crossModeRowMatches.map(({
     mode: m,
@@ -3526,7 +3558,7 @@ function KeysTab({
     style: {
       padding: '7px 14px 10px'
     }
-  }, (generated ? generated + ' generated by mod, ' : '') + explicit + ' written in your config' + (generated ? '. Generated bindings have no line to edit — Override copies one here first.' : '') + ' Chain commands with ;.')));
+  }, (generated ? generated + ' generated by mod, ' : '') + explicit + ' written in your config' + (generated ? '. Generated bindings have no line to edit: Override copies one here first.' : '') + ' Chain commands with ;.')));
 }
 Object.assign(window, {
   KeysTab
@@ -3602,7 +3634,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
     } })),
     ...movable.length > 0 ? [
       ...unpinned.length > 0 ? [{ divider: true }] : [],
-      { label: "Pinned elsewhere \u2014 move here", disabled: true },
+      { label: "Pinned elsewhere: move here", disabled: true },
       ...movable.map((a) => ({ label: a.workspace, mono: true, onClick: () => {
         pin(a.workspace, pinToken);
         setPinMenuOpen(false);
@@ -3619,7 +3651,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
     {
       sf: "display",
       title: "No monitors detected",
-      message: "Monitors appear here as soon as macOS reports one \u2014 their UUIDs are what pins a workspace to a physical panel."
+      message: "Monitors appear here as soon as macOS reports one. Their UUIDs are what pins a workspace to a physical panel."
     }
   ) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "monitor-diagram-wrap" }, /* @__PURE__ */ React.createElement(MonitorArrangement, { monitors, selected: selectedMonitor, onSelect: toggleMonitor, height: 150 })), /* @__PURE__ */ React.createElement("div", { className: "monitor-detail" }, activeMonitor ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5, width: "100%" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, position: "relative" } }, /* @__PURE__ */ React.createElement(Icon, { sf: "display", size: 13, style: { color: "var(--label-tertiary)", flex: "0 0 auto" } }), /* @__PURE__ */ React.createElement("strong", { style: { color: "var(--label)", fontWeight: "var(--weight-medium)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, activeMonitor.name), /* @__PURE__ */ React.createElement("span", { style: { color: "var(--label-secondary)" } }, activeMonitor.resolution), activeMonitor.uuid && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "mono", style: { fontSize: "var(--text-caption)", color: "var(--label-secondary)" } }, activeMonitor.uuid.slice(0, 8), "\u2026"), /* @__PURE__ */ React.createElement(CopyButton, { value: activeMonitor.uuid, help: "Copy monitor UUID\n" + activeMonitor.uuid + "\nA DisplayLink monitor reports no vendor or serial, so its UUID is the only thing that pins a workspace to that exact panel." })), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }), /* @__PURE__ */ React.createElement(
     Button,
@@ -3651,7 +3683,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
         // `circle` glyph: a near-invisible marker, not a visible icon.
         { key: "handle", title: "", width: "20px", render: () => /* @__PURE__ */ React.createElement("span", { style: { display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--label-tertiary)" } }) },
         { key: "workspace", title: "Workspace", width: "140px", render: (r) => /* @__PURE__ */ React.createElement(TextField, { mono: true, value: r.workspace, placeholder: "name", onChange: (v) => update(r.id, { workspace: v }), style: { width: "100%" } }) },
-        { key: "monitor", title: "Monitor", render: (r) => /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: 6, alignItems: "center" } }, /* @__PURE__ */ React.createElement(Select, { value: r.monitor, options: monitorOptions(r.monitor), onChange: (v) => update(r.id, { monitor: v }) }), r.complex && /* @__PURE__ */ React.createElement(Badge, { help: "Written with more detail than this editor can show \u2014 a fallback list of monitors, or a fingerprint keyed on more than its UUID. Any structured save in this window is refused until this changes; edit it in Raw TOML." }, "complex")) }
+        { key: "monitor", title: "Monitor", render: (r) => /* @__PURE__ */ React.createElement("span", { style: { display: "flex", gap: 6, alignItems: "center" } }, /* @__PURE__ */ React.createElement(Select, { value: r.monitor, options: monitorOptions(r.monitor), onChange: (v) => update(r.id, { monitor: v }) }), r.complex && /* @__PURE__ */ React.createElement(Badge, { help: "Written with more detail than this editor can show: a fallback list of monitors, or a fingerprint keyed on more than its UUID. Any structured save in this window is refused until this changes; edit it in Raw TOML." }, "complex")) }
       ],
       rows: assignments,
       emptyState: /* @__PURE__ */ React.createElement(
@@ -3672,7 +3704,7 @@ function MonitorsTab({ monitors, assignments, setAssignments, workspaces = [] })
       removeHelp: "Remove the selected assignment",
       onAdd: () => add(),
       onRemove: selected ? remove : null,
-      hint: "Hardware fingerprints already in your config are preserved \u2014 they show up here under the monitor's name. A workspace named here stays available even with no windows on it."
+      hint: "Hardware fingerprints already in your config are preserved, and show up here under the monitor's name. A workspace named here stays available even with no windows on it."
     }
   )))));
 }
@@ -3810,7 +3842,7 @@ function RawTomlTab({
     }))
   })), document.body)), /*#__PURE__*/React.createElement(Button, {
     variant: "borderless",
-    title: "External edits are picked up automatically \u2014 the config file is watched"
+    title: "External edits are picked up automatically: the config file is watched"
   }, "Open in TextEdit"), /*#__PURE__*/React.createElement(Button, {
     variant: "borderless",
     title: "Re-read the config file. Normally automatic."
@@ -3847,7 +3879,7 @@ function RawTomlTab({
     kind: "error"
   }, error)) : edited ? /*#__PURE__*/React.createElement(StatusLabel, {
     kind: "ok"
-  }, "Valid \u2014 press Apply (\u2318S) to write it") : /*#__PURE__*/React.createElement(StatusLabel, {
+  }, "Valid. Press Apply (\u2318S) to write it.") : /*#__PURE__*/React.createElement(StatusLabel, {
     kind: "neutral"
   }, "Matches the file on disk"), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -4102,7 +4134,7 @@ function RulesTab({
   }), rules.length === 0 ? /*#__PURE__*/React.createElement(ContentUnavailable, {
     sf: "macwindow",
     title: "No window rules",
-    message: "Rules run once, when a window first appears \u2014 pick an app and AeroSpork remembers what to do with it every time.",
+    message: "Rules run once, when a window first appears: pick an app and AeroSpork remembers what to do with it every time.",
     actionTitle: "Add rule",
     onAction: () => openPicker('new')
   }) : /*#__PURE__*/React.createElement("div", {

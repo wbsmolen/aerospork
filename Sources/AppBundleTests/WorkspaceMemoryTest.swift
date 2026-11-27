@@ -370,6 +370,31 @@ final class WorkspaceMemoryTest: XCTestCase {
         assertEquals(try Data(contentsOf: WorkspaceMemory.fileUrl), before)
     }
 
+    /// A failed write was silent. Now it logs once per episode, not once per refresh, and the first
+    /// write that lands ends the episode.
+    func testAFailedWriteIsRecordedOncePerEpisode() throws {
+        let directory = tempDir.appending(path: "gone")
+        WorkspaceMemory.fileUrlOverride = directory.appending(path: "state.json")
+        let snapshot = state(session: WorkspaceMemory.session(), windows: ["42": .init(workspace: "A", bundleId: "com.apple.finder")])
+        func writeTwice() {
+            WorkspaceMemory.writeForTests(snapshot)
+            WorkspaceMemory.writeForTests(snapshot)
+            WorkspaceMemory.waitForWrites()
+        }
+
+        writeTwice()
+        assertEquals(WorkspaceMemory.writeFailureNotices, 1)
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        writeTwice()
+        assertEquals(WorkspaceMemory.writeFailureNotices, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: WorkspaceMemory.fileUrl.path))
+
+        try FileManager.default.removeItem(at: directory)
+        writeTwice()
+        assertEquals(WorkspaceMemory.writeFailureNotices, 2, additionalMsg: "a write that landed did not end the episode")
+    }
+
     /// Failing to identify the session is not proof the file is stale. Deleting it on that basis
     /// destroys a perfectly good memory whenever the process table read happens to fail.
     func testAnUnidentifiableLiveSessionLeavesTheFileAlone() throws {
@@ -513,25 +538,21 @@ final class WorkspaceMemoryTest: XCTestCase {
         )
     }
 
-    /// And the result has to be what the window is bound to, not something computed and dropped.
+    /// And the result has to be what the window is bound to, not something computed and dropped:
+    /// `remembered` wins over the location fallback, and the workspace it picks is the one bound to.
+    /// Only those tokens, in that order: the fallback expression is not this rule.
     func testTheRestoredWorkspaceIsWhatTheWindowIsBoundTo() throws {
-        let source = try String(
-            contentsOf: projectRoot.appending(path: "Sources/AppBundle/tree/MacWindow.swift"),
-            encoding: .utf8,
-        )
-        let normalised = source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        XCTAssertTrue(
-            normalised.contains(
-                "let remembered = WorkspaceMemory.restoredWorkspace(forWindowId: windowId, bundleId: macApp.bundleId) "
-                    + "let workspace = remembered "
-                    + "?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace : focus.workspace) "
-                    + "var data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)",
-            ),
-            """
+        let body = try sourceBody("static func getOrRegister(windowId: UInt32", in: "Sources/AppBundle/tree/MacWindow.swift")
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let message = """
             the remembered workspace is not the value bound to the window -- location is being used
             regardless, so the memory is computed and thrown away.
-            """,
-        )
+            """
+        let lookup = try XCTUnwrap(body.range(of: "let remembered = WorkspaceMemory.restoredWorkspace("), message)
+        let preferred = try XCTUnwrap(body.range(of: "let workspace = remembered ??"), message)
+        let bound = try XCTUnwrap(body.range(of: "unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace,"), message)
+        XCTAssertLessThan(lookup.lowerBound, preferred.lowerBound, message)
+        XCTAssertLessThan(preferred.lowerBound, bound.lowerBound, message)
     }
 
     /// Restoring the name without the monitor is the reverted defect. `restoredWorkspace` is the one
@@ -597,10 +618,9 @@ final class WorkspaceMemoryTest: XCTestCase {
         assertNil(WorkspaceMemory.restoredWorkspace(forWindowId: 42, bundleId: "com.apple.finder"))
     }
 
-    /// `setUpWorkspacesForTests` assumes the one monitor the rest of the suite runs on.
+    /// `setUpWorkspacesForTests` puts back the one monitor the rest of the suite runs on.
     private func setUpWorkspacesOnTheseMonitors() {
         let these = testMonitors
-        testMonitors = [defaultTestMonitor]
         setUpWorkspacesForTests()
         testMonitors = these
     }
@@ -960,6 +980,55 @@ final class WorkspaceMemoryTest: XCTestCase {
 
         assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1, 2]), ["2": .init(workspace: "B", bundleId: "b")])
         assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1]), [:]) // closed, so gone for good
+    }
+
+    /// A window minimized across a restart is unclaimed, and can be the only window on its workspace.
+    /// Its workspace must keep its monitor in the file, or the next restart restores the workspace onto
+    /// the main monitor: half a restore.
+    func testAnUnclaimedWindowKeepsItsWorkspaceMonitor() {
+        write(state(
+            session: WorkspaceMemory.session(),
+            windows: ["1": .init(workspace: "A", bundleId: "b"), "2": .init(workspace: "B", bundleId: "b")],
+            monitors: ["A": fingerprint(uuid: leftUuid), "B": fingerprint(uuid: rightUuid)],
+        ))
+        WorkspaceMemory.load()
+        _ = WorkspaceMemory.restoredWorkspace(forWindowId: 1, bundleId: "b")
+
+        let kept = WorkspaceMemory.keptWindowsAndMonitors(
+            live: ["1": .init(workspace: "A", bundleId: "b")],
+            unclaimed: WorkspaceMemory.unclaimedWindows(alive: [1, 2]),
+            liveMonitors: [:], // neither workspace is visible or holds a registered window
+            remembered: [
+                "A": fingerprint(uuid: leftUuid),
+                "B": fingerprint(uuid: rightUuid),
+                "C": fingerprint(uuid: leftUuid), // no window names it any more
+            ],
+        )
+
+        assertEquals(kept.windows["2"]?.workspace, "B")
+        assertEquals(kept.monitors["B"]?.displayUUID, rightUuid)
+        assertEquals(kept.monitors["A"]?.displayUUID, leftUuid)
+        assertEquals(kept.monitors["C"], nil)
+    }
+
+    /// A failed WindowServer read is not proof that every window died: away places and unclaimed entries stay.
+    func testAFailedWindowServerReadForgetsNothing() {
+        setUpWorkspacesOnTheseMonitors()
+        write(state(session: WorkspaceMemory.session(), windows: ["7": .init(workspace: "B", bundleId: "b")]))
+        WorkspaceMemory.load()
+        let workspace = Workspace.get(byName: "A")
+        TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let away = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        away.leaveTilesForMacos(workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER)
+
+        WorkspaceMemory.forgetGoneAwayWindows(alive: nil)
+        assertEquals(workspace.rootTilingContainer.awayWindows.map(\.id), [2])
+        assertEquals(WorkspaceMemory.unclaimedWindows(alive: nil), ["7": .init(workspace: "B", bundleId: "b")])
+
+        // A read that worked and does not list them: gone for good.
+        WorkspaceMemory.forgetGoneAwayWindows(alive: [1])
+        assertEquals(workspace.rootTilingContainer.awayWindows.map(\.id), [])
+        assertEquals(WorkspaceMemory.unclaimedWindows(alive: [1]), [:])
     }
 
     /// The other half of the quit fix: a dragged floating window, on a monitor that isn't the first.

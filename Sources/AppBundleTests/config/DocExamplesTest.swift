@@ -75,13 +75,10 @@ final class DocExamplesTest: XCTestCase {
     /// top-level key, such as `alt-enter = '...'` in a man page, is a fragment of `[keys]`, so it is
     /// read under `[keys]` when it does not parse on its own.
     private func errors(of block: Block) -> [String] {
+        // Unit tests run with a stub environment that holds only PATH, so `${HOME}` in an
+        // example cannot resolve here. That says nothing about the example.
         func errors(_ text: String) -> [String] {
-            switch parseConfig(text) {
-                case .success: []
-                // Unit tests run with a stub environment that holds only PATH, so `${HOME}` in an
-                // example cannot resolve here. That says nothing about the example.
-                case .failure(let errors): errors.descriptions.filter { !$0.contains("isn't presented in AeroSpork.app env vars") }
-            }
+            parseErrors(text).filter { !$0.contains("isn't presented in AeroSpork.app env vars") }
         }
         let asIs = errors(block.text)
         let hasHeader = block.text.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[") }

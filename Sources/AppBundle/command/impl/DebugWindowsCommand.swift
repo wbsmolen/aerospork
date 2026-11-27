@@ -23,6 +23,9 @@ struct DebugWindowsCommand: Command {
     let args: DebugWindowsCmdArgs
 
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
+        if args.tree {
+            return io.out((JSONEncoder.aeroSporkDefault.encodeToString(treeDump()) ?? "null") + "\n")
+        }
         if let windowId = args.windowId {
             guard let window = Window.get(byId: windowId) else {
                 return io.err("Can't find window with the specified window-id: \(windowId)")
@@ -93,7 +96,7 @@ private func dumpWindowDebugInfo(_ window: Window) async throws -> String {
     result["Aero.AxUiElementWindowType_isDialogHeuristic"] = .newOrDie(isDialog)
 
     var matchingCallbacks: [Json] = []
-    for callback in config.onWindowDetected where try await callback.matches(window) {
+    for callback in config.onWindowDetected where try await callback.matches(window, title: { try await window.title }) {
         matchingCallbacks.append(callback.debugJson)
     }
     result["Aero.on-window-detected"] = .array(matchingCallbacks)
@@ -116,4 +119,92 @@ func debugWindowsIfRecording(_ window: Window) async throws {
         return
     }
     debugWindowsLog.append((id: window.windowId, dump: try await dumpWindowDebugInfo(window)))
+}
+
+/// The state AeroSpork holds, for `debug-windows --tree`. Reads memory only: no AX call, so a hung app
+/// cannot hang the dump, and nothing that creates a workspace or a container (`get(byName:)`,
+/// `rootTilingContainer`, `Monitor.activeWorkspace` all can).
+@MainActor
+func treeDump() -> Json {
+    var apps: [pid_t: any AbstractApp] = MacApp.allAppsMap.mapValues { $0 }
+    func dump(_ node: TreeNode) -> Json {
+        func container(_ kind: String) -> Json { .dict(["container": .string(kind), "children": .array(node.children.map(dump))]) }
+        switch node.nodeCases {
+            case .window(let window):
+                apps[window.app.pid] = window.app
+                return .dict([
+                    "window": .uint32(window.windowId),
+                    "pid": .int(Int(window.app.pid)),
+                    "bundleId": window.app.bundleId.map(Json.string) ?? .null,
+                    "layoutReason": .string(window.layoutReason.debugDescription),
+                    "backgroundTab": .bool(window.isBackgroundTab),
+                ])
+            case .tilingContainer(let tiling):
+                return .dict([
+                    "container": .string("tiling"),
+                    "layout": .string(tiling.layout.rawValue),
+                    "orientation": .string(tiling.orientation.rawValue),
+                    "away": .array(tiling.awayWindows.map { .uint32($0.id) }),
+                    "children": .array(tiling.children.map(dump)),
+                ])
+            case .workspace(let workspace):
+                return .dict([
+                    "workspace": .string(workspace.name),
+                    "visibleAt": workspace.visibleScreenPoint.map(\.debugJson) ?? .null,
+                    "children": .array(workspace.children.map(dump)),
+                ])
+            case .macosMinimizedWindowsContainer: return container("macos-minimized")
+            case .macosHiddenAppsWindowsContainer: return container("macos-hidden-app")
+            case .macosFullscreenWindowsContainer: return container("macos-fullscreen")
+            case .macosPopupWindowsContainer: return container("macos-popups")
+        }
+    }
+
+    let workspaces = Workspace.all
+    let tree = workspaces.map(dump) + [dump(macosMinimizedWindowsContainer), dump(macosPopupWindowsContainer)]
+    let monitorPoints = monitors.map(\.rect.topLeftCorner)
+    var inconsistencies: [Json] = []
+    for workspace in workspaces {
+        if let point = workspace.visibleScreenPoint, !monitorPoints.contains(point) {
+            inconsistencies.append(.string("workspace '\(workspace.name)' is visible at \(point), where no monitor is"))
+        }
+    }
+    let appsJson: [Json] = apps.values.sorted { $0.pid < $1.pid }.map { app in
+        var result: [String: Json] = ["pid": .int(Int(app.pid)), "bundleId": app.bundleId.map(Json.string) ?? .null]
+        if let macApp = app as? MacApp {
+            result["isTerminated"] = .bool(macApp.nsApp.isTerminated)
+            result["processIsGone"] = .bool(processIsGone(macApp.pid))
+            if macApp.nsApp.isGone {
+                inconsistencies.append(.string("app \(app.bundleId ?? "?") (\(app.pid)) is gone but still registered"))
+            }
+        }
+        return .dict(result)
+    }
+    return .dict([
+        "monitors": .array(monitors.map { monitor in
+            let point = monitor.rect.topLeftCorner
+            return .dict([
+                "name": .string(monitor.name),
+                "uuid": monitor.fingerprint?.displayUUID.map(Json.string) ?? .null,
+                "origin": point.debugJson,
+                "visibleWorkspace": workspaces.first { $0.visibleScreenPoint == point }.map { .string($0.name) } ?? .null,
+            ])
+        }),
+        "tree": .array(tree),
+        "apps": .array(appsJson),
+        "inconsistencies": .array(inconsistencies),
+    ])
+}
+
+extension CGPoint {
+    fileprivate var debugJson: Json { .dict(["x": .int(Int(x)), "y": .int(Int(y))]) }
+}
+
+extension LayoutReason {
+    fileprivate var debugDescription: String {
+        switch self {
+            case .standard: "standard"
+            case .macos(let kind, let workspace): "macos(from: \(kind), workspace: \(workspace ?? "nil"))"
+        }
+    }
 }

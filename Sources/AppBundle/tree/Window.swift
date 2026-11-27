@@ -24,8 +24,13 @@ class Window: TreeNode, Hashable {
     }
 
     @MainActor static func get(byId windowId: UInt32) -> Window? {
+        // The test branch also searches the two global containers, which hang off no workspace, so a
+        // minimized or popup test window can be found as `allWindowsMap` finds it in production.
         isUnitTest
-            ? Workspace.all.flatMap { $0.allLeafWindowsRecursive }.first(where: { $0.windowId == windowId })
+            ? (Workspace.all.flatMap(\.allLeafWindowsRecursive)
+                + macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self)
+                + macosPopupWindowsContainer.children.filterIsInstance(of: Window.self))
+            .first(where: { $0.windowId == windowId })
             : MacWindow.allWindowsMap[windowId]
     }
 
@@ -99,6 +104,10 @@ class Window: TreeNode, Hashable {
 
     /// No-ops here, because a test double has no native state to change.
     func setNativeMinimized(_ value: Bool) {}
+    func setNativeFullscreen(_ value: Bool) {}
+    /// A test double is an ordinary window. Overridden by `MacWindow`, which asks the app.
+    @MainActor
+    func getAxUiElementWindowType() async throws -> AxUiElementWindowType { .window }
     func unhideApp() {}
 
     func setAxTopLeftCorner(_ point: CGPoint) { die("Not implemented") }
@@ -121,10 +130,15 @@ enum LayoutReason: Equatable {
 
 extension Window {
     /// "Floating" is not stored state -- it's just "bound directly to the workspace instead of to a
-    /// tiling container". That holds for every parent kind we have today. `sticky` (a window pinned
-    /// across all workspaces) would break it, but sticky is not implemented and not planned, so
-    /// there is nothing to design around yet.
+    /// tiling container". That holds for every parent kind we have today, sticky windows included: a
+    /// sticky window is a floating window that `followVisibleWorkspaces` rebinds.
     var isFloating: Bool { parent is Workspace }
+
+    /// Follows the workspace its monitor shows. See `followVisibleWorkspaces`.
+    @MainActor var isSticky: Bool {
+        get { stickyWindowIds.contains(windowId) }
+        set { if newValue { stickyWindowIds.insert(windowId) } else { stickyWindowIds.remove(windowId) } }
+    }
 
     @discardableResult
     @MainActor
@@ -139,6 +153,4 @@ extension Window {
         if !isBackgroundTab { (parent as? TilingContainer)?.noteAway(self) }
         bind(to: container, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
     }
-
-    func asMacWindow() -> MacWindow { self as! MacWindow }
 }

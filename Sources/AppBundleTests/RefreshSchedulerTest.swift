@@ -79,14 +79,14 @@ final class RefreshSchedulerTest: XCTestCase {
         scheduler.request(request())
         await until { recorder.started.count == 1 }
 
-        scheduler.sessionWillStart()
+        let session = scheduler.sessionWillStart()
         await until { recorder.cancelled == 1 }
         scheduler.request(request())
         try? await Task.sleep(for: .milliseconds(30))
         assertEquals(recorder.started.count, 1) // nothing starts underneath a session
 
         recorder.hold = false
-        scheduler.sessionDidEnd()
+        scheduler.sessionDidEnd(session)
         await until { recorder.started.count == 2 && recorder.finished == 1 }
     }
 
@@ -95,12 +95,56 @@ final class RefreshSchedulerTest: XCTestCase {
         let recorder = Recorder()
         let scheduler = scheduler(recorder)
         scheduler.request(request(unlocked: true))
-        scheduler.sessionWillStart()
+        let session = scheduler.sessionWillStart()
         try? await Task.sleep(for: .milliseconds(30))
         assertEquals(recorder.started.count, 0)
-        scheduler.sessionDidEnd()
+        scheduler.sessionDidEnd(session)
         await until { recorder.finished == 1 }
         assertEquals(recorder.started[0].screenIsDefinitelyUnlocked, true)
+    }
+
+    /// A session body that awaits something that never returns: the gate lets the next session in, and the
+    /// scheduler must stop waiting for it too, or no refresh runs again while hotkeys keep working.
+    func testASessionThatNeverEndsStopsHoldingBackRefreshes() async {
+        let recorder = Recorder()
+        let scheduler = scheduler(recorder, abandonAfter: .milliseconds(20))
+        let start = ContinuousClock.now
+        scheduler.sessionDidAcquireGate(scheduler.sessionWillStart()) // and never ends
+        scheduler.request(request())
+        await until { recorder.finished == 1 }
+        XCTAssertGreaterThanOrEqual(ContinuousClock.now - start, .milliseconds(20))
+    }
+
+    /// Only a session holding the gate can be wedged; one still waiting for it is waiting on that one.
+    func testAQueuedSessionDoesNotExpire() async {
+        let recorder = Recorder()
+        let scheduler = scheduler(recorder, abandonAfter: .milliseconds(20))
+        let queued = scheduler.sessionWillStart()
+        scheduler.request(request())
+        try? await Task.sleep(for: .milliseconds(60))
+        assertEquals(recorder.started.count, 0)
+        scheduler.sessionDidEnd(queued)
+        await until { recorder.finished == 1 }
+    }
+
+    /// An abandoned session's `defer` still runs, late. It must not end the session that holds the gate now.
+    func testALateEndOfAnAbandonedSessionDoesNotFreeALiveOne() async {
+        let recorder = Recorder()
+        let scheduler = scheduler(recorder, abandonAfter: .milliseconds(200))
+        let wedged = scheduler.sessionWillStart()
+        scheduler.sessionDidAcquireGate(wedged)
+        scheduler.request(request())
+        await until { recorder.finished == 1 } // dropped
+
+        let live = scheduler.sessionWillStart()
+        scheduler.sessionDidAcquireGate(live)
+        scheduler.sessionDidEnd(wedged)
+        scheduler.request(request())
+        try? await Task.sleep(for: .milliseconds(20))
+        assertEquals(recorder.started.count, 1) // nothing starts underneath the live session
+
+        scheduler.sessionDidEnd(live)
+        await until { recorder.finished == 2 }
     }
 
     func testAWedgedRefreshDoesNotEndRefreshesForGood() async {
@@ -147,9 +191,7 @@ final class RefreshSchedulerTest: XCTestCase {
 
     /// `FifoGate` deadlocks on a session that awaits another, so nothing a session runs may start one.
     func testNoCommandStartsANestedSession() throws {
-        let commands = projectRoot.appending(path: "Sources/AppBundle/command")
-        let files = try XCTUnwrap(FileManager.default.enumerator(at: commands, includingPropertiesForKeys: nil))
-        for case let url as URL in files where url.pathExtension == "swift" {
+        for url in try sourceFiles(in: "Sources/AppBundle/command") {
             let source = try String(contentsOf: url, encoding: .utf8)
             XCTAssertFalse(withoutComments(source).contains("runSession("), "\(url.lastPathComponent) would deadlock on sessionGate")
         }
@@ -157,21 +199,32 @@ final class RefreshSchedulerTest: XCTestCase {
 
     // MARK: - Wiring (needs real apps, so pinned in the source)
 
+    /// App activation and mouse-up lay out twice. The first pass parks only what left the screen, or its hide jobs
+    /// for windows parked already queue ahead of the enumeration on each app's thread; the second re-checks all.
+    func testOnlyThePreLayoutSkipsWindowsParkedAlready() throws {
+        let body = try sourceBody("func runRefreshSessionBlocking(", in: "Sources/AppBundle/layout/refresh.swift")
+        let pre = try XCTUnwrap(body.range(of: "optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces(parkOnlyUnparked: true) }"))
+        let full = try XCTUnwrap(body.range(of: "if shouldLayoutWorkspaces { try await layoutWorkspaces() }"))
+        XCTAssertLessThan(pre.lowerBound, full.lowerBound)
+    }
+
     func testARefreshDoesNotAskLaunchServicesAboutEveryProcess() throws {
-        let body = try sourceBody("static func refreshAllAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 1400)
+        let body = try sourceBody("static func refreshAllAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
         XCTAssertFalse(body.contains("activationPolicy"))
         XCTAssertFalse(body.contains("runningApplications"))
     }
 
     /// Its comment promised one comparison, and it was a round trip to LaunchServices on every refresh.
     func testARefreshDoesNotAskLaunchServicesAboutItself() throws {
-        let body = try sourceBody("@MainActor func syncAppVisibility()", in: "Sources/AppBundle/ui/TrayMenuModel.swift", length: 500)
+        let body = try sourceBody("@MainActor func syncAppVisibility()", in: "Sources/AppBundle/ui/TrayMenuModel.swift")
         XCTAssertFalse(body.contains("NSApp.activationPolicy()"))
     }
 
+    /// Reading `localizedName` asks LaunchServices, and the menu bar lists every window's app per refresh.
+    /// Any computed `name` brings that back, not only the one spelling that used to be there.
     func testAnAppsNameIsKeptNotAskedFor() throws {
         let source = try String(contentsOf: projectRoot.appending(path: "Sources/AppBundle/tree/MacApp.swift"), encoding: .utf8)
-        XCTAssertFalse(source.contains("var name: String? { nsApp.localizedName }"))
+        XCTAssertTrue(source.contains("let name: String?"), "MacApp.name must be stored once, not computed on every read")
     }
 
     /// An app that turns regular without launching or activating. The sweep is how it gets noticed.
@@ -186,10 +239,37 @@ final class RefreshSchedulerTest: XCTestCase {
     }
 
     func testOneWindowListAnswersForEveryWindowItNames() throws {
-        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift", length: 2600)
-        let shortcut = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key) { return true }"))
+        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        let listed = try XCTUnwrap(body.range(of: "if listedIds.contains($0.key)"), "a listed window is asked about one by one")
+        let alive = try XCTUnwrap(body.range(of: "return true", range: listed.upperBound ..< body.endIndex))
         let perWindow = try XCTUnwrap(body.range(of: "isDestroyed()"))
-        XCTAssertLessThan(shortcut.lowerBound, perWindow.lowerBound)
+        XCTAssertLessThan(alive.lowerBound, perWindow.lowerBound)
+    }
+
+    /// The WindowServer verdict acts only where AX cannot answer: before the timeout shortcut that keeps every
+    /// window, and never against an app that lists the window.
+    func testAWindowGoneFromWindowServerIsDroppedBeforeTheTimeoutKeepsIt() throws {
+        let body = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        let dead = try XCTUnwrap(body.range(of: "if pendingDead.contains($0.key) && !listedIds.contains($0.key) { return false }"))
+        let timeout = try XCTUnwrap(body.range(of: "if timedOut { return true }"))
+        XCTAssertLessThan(dead.lowerBound, timeout.lowerBound, "a timed-out app keeps a window WindowServer destroyed")
+    }
+
+    /// About 1.5 ms a read: the 30 s sweep pays it, a 50 ms-debounced refresh must not.
+    func testWindowServerIsReadByTheSweepNotByARefresh() throws {
+        let refresh = try sourceBody("private func refresh() async throws", in: "Sources/AppBundle/layout/refresh.swift")
+        let pass = try sourceBody("static func refreshAllAndGetAliveWindowIds(", in: "Sources/AppBundle/tree/MacApp.swift")
+        let perApp = try sourceBody("private func refreshAndGetAliveWindowIds", in: "Sources/AppBundle/tree/MacApp.swift")
+        for body in [refresh, pass, perApp] {
+            XCTAssertFalse(body.contains("windowServerWindowIds()"))
+            XCTAssertFalse(body.contains("noteWindowsGoneFromWindowServer()"))
+        }
+        let sweep = try sourceBody("static func startRegularAppSweep()", in: "Sources/AppBundle/tree/MacApp.swift")
+        XCTAssertTrue(sweep.contains("noteWindowsGoneFromWindowServer()"))
+        let note = try sourceBody("static func noteWindowsGoneFromWindowServer()", in: "Sources/AppBundle/tree/MacApp.swift")
+        let registered = try XCTUnwrap(note.range(of: "Set(MacWindow.allWindowsMap.keys)"))
+        let read = try XCTUnwrap(note.range(of: "windowServerWindowIds()"))
+        XCTAssertLessThan(registered.lowerBound, read.lowerBound, "a window registered after the read would look dead")
     }
 
     func testAPopupIsOnlyRecheckedSoonAfterItAppeared() {

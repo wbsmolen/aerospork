@@ -101,8 +101,23 @@ final class CmdArgsParsingTest: XCTestCase {
         assertNotNil(parse(["resize", "smart", "-50"], as: ResizeCmdArgs.self))
     }
 
+    /// The deprecated alias is registered through `parseMoveCmdArgs`, not a type of its own.
+    func testTheMoveThroughAliasStillParsesAsMove() {
+        let alias = parse(["move-through", "left"], as: MoveCmdArgs.self)
+        assertNotNil(alias)
+        assertEquals(alias, parse(["move", "left"], as: MoveCmdArgs.self))
+    }
+
     func testSingleValueOptionReportsAMissingValue() {
         assertFailure(parseCmdArgs(["list-workspaces", "--monitor", "all", "--format"]), "ERROR: <output-format> is mandatory")
+    }
+
+    func testSubscribeTakesEitherAllOrAListOfEvents() {
+        assertEquals(parse(["subscribe", "--all"], as: SubscribeCmdArgs.self)?.subscribedEvents, Set(SubscribeEvent.allCases))
+        assertEquals(parse(["subscribe", "mode-changed", "focus-changed"], as: SubscribeCmdArgs.self)?.subscribedEvents, [.modeChanged, .focusChanged])
+        assertNotNil(errorOrNil(parseCmdArgs(["subscribe"])))
+        assertNotNil(errorOrNil(parseCmdArgs(["subscribe", "--all", "mode-changed"])))
+        XCTAssertTrue(errorOrNil(parseCmdArgs(["subscribe", "mode-change"]))?.contains("workspace-windows-changed") == true)
     }
 }
 

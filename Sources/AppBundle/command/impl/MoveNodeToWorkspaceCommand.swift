@@ -29,10 +29,19 @@ struct MoveNodeToWorkspaceCommand: Command {
 
 @MainActor
 func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io: CmdIo, focusFollowsWindow: Bool, failIfNoop: Bool, index: Int = INDEX_BIND_LAST) -> Bool {
+    // macOS owns a native-fullscreen or hidden-app window: binding it into the target's tiles would give
+    // the target a tile for a window in its own Space (or hidden), and leave a stale away slot behind.
+    // Refused like `move` refuses it. A rule on a brand-new window is unaffected: registration binds it
+    // into the tiles, and only a later refresh hands it to macOS.
+    if window.parent is MacosFullscreenWindowsContainer || window.parent is MacosHiddenAppsWindowsContainer {
+        return io.err(moveOutMacosUnconventionalWindow)
+    }
     if window.nodeWorkspace == targetWorkspace {
         io.err(noopMessage("Window '\(window.windowId)' already belongs to workspace '\(targetWorkspace.name)'.", failIfNoop: failIfNoop))
         return !failIfNoop
     }
+    // Sent somewhere on purpose: following the screen would take it straight back.
+    window.isSticky = false
     let targetContainer: NonLeafTreeNodeObject = window.isFloating ? targetWorkspace : targetWorkspace.rootTilingContainer
     window.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: index)
     // A completed move is a success whether or not focus was asked to follow it. This used to

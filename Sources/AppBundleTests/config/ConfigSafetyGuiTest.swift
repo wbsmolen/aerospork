@@ -5,13 +5,6 @@ import XCTest
 /// Settings-GUI gaps where the UI reported success and nothing happened.
 @MainActor
 final class ConfigSafetyGuiTest: XCTestCase {
-    private func errors(_ toml: String) -> [String] {
-        switch parseConfig(toml) {
-            case .success: return []
-            case .failure(let e): return e.map(\.description)
-        }
-    }
-
     /// A config with no `[mode.*]` section is perfectly valid. `addBinding` used to return silently
     /// for it while the tab cleared the fields anyway, so the binding the user typed just vanished.
     func testAddBindingCreatesTheModeWhenThereIsNone() {
@@ -22,7 +15,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
         let out = ConfigurationWriter.render(baseText: "start-at-login = false\n", from: vm)
         XCTAssertTrue(out.contains("[keys]"), out)
         XCTAssertTrue(out.contains("alt-h = 'focus left'"), out)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
     }
 
     /// The caller has to be able to tell "taken" from "ignored", or it clears the fields regardless.
@@ -61,7 +54,7 @@ final class ConfigSafetyGuiTest: XCTestCase {
         let out = ConfigurationWriter.render(baseText: base, from: vm)
         XCTAssertFalse(out.contains("mode.resize"), "deleted mode survived:\n\(out)")
         XCTAssertTrue(out.contains("alt-h = 'focus left'"), "took the wrong mode with it:\n\(out)")
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
     }
 
     /// `main` is the mode the app starts in; deleting it leaves nothing to fall back to.

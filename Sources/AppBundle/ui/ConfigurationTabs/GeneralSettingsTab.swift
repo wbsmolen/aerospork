@@ -3,19 +3,16 @@ import SwiftUI
 
 struct GeneralSettingsTab: View {
     @ObservedObject var viewModel: ConfigurationViewModel
-
-    private var configPath: String {
-        (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
-    }
+    /// Sparkle's setting is not observable, so the toggle shows this copy. Not read in a build that
+    /// cannot check: that would create the updater for nothing.
+    @State private var checksAutomatically = Updater.shared.isEnabled && Updater.shared.automaticallyChecksForUpdates
 
     var body: some View {
         Form {
             Section {
                 Toggle("Start AeroSpork at login", isOn: viewModel.binding(\.settings.general.startAtLogin))
                 Toggle("Automatically unhide macOS hidden apps", isOn: viewModel.binding(\.settings.general.automaticallyUnhideMacosHiddenApps))
-                    .help("Undo ⌘H automatically, so hidden windows keep tiling")
                 Toggle("Move workspaces to assigned monitors on connect", isOn: viewModel.binding(\.settings.general.autoMoveWorkspacesOnMonitorConnect))
-                    .help("Plug in a dock and your pinned workspaces go back to the monitors you assigned them. Off, they stay wherever they landed when the monitor went away.")
             } header: {
                 SectionLabel("Startup & behaviour", "power")
             } footer: {
@@ -54,11 +51,17 @@ struct GeneralSettingsTab: View {
                 }
                 .pickerStyle(.segmented)
 
+                Picker("New windows open", selection: viewModel.binding(\.settings.general.newWindowPlacement)) {
+                    Text("Beside").tag("sibling")
+                    Text("Nested").tag("nest")
+                }
+                .pickerStyle(.segmented)
+
                 NumberField("Accordion peek", value: viewModel.binding(\.settings.general.accordionPadding))
             } header: {
                 SectionLabel("Layout", "rectangle.split.3x1")
             } footer: {
-                SettingsHint("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
+                SettingsHint("Auto gives wide monitors a horizontal split and tall monitors a vertical one. Layout and split direction apply to new workspaces; existing ones keep theirs. Nested splits the focused window's tile between it and the new window, so the other windows keep their size; beside gives every window in the row a narrower share. The accordion peek is how much of the window behind stays visible; 0 stacks them exactly. It applies to any accordion container, not just new workspaces.")
             }
 
             Section {
@@ -95,13 +98,27 @@ struct GeneralSettingsTab: View {
                 }
                 LabeledContent("Config file") {
                     HStack(spacing: 6) {
-                        Text(configPath)
+                        Text(viewModel.configPath)
                             .font(.system(.callout, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .truncationMode(.head)
                             .lineLimit(1)
                             .textSelection(.enabled)
-                        CopyButton(value: configPath, help: "Copy path")
+                        CopyButton(value: viewModel.configPath, help: "Copy path")
+                    }
+                }
+                // Only in a build that has a feed to check, like the menu's row. Not a config key, so
+                // the writer is not involved.
+                if Updater.shared.isEnabled {
+                    Toggle("Automatically check for updates", isOn: Binding(
+                        get: { checksAutomatically },
+                        set: {
+                            checksAutomatically = $0
+                            Updater.shared.automaticallyChecksForUpdates = $0
+                        },
+                    ))
+                    LabeledContent("Updates") {
+                        Button("Check for updates…") { Updater.shared.checkForUpdates() }
                     }
                 }
             } header: {

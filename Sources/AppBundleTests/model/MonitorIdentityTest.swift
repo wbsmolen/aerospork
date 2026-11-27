@@ -10,16 +10,26 @@ import XCTest
 @MainActor
 final class MonitorIdentityTest: XCTestCase {
     override func tearDown() async throws {
-        testMonitors = [defaultTestMonitor]
         config.workspaceToMonitorForceAssignment = [:]
-        // Hand back exactly the state `setUpWorkspacesForTests` assumes. The workspace-to-screen map
-        // is keyed by screen POINT and nothing in setUp clears it, so a workspace left visible on a
-        // fake second monitor stays "visible" -- and the next test's setUp cannot displace it,
-        // because `setFocus` early-returns when the frozen focus already names its target.
-        gcMonitors() // rebuild the map for the restored single-monitor world
-        _ = mainMonitor.setActiveWorkspace(focus.workspace)
-        Workspace.garbageCollectUnusedWorkspaces()
         try await super.tearDown()
+    }
+
+    // MARK: - Test isolation
+
+    /// `getStubWorkspace` takes the workspace a screen point showed before. Kept across tests, that was
+    /// whatever an earlier test left there, so a test's stub depended on which test ran before it.
+    func testSetUpForgetsWhatEarlierTestsShowed() {
+        setUpWorkspacesForTests()
+        let side = panel(id: 2, x: 1920, uuid: "BBBBBBBB-0000-0000-0000-000000000002")
+        testMonitors = [defaultTestMonitor, side]
+        gcMonitors()
+        check(side.setActiveWorkspace(Workspace.get(byName: "earlier-a")))
+        check(side.setActiveWorkspace(Workspace.get(byName: "earlier-b"))) // the side point last showed earlier-a
+        setUpWorkspacesForTests()
+
+        setUpWorkspacesForTests()
+        testMonitors = [side] // a later test whose main monitor sits at that point
+        assertNotEquals(getStubWorkspace(for: mainMonitor).name, "earlier-a")
     }
 
     // MARK: - Fingerprint resolution against real monitors

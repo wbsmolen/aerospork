@@ -5,7 +5,7 @@ Notable changes to AeroSpork, newest first. This file starts at version 1.2.0. T
 <!--
 How to write this file. script/publish-release.sh reads the section of the version that it publishes, and that section becomes the update dialog and the GitHub release.
 
-- Write each bullet on one line. The converter in the release script turns the second line of a wrapped bullet into a separate paragraph, and it reports no error.
+- Write each bullet on one line. `script/release-notes-html.py` keeps an indented continuation line inside its bullet, but one line per bullet is easier to review.
 - Add a change to "Unreleased" in the pull request that makes it. Before a release, rename "Unreleased" to "X.Y.Z (YYYY-MM-DD)" and add a new empty "Unreleased" above it. The release script stops when the section of the version is missing or empty.
 - Start a version with one sentence about the change that a user notices first. Do not copy a bullet.
 - Use these headings, in this order, and leave out a heading with no items: Upgrade notes, Added, Changed, Fixed, Security. In a large release, group the items under a heading in themes with "####".
@@ -16,6 +16,78 @@ How to write this file. script/publish-release.sh reads the section of the versi
 -->
 
 ## Unreleased
+
+## 1.4.0 (2026-11-27)
+
+Status bars can follow AeroSpork with `subscribe`, windows of apps that quit no longer leave empty tiles, and AeroSpork survives several situations that used to stop it.
+
+### Upgrade notes
+
+- If your config file exists but cannot be read (wrong permissions, not UTF-8 text, or a link to a missing file), AeroSpork now says so and keeps your file, instead of quietly running the defaults. Fix the file, or the permissions, and it loads again.
+- If you migrated a config that binds `swap`, it now loads: `swap` is a command.
+- If a script or status bar waits on an `aerospork` command, it now gets exit code 3 and "No response from AeroSpork server within 60 s" when AeroSpork does not answer, instead of waiting forever. Treat exit 3 as "try again later".
+- If your config has `on-mode-changed`, AeroSpork now runs it on each mode change. It used to report the key and ignore it. Remove the key if you do not want its commands to run.
+- If a workspace range mixes digits and letters, or upper and lower case, such as `0-A`, the config no longer loads. List those workspaces by name instead.
+
+### Added
+
+#### Windows
+
+- `swap` trades the focused window with its neighbour, keeping both slots and sizes.
+- `sticky` keeps a floating window on screen as you switch workspaces on its monitor, for video calls and picture-in-picture. A window rule can run `sticky on`, and `%{window-is-sticky}` reports it.
+- Window rules can run `move-node-to-monitor` and `fullscreen on`, so a rule can open an app on the monitor you want.
+- `new-window-placement = 'nest'` makes a new window share the focused window's tile, so the other windows keep their size and new windows open in a spiral. It is off by default, and the General pane in Settings has the same choice.
+
+#### Status bars and scripts
+
+- `subscribe` prints a line of JSON for each change of focus, workspace, monitor or mode, each new window, and each window that comes to or leaves a workspace, so a status bar can stay current without starting a process for each event. `man aerospork-subscribe` lists every event and field.
+- `on-mode-changed` runs commands when the binding mode changes, with `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` set, so a status bar can show the mode.
+- `list-modes --json` prints the binding modes as JSON, and `%{window-layout}`, `%{window-orientation}` and `%{window-is-floating}` tell a status bar how a window is laid out.
+- `debug-windows --tree` prints the whole window tree as JSON, with anything that looks inconsistent, for bug reports.
+
+#### Settings
+
+- Settings has "Check for updates…" and an automatic-check switch under General.
+- The Monitors pane has an Identify button that shows each monitor's number on that screen.
+- "Show config error…" in the menu opens Settings on Raw TOML at the line with the error.
+
+### Changed
+
+- AeroSpork asks apps for less on every workspace switch and refresh, so switching is quicker with many windows open.
+- Saving in Settings no longer re-registers every hotkey, so a key pressed during a save is not lost.
+- One `split` binding while flatten normalization is on is now a warning, instead of rejecting the whole config.
+- A config that names upstream keys on several lines gets one warning per kind, listing the lines.
+- Errors in Settings name what happened and offer the way out, on every pane.
+- A config error for an unknown key or key name suggests the name you probably meant, and a bad modifier gets the same message everywhere.
+- A binding or a monitor pin written in both the v1 and the v2 spelling loads with a warning that names the one that wins, and Settings edits that one.
+- The shortcut recorder starts recording on a click, Space or Return, and no longer when Tab moves onto it.
+- While Raw TOML has edits you have not applied, the other Settings panes are locked, so the next Apply cannot silently undo a change made there.
+- VoiceOver reads the menu bar as a sentence, for example "Workspace 1, focused".
+- Monitor sizes in Settings are shown in points, the unit `[monitors]` fingerprints use.
+
+### Fixed
+
+- A window of an app that quit while updating itself no longer leaves an empty tile behind.
+- A window that is gone but that its app still seems to hold, for example when the app hangs as it exits, now gives up its empty tile within 30 seconds.
+- `move-node-to-workspace` and `move-node-to-monitor` refuse a window in macOS fullscreen or of a hidden app, as `move` does, instead of leaving an empty tile for it on the other workspace.
+- AeroSpork no longer quits when a CLI command gives up waiting for it, or is interrupted, while AeroSpork is busy.
+- AeroSpork no longer quits when every display is asleep or a DisplayLink dock is reconnecting.
+- AeroSpork no longer quits at startup when both `~/.aerospork.toml` and `~/.config/aerospork/aerospork.toml` exist.
+- Saving in Settings keeps a symlinked config a symlink, so a dotfiles manager keeps managing it.
+- A config file you create, replace or restore is picked up without a restart, and deleting it falls back to the defaults after a second.
+- The shortcut recorder can record Shift with a digit or punctuation key, function keys and keypad keys, and follows the key mapping preset.
+- Clicking anywhere outside the shortcut recorder cancels it, so a ⌘W that follows closes the window instead of being recorded as a binding.
+- Raw TOML shows errors from Apply, Restore and a changed file, undo no longer cuts text out of the config, and Reload waits until unapplied edits are applied or reverted.
+- Focusing a minimized window whose workspace was cleaned up brings it back on the focused monitor, instead of on the main monitor.
+- A window that stays minimized across a restart keeps its workspace's monitor.
+- `reload-config --dry-run` no longer hides the banner that says the defaults are running.
+- `list-windows --workspace` with a name that does not exist no longer creates that workspace.
+- When a workspace moves to another monitor, the monitor it left goes back to the workspace it showed before, instead of the first one by name.
+- The `.pre-v2` backup keeps your config's file permissions.
+
+### Security
+
+- The CLI socket no longer spins a CPU core when the process runs out of file descriptors.
 
 ## 1.3.4 (2026-11-06)
 

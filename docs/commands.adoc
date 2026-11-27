@@ -56,6 +56,16 @@ include::aerospork-move.adoc[tags=purpose]
 
 include::aerospork-move.adoc[tags=body]
 
+[#swap]
+=== swap
+----
+include::aerospork-swap.adoc[tags=synopsis]
+----
+include::aerospork-swap.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-swap.adoc[tags=body]
+
 [#move-node-to-workspace]
 === move-node-to-workspace
 ----
@@ -245,6 +255,16 @@ include::aerospork-macos-native-minimize.adoc[tags=purpose]
 
 include::aerospork-macos-native-minimize.adoc[tags=body]
 
+[#sticky]
+=== sticky
+----
+include::aerospork-sticky.adoc[tags=synopsis]
+----
+include::aerospork-sticky.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-sticky.adoc[tags=body]
+
 [#binding-mode-commands]
 == Binding modes
 
@@ -407,6 +427,16 @@ include::aerospork-list-workspaces.adoc[tags=purpose]
 {manpurpose}.
 
 include::aerospork-list-workspaces.adoc[tags=body]
+
+[#subscribe]
+=== subscribe
+----
+include::aerospork-subscribe.adoc[tags=synopsis]
+----
+include::aerospork-subscribe.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-subscribe.adoc[tags=body]
 
 [#exit-status]
 == Exit status

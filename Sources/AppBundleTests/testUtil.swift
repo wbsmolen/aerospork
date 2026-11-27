@@ -3,25 +3,85 @@ import Common
 import Foundation
 import XCTest
 
+/// Three levels above `Sources/AppBundleTests/testUtil.swift`. A walk up to `.git` never ended outside a
+/// checkout (a source tarball), because `deleteLastPathComponent()` does not stop at "/".
 let projectRoot: URL = {
-    var url = URL(filePath: #filePath).absoluteURL
-    check(FileManager.default.fileExists(atPath: url.path))
-    while !FileManager.default.fileExists(atPath: url.appending(component: ".git").path) {
-        url.deleteLastPathComponent()
-    }
+    let url = URL(filePath: #filePath).absoluteURL
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    check(FileManager.default.fileExists(atPath: url.appending(component: "Package.swift").path))
     return url
 }()
 
-/// The source from `declaration` on, `length` characters of it, for tests that pin wiring which needs a
-/// real `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment
-/// explaining a fix would satisfy or trip the assertion.
-func sourceBody(_ declaration: String, in relativePath: String, length: Int) throws -> String {
-    let source = try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
-    let start = try XCTUnwrap(
-        source.range(of: declaration),
-        "\(declaration) was renamed; re-point this test rather than deleting it",
+/// Points the URL-less config reads and writes at a new temp file holding `text` until `test` ends, so
+/// a save can run for real. A save reloads the config, so the loaded config is put back afterwards.
+@MainActor func useTemporaryConfig(_ text: String, for test: XCTestCase) throws -> URL {
+    let dir = URL(filePath: NSTemporaryDirectory()).appending(path: "aerospork-config-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let url = dir.appending(path: "config.toml")
+    try text.write(to: url, atomically: true, encoding: .utf8)
+    let (savedConfig, savedUrl, savedFailure, savedWarnings) = (config, configUrl, configLoadFailure, configWarnings)
+    testConfigOverride = url
+    test.addTeardownBlock { @MainActor in
+        testConfigOverride = nil
+        (config, configUrl, configLoadFailure, configWarnings) = (savedConfig, savedUrl, savedFailure, savedWarnings)
+        try? FileManager.default.removeItem(at: dir)
+    }
+    return url
+}
+
+/// A file of the checkout, by its path from the project root.
+func readRepoFile(_ relativePath: String) throws -> String {
+    try String(contentsOf: projectRoot.appending(path: relativePath), encoding: .utf8)
+}
+
+/// The parse errors of `toml` read as a whole config, empty when it loads.
+@MainActor func parseErrors(_ toml: String) -> [String] {
+    switch parseConfig(toml) {
+        case .success: []
+        case .failure(let errors): errors.descriptions
+    }
+}
+
+/// The config `toml` loads to (nil when it does not load), with its warnings and errors.
+@MainActor func parseWithWarnings(_ toml: String) -> (config: Config?, warnings: [String], errors: [String]) {
+    var warnings: [TomlParseError] = []
+    switch parseConfig(toml, warnings: &warnings) {
+        case .success(let config): return (config, warnings.descriptions, [])
+        case .failure(let errors): return (nil, warnings.descriptions, errors.descriptions)
+    }
+}
+
+/// The whole declaration that `declaration` starts, for tests that pin wiring which needs a real
+/// `MacApp` and so cannot be driven headlessly. Line comments are stripped, or a comment explaining a
+/// fix would satisfy or trip the assertion.
+func sourceBody(_ declaration: String, in relativePath: String) throws -> String {
+    let source = try readRepoFile(relativePath)
+    return try XCTUnwrap(
+        declarationBody(declaration, in: source),
+        "\(declaration) was renamed, or no line closes it at its indentation; re-point this test rather than deleting it",
     )
-    return withoutComments(source[start.lowerBound...].prefix(length))
+}
+
+/// From the line holding `declaration` through the first later line that is that line's indentation
+/// followed by `}`, or nil when either is missing. swiftformat enforces the indentation, so a brace in
+/// a string or a comment cannot end the body early. A fixed character window was cut short by some
+/// bodies and ran into the next declaration for others.
+func declarationBody(_ declaration: String, in source: String) -> String? {
+    guard let start = source.range(of: declaration) else { return nil }
+    let lines = source[source.lineRange(for: start).lowerBound...].split(separator: "\n", omittingEmptySubsequences: false)
+    let close = lines[0].prefix { $0 == " " } + "}"
+    guard let end = lines.firstIndex(where: { $0 == close }) else { return nil }
+    return withoutComments(lines[...end].joined(separator: "\n"))
+}
+
+/// The `.swift` files under `relativePath`. Fails when there are none, or a moved directory would
+/// leave every check over it passing with nothing to check.
+func sourceFiles(in relativePath: String) throws -> [URL] {
+    let dir = projectRoot.appending(path: relativePath)
+    let files = (FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+        .filter { $0.pathExtension == "swift" }
+    _ = try XCTUnwrap(files.first, "no Swift files under \(relativePath)")
+    return files
 }
 
 func withoutComments(_ text: some StringProtocol) -> String {
@@ -32,6 +92,7 @@ func withoutComments(_ text: some StringProtocol) -> String {
 
 @MainActor
 func setUpWorkspacesForTests() {
+    testMonitors = [defaultTestMonitor] // before `gcMonitors()`, so a multi-monitor test needs no reset of its own
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable
@@ -42,6 +103,7 @@ func setUpWorkspacesForTests() {
     config.modes = [mainModeId: Mode(bindings: [:])]
     config.preservedWorkspaceNames = []
     config.persistentWorkspaces = [] // the bundled default declares 1-9, which would otherwise always exist
+    stickyWindowIds = [] // test windows reuse ids, so one left sticky would follow the screen in the next test
 
     for workspace in Workspace.all {
         for child in workspace.children {
@@ -49,11 +111,14 @@ func setUpWorkspacesForTests() {
         }
     }
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
+    resetWorkspaceScreensForTests() // or `getStubWorkspace` hands out what an earlier test showed
     gcMonitors() // a multi-monitor test leaves its workspaces visible on monitors that are gone by now
+    // Before the GC: when the focus already named this workspace, `focusWorkspace` returned early and left
+    // the main monitor showing whatever a multi-monitor test put there.
+    check(mainMonitor.setActiveWorkspace(focus.workspace))
     Workspace.garbageCollectUnusedWorkspaces()
     check(focus.workspace.isEffectivelyEmpty)
     check(focus.workspace === Workspace.all.singleOrNil(), Workspace.all.map(\.description).joined(separator: ", "))
-    check(mainMonitor.setActiveWorkspace(focus.workspace))
 
     TestApp.shared.focusedWindow = nil
     TestApp.shared.windows = []
@@ -116,5 +181,42 @@ extension HotkeyBinding {
             ? keyCode.rawValue
             : modifiers.toString() + "-" + keyCode.rawValue
         self.init(modifiers, keyCode, commands, descriptionWithKeyNotation: descriptionWithKeyNotation)
+    }
+}
+
+// MARK: - The socket server, over a socketpair, never the app's real socket
+
+/// The client end of a connection that `newConnection` serves, with `frameTimeout` on the server's end as
+/// `startUnixSocketServer` sets it.
+func serverConnectionForTests(frameTimeout: Duration = .seconds(5)) -> UnixSocketConnection {
+    var fds: [Int32] = [0, 0]
+    check(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0)
+    let (client, server) = (UnixSocketConnection(fd: fds[0]), UnixSocketConnection(fd: fds[1]))
+    client.setFrameTimeout(seconds: 5)
+    server.setFrameTimeout(frameTimeout)
+    Task.detached { await newConnection(server) }
+    return client
+}
+
+func sendRequest(_ client: UnixSocketConnection, _ args: [String]) throws {
+    check(client.sendMessage(try JSONEncoder().encode(ClientRequest(args: args, stdin: ""))))
+}
+
+/// The next answer, read off the main actor, which the server has to reach. nil when the server hung up.
+func nextAnswer(_ client: UnixSocketConnection) async throws -> ServerAnswer? {
+    guard let data = try await Task.detached(operation: { try client.recvMessage() }).value else { return nil }
+    return try JSONDecoder().decode(ServerAnswer.self, from: data)
+}
+
+/// The event JSON a `subscribe` answer carries.
+func eventJson(_ answer: ServerAnswer?) -> [String: Any] {
+    (try? JSONSerialization.jsonObject(with: Data((answer?.stdout ?? "").utf8))) as? [String: Any] ?? [:]
+}
+
+@MainActor func waitUntil(_ condition: () -> Bool, timeout: Duration = .seconds(5)) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+        guard ContinuousClock.now < deadline else { return XCTFail("timed out") }
+        try await Task.sleep(for: .milliseconds(10))
     }
 }

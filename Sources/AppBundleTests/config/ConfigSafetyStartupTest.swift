@@ -49,16 +49,128 @@ final class ConfigSafetyStartupTest: XCTestCase {
     /// after it was recorded, leaving nothing anywhere that says the config did not load.
     func testForcedDefaultReadDoesNotEraseTheFailure() {
         configLoadFailure = "Failed to parse ~/.aerospork.toml"
-        _ = readConfig(forceConfigUrl: defaultConfigUrl)
+        var warnings: [String] = []
+        recordConfigHealth(readConfig(forceConfigUrl: defaultConfigUrl, warnings: &warnings), warnings: warnings)
         assertEquals(configLoadFailure, "Failed to parse ~/.aerospork.toml")
+    }
+
+    /// `reload-config --dry-run` promises to change nothing. A passing one cleared the failure, so the
+    /// banner went away while the defaults still ran, and a failing one set a failure for a config the
+    /// app was not running.
+    func testDryRunDoesNotTouchHealth() throws {
+        let good = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        let bad = good.deletingLastPathComponent().appending(path: "bad.toml")
+        try "accordion-padding = 'thirty'\n".write(to: bad, atomically: true, encoding: .utf8)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.dryRun = true
+        args.noGui = true
+        var stdout = ""
+
+        configUrl = defaultConfigUrl
+        configLoadFailure = "Failed to parse ~/.aerospork.toml"
+        configWarnings = ["a warning from the running config"]
+        XCTAssertTrue(reloadConfig(args: args, forceConfigUrl: good, stdout: &stdout), stdout)
+        assertEquals(configLoadFailure, "Failed to parse ~/.aerospork.toml")
+        assertEquals(configWarnings, ["a warning from the running config"])
+        XCTAssertTrue(isRunningFallbackDefaults)
+
+        configLoadFailure = nil
+        XCTAssertFalse(reloadConfig(args: args, forceConfigUrl: bad, stdout: &stdout))
+        XCTAssertNil(configLoadFailure)
+        assertEquals(configWarnings, ["a warning from the running config"])
+    }
+
+    /// Under `swift test` the URL-less read resolved to the developer's own `~/.aerospork-debug.toml`.
+    func testUnitTestsNeverResolveTheRealConfig() {
+        XCTAssertNil(testConfigOverride)
+        guard case .failure(let reason) = readConfig() else { return XCTFail("a test read a real config") }
+        assertEquals(reason, "tests may not touch a real config")
+        guard case .failure = configBaseText() else { return XCTFail("a test read a real config") }
+        guard case .failure = userConfigTargetUrl() else { return XCTFail("a test resolved a real config to write") }
+        // A forced read still reads exactly the file it names.
+        guard case .success((_, let url)) = readConfig(forceConfigUrl: defaultConfigUrl) else { return XCTFail() }
+        assertEquals(url, defaultConfigUrl)
+    }
+
+    /// With two configs, the search for the user's config fails. The forced read of the bundled default
+    /// ran that search first and failed the same way, and `initAppBundle` `check`s it: the app died at
+    /// startup. Now the defaults run, and the banner says why.
+    func testTheForcedDefaultReadSurvivesTwoConfigs() throws {
+        let first = try useTemporaryConfig("accordion-padding = 1\n", for: self)
+        let second = try useTemporaryConfig("accordion-padding = 2\n", for: self)
+        let twoConfigs = findCustomConfigUrl(among: [first, second])
+        guard case .ambiguousConfigError = twoConfigs else { return XCTFail("two configs were not ambiguous") }
+        configLoadFailure = nil
+
+        let read = readConfig(found: twoConfigs)
+        guard case .failure = read else { return XCTFail("an ambiguous config loaded") }
+        recordConfigHealth(read, warnings: [])
+        guard case .success((_, let url)) = readConfig(forceConfigUrl: defaultConfigUrl, found: twoConfigs) else {
+            return XCTFail("the startup fallback failed, and initAppBundle would die")
+        }
+        configUrl = url
+        XCTAssertTrue(isRunningFallbackDefaults)
+    }
+
+    /// A config that existed and could not be read loaded as "the defaults, successfully": no banner,
+    /// and the log said the user's file had loaded. A Latin-1 file is the likely case.
+    func testUnreadableConfigIsAFailureNotTheDefaults() throws {
+        let locked = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: locked.path) }
+        let latin1 = locked.deletingLastPathComponent().appending(path: "latin1.toml")
+        try Data("accordion-padding = 31 # caf\u{E9}\n".data(using: .isoLatin1).orDie()).write(to: latin1)
+
+        for (url, why) in [(locked, "permission denied"), (latin1, "isn't UTF-8 text")] {
+            configLoadFailure = nil
+            let read = readConfig(at: url)
+            guard case .failure(let reason) = read else { return XCTFail("\(url.lastPathComponent) loaded") }
+            XCTAssertTrue(reason.contains(why), reason)
+            recordConfigHealth(read, warnings: [])
+            // `initAppBundle`'s fallback: it must succeed, and leave the failure showing.
+            guard case .success((_, let fallback)) = readConfig(forceConfigUrl: defaultConfigUrl) else { return XCTFail() }
+            configUrl = fallback
+            XCTAssertTrue(isRunningFallbackDefaults, url.lastPathComponent)
+        }
+    }
+
+    /// A dangling link (a dotfiles repo not checked out yet) read as "no config", and the first
+    /// Settings save replaced the link with a regular file.
+    func testDanglingConfigLinkIsReportedAndNotReplaced() async throws {
+        let link = try useTemporaryConfig("", for: self)
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "dotfiles/aerospork.toml")
+        let missing = link.deletingLastPathComponent().appending(path: "missing.toml")
+
+        guard case .file(let found) = findCustomConfigUrl(among: [link, missing]) else { return XCTFail("the link was not found") }
+        assertEquals(found, link)
+        guard case .failure(let reason) = readConfig(at: link) else { return XCTFail("a dangling link loaded") }
+        XCTAssertTrue(reason.contains("is a link to dotfiles/aerospork.toml, which does not exist"), reason)
+
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        vm.load(fromText: "")
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+
+        XCTAssertNotNil(vm.errorMessage)
+        assertEquals(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), "dotfiles/aerospork.toml")
+
+        // A stale link next to a working config changes nothing: the config is still found.
+        let real = link.deletingLastPathComponent().appending(path: "real.toml")
+        try "".write(to: real, atomically: true, encoding: .utf8)
+        guard case .file(let foundReal) = findCustomConfigUrl(among: [link, real]) else { return XCTFail() }
+        assertEquals(foundReal, real)
     }
 
     /// The migration rewrites the user's file, so it belongs to startup. Inside `readConfig` it also
     /// ran for `reload-config --dry-run`, which promises to change nothing, and every Settings save.
     func testTheV2MigrationRunsOnceAtStartupAndNotOnEveryRead() throws {
-        let read = try sourceBody("func readConfig(", in: "Sources/AppBundle/config/parseConfig.swift", length: 1500)
-        XCTAssertFalse(read.contains("migrateUserConfigToV2IfNeeded"))
-        let start = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift", length: 3000)
+        for declaration in ["func readConfig(forceConfigUrl", "func readConfig(at"] {
+            let read = try sourceBody(declaration, in: "Sources/AppBundle/config/parseConfig.swift")
+            XCTAssertFalse(read.contains("migrate"), declaration)
+        }
+        let start = try sourceBody("public func initAppBundle()", in: "Sources/AppBundle/initAppBundle.swift")
         let migrate = try XCTUnwrap(start.range(of: "migrateUserConfigToV2IfNeeded()"))
         let firstLoad = try XCTUnwrap(start.range(of: "reloadConfig()"))
         XCTAssertLessThan(migrate.lowerBound, firstLoad.lowerBound)
@@ -80,6 +192,178 @@ final class ConfigSafetyStartupTest: XCTestCase {
     /// user was busy typing would not be picked up until the app was restarted.
     func testWatcherNeverWatchesTheBundledDefault() {
         configUrl = defaultConfigUrl
-        XCTAssertNotEqual(ConfigFileWatcher.watchedPath, defaultConfigUrl.path)
+        let plan = ConfigFileWatcher.plan
+        XCTAssertNotEqual(plan.file, defaultConfigUrl.path)
+        XCTAssertFalse(plan.dirs.contains(defaultConfigUrl.deletingLastPathComponent().path), "\(plan.dirs)")
+    }
+
+    // MARK: - The watcher's check step
+
+    /// One save, one reload: the save applies its own bytes, and the watcher, which sees the write,
+    /// skips them. A 500 ms timer did this before, and swallowed any outside edit in that window.
+    func testOneSettingsWriteCausesOneReload() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        let vm = ConfigurationViewModel()
+        defer { vm.cancelPendingAutoSave() }
+        vm.load(fromText: try String(contentsOf: url, encoding: .utf8))
+        vm.settings.general.accordionPadding = 42
+        await vm.saveConfiguration()
+
+        XCTAssertNil(vm.errorMessage)
+        assertEquals(config.accordionPadding, 42)
+        let reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "the watcher reloaded the save a second time")
+    }
+
+    /// The documented first step, `cp … ~/.aerospork.toml`, did nothing until a restart.
+    func testAppearingFileIsLoaded() async throws {
+        let url = try useTemporaryConfig("", for: self)
+        try FileManager.default.removeItem(at: url)
+        XCTAssertTrue(reloadConfig())
+        assertEquals(configUrl, defaultConfigUrl)
+        var reloaded = await ConfigFileWatcher.check(grace: .zero)
+        XCTAssertFalse(reloaded, "still no config, and the defaults already run")
+
+        try "accordion-padding = 31\n".write(to: url, atomically: true, encoding: .utf8)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(configUrl, url)
+        assertEquals(config.accordionPadding, 31)
+    }
+
+    func testWatcherSkipsIdenticalBytesAndAppliesChangedOnes() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        var reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded)
+        try "accordion-padding = 31\n".write(to: url, atomically: true, encoding: .utf8)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "the same bytes again")
+
+        try "accordion-padding = 32\n".write(to: url, atomically: true, encoding: .utf8)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(config.accordionPadding, 32)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded)
+    }
+
+    /// `reload-config --dry-run` applies nothing, so it must not mark the text applied, or the watcher
+    /// would skip the change it read.
+    func testDryRunDoesNotMarkTextApplied() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        try "accordion-padding = 32\n".write(to: url, atomically: true, encoding: .utf8)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.dryRun = true
+        args.noGui = true
+        var stdout = ""
+        XCTAssertTrue(reloadConfig(args: args, stdout: &stdout), stdout)
+        assertEquals(config.accordionPadding, 31)
+
+        let reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(config.accordionPadding, 32)
+    }
+
+    /// What an editor's save is: a new file renamed over the old one.
+    func testAtomicRenameOverTheFileReloadsOnce() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        let temp = url.deletingLastPathComponent().appending(path: ".config.toml.swp")
+        try "accordion-padding = 33\n".write(to: temp, atomically: false, encoding: .utf8)
+        XCTAssertEqual(rename(temp.path, url.path), 0)
+
+        var reloaded = await ConfigFileWatcher.check()
+        XCTAssertTrue(reloaded)
+        assertEquals(config.accordionPadding, 33)
+        reloaded = await ConfigFileWatcher.check()
+        XCTAssertFalse(reloaded, "one rename, two reloads")
+    }
+
+    /// `git stash`, or a move away and back, empties the path for a moment. Falling back at once put the
+    /// bundled keymap on, and the watcher, now unarmed, never saw the file come back.
+    func testDeleteAndRecreateWithinTheGraceKeepsTheConfig() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        try FileManager.default.removeItem(at: url)
+        // Runs while `check` waits out the grace.
+        Task { try? "accordion-padding = 31\n".write(to: url, atomically: true, encoding: .utf8) }
+
+        let reloaded = await ConfigFileWatcher.check(grace: .milliseconds(300))
+        XCTAssertFalse(reloaded)
+        assertEquals(configUrl, url)
+        assertEquals(config.accordionPadding, 31)
+    }
+
+    /// `default-config.toml`: "If you delete your copy, AeroSpork uses this file again."
+    func testDeleteThatStaysFallsBackToTheDefaults() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 31\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        try FileManager.default.removeItem(at: url)
+
+        var reloaded = await ConfigFileWatcher.check(grace: .milliseconds(10))
+        XCTAssertTrue(reloaded)
+        assertEquals(configUrl, defaultConfigUrl)
+        assertEquals(config.accordionPadding, 30)
+        XCTAssertFalse(isRunningFallbackDefaults, "a deleted config is not a broken one")
+        reloaded = await ConfigFileWatcher.check(grace: .zero)
+        XCTAssertFalse(reloaded)
+    }
+
+    /// Deleting a broken config to start over left "Config not loaded" on the banner and in the menu,
+    /// for a file that no longer existed: the read that found no config returned the bundled default's
+    /// URL, which `recordConfigHealth` skipped as the startup fallback.
+    func testDeletingABrokenConfigClearsItsBanner() async throws {
+        let url = try useTemporaryConfig("accordion-padding = 'thirty'\n", for: self)
+        var args = ReloadConfigCmdArgs(rawArgs: [])
+        args.noGui = true
+        var stdout = ""
+        XCTAssertFalse(reloadConfig(args: args, stdout: &stdout))
+        // `initAppBundle`'s fallback still leaves the failure showing.
+        XCTAssertTrue(reloadConfig(forceConfigUrl: defaultConfigUrl))
+        XCTAssertTrue(isRunningFallbackDefaults)
+
+        try FileManager.default.removeItem(at: url)
+        let reloaded = await ConfigFileWatcher.check(grace: .milliseconds(10))
+        XCTAssertTrue(reloaded)
+        XCTAssertNil(configLoadFailure)
+        XCTAssertFalse(isRunningFallbackDefaults)
+    }
+
+    func testDeletingAConfigClearsItsWarnings() throws {
+        let url = try useTemporaryConfig("config-version = 2\n", for: self)
+        XCTAssertTrue(reloadConfig())
+        XCTAssertFalse(configWarnings.isEmpty, "the fixture no longer warns")
+
+        try FileManager.default.removeItem(at: url)
+        XCTAssertTrue(reloadConfig())
+        assertEquals(configUrl, defaultConfigUrl)
+        assertEquals(configWarnings, [])
+    }
+
+    // MARK: - What the watcher arms
+
+    func testWatchPlanArmsDirectoriesWhenNoFileExists() {
+        let candidates = ["/h/.aerospork.toml", "/h/.config/aerospork/aerospork.toml"]
+        let plan = ConfigFileWatcher.watchPlan(candidates: candidates, existing: { ["/h", "/h/.config"].contains($0) }, home: "/h")
+        XCTAssertNil(plan.file)
+        assertEquals(plan.dirs, ["/h", "/h/.config"])
+
+        // `--config-path` outside the home folder: its nearest existing folder.
+        let outside = ConfigFileWatcher.watchPlan(candidates: ["/etc/aerospork/a.toml"], existing: { $0 == "/etc" }, home: "/h")
+        assertEquals(outside.dirs, ["/etc"])
+    }
+
+    func testWatchPlanSkipsMissingDirectories() {
+        let candidates = ["/h/.aerospork.toml", "/h/.config/aerospork/aerospork.toml"]
+        let homeOnly = ConfigFileWatcher.watchPlan(candidates: candidates, existing: { $0 == "/h" || $0 == candidates[0] }, home: "/h")
+        assertEquals(homeOnly.file, candidates[0])
+        assertEquals(homeOnly.dirs, ["/h"])
+
+        let all = ConfigFileWatcher.watchPlan(candidates: candidates, existing: { _ in true }, home: "/h")
+        XCTAssertNil(all.file, "two configs: neither is the config")
+        assertEquals(all.dirs, ["/h", "/h/.config/aerospork", "/h/.config"])
     }
 }

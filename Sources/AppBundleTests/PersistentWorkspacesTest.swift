@@ -80,6 +80,14 @@ final class PersistentWorkspacesTest: XCTestCase {
         assertEquals(defaultConfig.persistentWorkspaces, Set((1 ... 9).map(String.init)))
     }
 
+    /// The bound names too. The default once got only its force-assigned names, so a copy of it picked
+    /// different stub workspaces than the original.
+    func testACopyOfTheBundledDefaultBindsTheSameNames() throws {
+        let copy = parsed(try String(contentsOf: defaultConfigUrl, encoding: .utf8))
+        assertEquals(defaultConfig.preservedWorkspaceNames.sorted(), copy.preservedWorkspaceNames.sorted())
+        XCTAssertTrue(Set(copy.preservedWorkspaceNames).isSuperset(of: (1 ... 9).map(String.init)))
+    }
+
     // MARK: - What collection does with it
 
     func testDeclaredWorkspacesSurviveEmptyWhileBindingOnlyOnesAreReleased() {
@@ -114,6 +122,21 @@ final class PersistentWorkspacesTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: "gone"))
     }
 
+    /// A sticky window that follows the switch leaves its workspace empty, and an undeclared empty workspace
+    /// goes in the same refresh. A declared one stays.
+    func testAWorkspaceWhoseOnlyWindowWasStickyIsReleased() {
+        config.persistentWorkspaces = ["kept"]
+        for (id, name): (UInt32, String) in [(1, "left"), (2, "kept")] {
+            XCTAssertTrue(Workspace.get(byName: name).focusWorkspace())
+            TestWindow.new(id: id, parent: Workspace.get(byName: name)).isSticky = true
+            XCTAssertTrue(Workspace.get(byName: "elsewhere").focusWorkspace())
+            refreshModel()
+        }
+        XCTAssertNil(Workspace.existing(byName: "left"), "the workspace the sticky window left was kept alive")
+        XCTAssertNotNil(Workspace.existing(byName: "kept"))
+        assertEquals(Workspace.get(byName: "elsewhere").floatingWindows.count, 2)
+    }
+
     /// The issue's `cmd-left`/`cmd-right = 'workspace --wrap-around prev/next'` walked only the
     /// workspaces that happened to hold windows.
     func testNextAndPrevWalkThroughEmptyDeclaredWorkspaces() {
@@ -124,6 +147,17 @@ final class PersistentWorkspacesTest: XCTestCase {
         let next = getNextPrevWorkspace(current: focus.workspace, isNext: true, wrapAround: true, stdin: "", target: focus)
 
         assertEquals(next?.name, "2")
+    }
+
+    /// In text order 10 sorts between 1 and 2, so `next` from 9 would wrap round to 1.
+    func testNextAndPrevSortNumerically() {
+        config.persistentWorkspaces = Set((1 ... 10).map(String.init))
+        Workspace.garbageCollectUnusedWorkspaces()
+        XCTAssertTrue(Workspace.get(byName: "9").focusWorkspace())
+        assertEquals(getNextPrevWorkspace(current: focus.workspace, isNext: true, wrapAround: true, stdin: "", target: focus)?.name, "10")
+
+        XCTAssertTrue(Workspace.get(byName: "10").focusWorkspace())
+        assertEquals(getNextPrevWorkspace(current: focus.workspace, isNext: false, wrapAround: true, stdin: "", target: focus)?.name, "9")
     }
 
     /// The Monitors pane's "Pin a workspace here" menu lists defined workspaces. It must read both

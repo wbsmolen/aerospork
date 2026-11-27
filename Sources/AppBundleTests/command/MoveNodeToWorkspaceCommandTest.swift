@@ -104,4 +104,44 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         assertEquals(Workspace.get(byName: "b").rootTilingContainer.children.count, 0)
         assertEquals(workspaceA.rootTilingContainer.children.count, 2)
     }
+
+    /// macOS owns a native-fullscreen or hidden-app window. Moving one bound it into the target's tiles while its
+    /// reason stayed `.macos`, so the target tiled a window in its own Space (or hidden), and the source kept a
+    /// stale away slot. Refused, like `move` refuses it.
+    func testANativeFullscreenWindowIsRefused() {
+        assertRefused(from: Workspace.get(byName: "a").macOsNativeFullscreenWindowsContainer)
+    }
+
+    func testAHiddenAppWindowIsRefused() {
+        assertRefused(from: Workspace.get(byName: "a").macOsNativeHiddenAppsWindowsContainer)
+    }
+
+    /// A minimized window has no workspace, so the command already fails before the macOS-owned guard.
+    func testAMinimizedWindowIsRefused() {
+        let window = TestWindow.new(id: 1, parent: macosMinimizedWindowsContainer)
+        // The container is global, so `setUpWorkspacesForTests` does not empty it, and a later test would find this window.
+        defer { window.unbindFromParent() }
+        let io = CmdIo(stdin: .emptyStdin)
+        let succ = MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b").copy(\.windowId, 1)).run(.defaultEnv, io)
+
+        XCTAssertFalse(succ)
+        XCTAssertTrue(window.parent === macosMinimizedWindowsContainer, "the window moved")
+        XCTAssertTrue(Workspace.get(byName: "b").isEffectivelyEmpty)
+    }
+
+    private func assertRefused(from container: NonLeafTreeNodeObject) {
+        let workspaceA = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: workspaceA.rootTilingContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: "a")
+        window.leaveTilesForMacos(container, adaptiveWeight: WEIGHT_DOESNT_MATTER)
+
+        let io = CmdIo(stdin: .emptyStdin)
+        let succ = MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b").copy(\.windowId, 1)).run(.defaultEnv, io)
+
+        XCTAssertFalse(succ)
+        assertEquals(io.stderr, [moveOutMacosUnconventionalWindow])
+        XCTAssertTrue(window.parent === container, "the window moved")
+        assertEquals(workspaceA.rootTilingContainer.awayWindows.map(\.id), [1])
+        XCTAssertTrue(Workspace.get(byName: "b").isEffectivelyEmpty)
+    }
 }

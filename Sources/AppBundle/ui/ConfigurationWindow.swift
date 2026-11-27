@@ -5,7 +5,9 @@ public struct ConfigurationWindow: View {
     @StateObject private var viewModel = ConfigurationViewModel()
     /// Apple recommends restoring the last pane in a multi-pane Settings window. A stable string
     /// rather than an enum-backed integer keeps the preference readable and survives reordering.
-    @AppStorage("settings.selectedPane") private var selectedPaneID = SettingsPane.general.rawValue
+    @AppStorage(Self.selectedPaneKey) private var selectedPaneID = SettingsPane.general.rawValue
+    /// The menu's "Show config error…" writes this default to land on Raw TOML; `@AppStorage` observes it.
+    static let selectedPaneKey = "settings.selectedPane"
 
     public init() {}
 
@@ -29,6 +31,7 @@ public struct ConfigurationWindow: View {
         var symbol: String {
             switch self {
                 case .general: "gearshape"
+                // "square.resize" is SF Symbols 5 (macOS 14); this app targets 13, where it renders blank.
                 case .gaps: "rectangle.split.3x3"
                 case .keys: "keyboard"
                 case .monitors: "display.2"
@@ -46,12 +49,12 @@ public struct ConfigurationWindow: View {
             // The startup error dialog is modal-and-gone. Without a persistent banner, an app
             // running the bundled default keymap looks exactly like one running the user's config.
             if isRunningFallbackDefaults {
-                Banner(
-                    "Your config was not loaded — AeroSpork is running built-in defaults. Fix the errors below and save; the config reloads by itself.\n\(configLoadFailure ?? "")",
-                    kind: .error,
-                )
+                Banner(Self.fallbackBanner(configLoadFailure ?? ""), kind: .error, action: configFailureIsInTheText ? showInRawToml : nil)
             } else if !configWarnings.isEmpty {
                 Banner(configWarnings.joined(separator: "\n"), kind: .warning)
+            }
+            if viewModel.hasPendingRawEdits, selectedPane != .rawToml {
+                Banner(Self.pendingRawEditsBanner, kind: .warning, action: ("Go to Raw TOML", { selectedPaneID = SettingsPane.rawToml.rawValue }))
             }
             tabs
         }
@@ -60,27 +63,32 @@ public struct ConfigurationWindow: View {
     private var tabs: some View {
         TabView(selection: $selectedPaneID) {
             GeneralSettingsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.general) }
                 .tag(SettingsPane.general.rawValue)
 
             GapsSettingsTab(viewModel: viewModel)
-                // "square.resize" is SF Symbols 5 (macOS 14); this app targets 13, where it renders blank.
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.gaps) }
                 .tag(SettingsPane.gaps.rawValue)
 
             KeyBindingsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.keys) }
                 .tag(SettingsPane.keys.rawValue)
 
             WorkspacesMonitorsTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.monitors) }
                 .tag(SettingsPane.monitors.rawValue)
 
             CallbacksTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.events) }
                 .tag(SettingsPane.events.rawValue)
 
             WindowRulesTab(viewModel: viewModel)
+                .disabled(viewModel.hasPendingRawEdits)
                 .tabItem { paneLabel(.windowRules) }
                 .tag(SettingsPane.windowRules.rawValue)
 
@@ -100,19 +108,10 @@ public struct ConfigurationWindow: View {
         // convention, and it is only safe because an untouched section is never rewritten. The Raw
         // TOML tab has its own explicit Apply, since half-typed TOML is invalid most of the time.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            // The raw tab shows its own errors inline next to its Apply button.
-            if let error = viewModel.errorMessage, selectedPane != .rawToml {
-                VStack(spacing: 0) {
-                    Divider()
-                    StatusLabel(error, kind: .error)
-                        .textSelection(.enabled)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                }
-                .background(Banner.Kind.error.tint.opacity(0.13))
+            // On every pane, Raw TOML included. Its inline status shows only the parse diagnostic of
+            // the buffer; a failed Apply or Restore, or the changed-on-disk conflict, shows only here.
+            if let error = viewModel.errorMessage {
+                Banner(error, kind: .error, action: recovery(for: error), dividerEdge: .top)
             }
         }
         .task { await viewModel.loadConfiguration() }
@@ -122,6 +121,37 @@ public struct ConfigurationWindow: View {
         }
         // Flushed, not cancelled: closing the window inside the 600ms debounce used to drop the last edit.
         .onDisappear { Task { await viewModel.flushPendingAutoSave() } }
+    }
+
+    /// A structured save refuses while Raw TOML has unapplied edits, and the next Apply reloads every
+    /// pane from the raw text, so an edit made here meanwhile would be lost. The panes lock instead.
+    /// On each pane, not the `TabView`, which would lock the toolbar and the way back to Raw TOML.
+    static let pendingRawEditsBanner = "Raw TOML has edits you have not applied, so the other panes are locked. Apply or revert them in Raw TOML."
+
+    /// Only a parse error is in text Raw TOML can show. Two configs, or one that can't be read, are
+    /// fixed outside Settings, and the failure below names the files.
+    static func fallbackBanner(_ failure: String) -> String {
+        let reload = "then run aerospork reload-config if it does not reload by itself."
+        let recovery = if failure.hasPrefix(configParseFailurePrefix) {
+            "Fix the error in Raw TOML or your editor; the config reloads by itself."
+        } else if failure.hasPrefix(ambiguousConfigFailurePrefix) {
+            "AeroSpork reads one config and found several: remove or rename all but one in Finder, \(reload)"
+        } else {
+            "Settings can't open the file below: fix it in Finder or your editor, \(reload)"
+        }
+        return "Your config was not loaded, so AeroSpork is running built-in defaults. \(recovery)\n\(failure)"
+    }
+
+    /// Raw TOML holds the file that failed to load, with the parser's error on it. None on that pane.
+    private var showInRawToml: (title: String, run: () -> Void)? {
+        guard selectedPane != .rawToml else { return nil }
+        return ("Show in Raw TOML", { selectedPaneID = SettingsPane.rawToml.rawValue })
+    }
+
+    /// The conflict's recovery works on every pane. It discards the edits, so its title says so.
+    private func recovery(for error: String) -> (title: String, run: () -> Void)? {
+        guard error == ConfigurationViewModel.diskConflictMessage else { return nil }
+        return ("Discard edits and load from disk", { viewModel.revertChanges() })
     }
 
     private func paneLabel(_ pane: SettingsPane) -> some View {

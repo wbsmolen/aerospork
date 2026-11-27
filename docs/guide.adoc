@@ -178,10 +178,12 @@ shows no message, so the only sign is the default keymap.
 
 Other differences:
 
-* `config-version`, `auto-reload-config`, `on-mode-changed` and `focus-follows-mouse` have no
-  AeroSpork equivalent. AeroSpork reports these keys and ignores them. It does not reject the file.
-  A saved config always reloads by itself.
-* A window rule can run only `layout floating`, `layout tiling` and `move-node-to-workspace`.
+* `config-version`, `auto-reload-config` and `focus-follows-mouse` have no AeroSpork equivalent.
+  AeroSpork reports these keys and ignores them. It does not reject the file. A saved config always
+  reloads by itself.
+* AeroSpork runs `on-mode-changed`, and sets `AEROSPORK_MODE` and `AEROSPORK_PREV_MODE` for its
+  commands. See <<on-mode-changed-callback>>.
+* A window rule can run only the commands that <<window-rule-commands>> lists.
 * `persistent-workspaces` works as it does in AeroSpace, and so does `workspaces`. See
   <<persistent-workspaces>>.
 * The first time AeroSpork starts with a config in the v1 spelling (bindings under
@@ -278,6 +280,35 @@ To do the same in the Settings window:
 . Set what the rule does: the workspace to move the window to, or Float or Tile.
 
 To match by app name, window title or workspace, see <<on-window-detected-callback>>.
+
+[#sticky-windows]
+=== Keep a window on every workspace
+
+A window belongs to one workspace, so a video call or a picture-in-picture video goes off screen when
+you switch away from its workspace. A sticky window follows the workspace that its monitor shows: on
+each switch it moves to the new workspace, and stays where it is on the screen.
+
+To make the focused window sticky, run xref:commands.adoc#sticky[sticky], or bind it to a key:
+
+[source,toml]
+----
+[keys]
+alt-shift-s = 'sticky'  # Toggles
+----
+
+To make the windows of an app sticky when they open, write a window rule that says `sticky on`. This
+rule matches the picture-in-picture windows of Chrome and Firefox by their title:
+
+[source,toml]
+----
+[[on-window-detected]]
+    if.window-title-regex-substring = '^picture.in.picture$'
+    run = 'sticky on'
+----
+
+A sticky window is a floating window. Tile it, or move it with `move-node-to-workspace` or
+`move-node-to-monitor`, and it stops being sticky. A minimized sticky window, or one of a hidden app,
+stays on its workspace until it comes back.
 
 [#binding-modes]
 === Add a binding mode
@@ -533,6 +564,51 @@ enable-normalization-flatten-containers = false
 enable-normalization-opposite-orientation-for-nested-containers = false
 ----
 
+[#new-window-placement]
+==== Where a new window goes
+
+A new window opens beside the focused window, in the same container. Each new window takes a share
+of that whole row, so a third or fourth window makes every window in the row narrower.
+
+To make a new window share the focused window's tile instead, set:
+
+[source,toml]
+----
+new-window-placement = 'nest'   # the built-in default is 'sibling'
+----
+
+With `'nest'`, the focused window and the new window go into a new container that takes the
+focused window's place and size. The other windows keep their size. With the normalizations on, the
+new container has the opposite orientation of its parent, so windows open in a spiral:
+
+----
+h_tiles
+├── window 1
+└── v_tiles
+    ├── window 2
+    └── h_tiles
+        ├── window 3
+        └── window 4
+----
+
+With `enable-normalization-opposite-orientation-for-nested-containers = false`, the new container
+splits the focused window along its longer side.
+
+Some windows never nest:
+
+* The first two windows of a container. They sit side by side, because the focused window already
+  fills its container.
+* A window in an accordion container.
+* A window that a restart brings back to the place it had, and the windows that are already open
+  when AeroSpork starts.
+* A new native tab. It takes the tile of its tab group.
+* A window that comes back from minimized, hidden or fullscreen. It goes back to its place.
+* A window that `layout tiling` or a move command puts in the tiles.
+
+When a <<on-window-detected-callback,window rule>> moves a new window to another workspace, the
+window nests there, beside the focused window of that workspace. The Layout section of the General
+pane in Settings has the same choice.
+
 [#floating-windows]
 ==== Floating windows
 
@@ -608,7 +684,7 @@ When AeroSpork restarts, it puts back the whole layout:
 * The workspace of each window, and the monitor of each workspace.
 * The workspace that each monitor showed.
 * The tree of each workspace, with its split sizes and layouts.
-* The place of each floating, fullscreen and minimized window.
+* The place of each floating, fullscreen and minimized window, and which windows are sticky.
 
 AeroSpork knows a window by the ID that the macOS window server gives it. The memory lasts as long
 as the window server does. A restart of AeroSpork keeps it: an update, a crash, `killall`, or Quit
@@ -981,6 +1057,7 @@ The other built-in defaults:
 |`accordion-padding` |`30` |commented out
 |`default-root-container-layout` |`'tiles'` |commented out
 |`default-root-container-orientation` |`'auto'` |commented out
+|`new-window-placement` |`'sibling'` |commented out
 |`start-at-login` |`false` |commented out
 |`enable-normalization-flatten-containers` |`true` |no
 |`enable-normalization-opposite-orientation-for-nested-containers` |`true` |no
@@ -992,7 +1069,7 @@ The other built-in defaults:
 |===
 
 `after-startup-command`, `on-focus-changed`, `on-focused-workspace-changed`,
-`on-focused-monitor-changed`, `on-window-detected`, `persistent-workspaces` and
+`on-focused-monitor-changed`, `on-mode-changed`, `on-window-detected`, `persistent-workspaces` and
 `workspace-to-monitor-force-assignment` are empty by default.
 
 [#config-v2]
@@ -1317,13 +1394,34 @@ A rule with no condition matches every new window.
 * The Window Rules pane of the Settings window edits both forms. It writes `[on-window]` when every
   rule fits the short form, and `\[[on-window-detected]]` otherwise.
 
+[#window-rule-commands]
 ==== What a rule can run
 
-`run` accepts exactly three commands: `layout floating`, `layout tiling` and
-xref:commands.adoc#move-node-to-workspace[move-node-to-workspace]. AeroSpork rejects other
-`layout` arguments here. `move-node-to-workspace` can appear only once, as the last command in the
-list. If you need another command, https://github.com/wbsmolen/aerospork/issues[open an issue] that
-describes your use case.
+`run` accepts these commands, and AeroSpork rejects a rule with any other:
+
+* `layout floating` and `layout tiling`. AeroSpork rejects other `layout` arguments here.
+* `fullscreen on`. A rule must say `on`: a bare `fullscreen` toggles, so the window would leave
+  fullscreen if the rule ran again. See xref:commands.adoc#fullscreen[fullscreen].
+* `sticky on`, for the same reason. See <<sticky-windows>>.
+* xref:commands.adoc#move-node-to-workspace[move-node-to-workspace] and
+  xref:commands.adoc#move-node-to-monitor[move-node-to-monitor]. A rule moves its window at most
+  once, with one of the two, and the move is the last command in the list. A move takes the window
+  away from the workspace that the commands before it worked on.
+
+To open an app on another monitor, for example, move its window to that monitor. The window goes to
+the workspace that the monitor shows:
+
+[source,toml]
+----
+[on-window]
+'com.apple.Music' = 'move-node-to-monitor secondary'
+'com.apple.TV' = ['fullscreen on', 'move-node-to-monitor main']
+----
+
+A rule does not take focus unless a move says `--focus-follows-window`. A rule can run seconds after
+its window appears, when AeroSpork asks a slow app again, so the flag can pull you away from what
+you are typing in. If you need another command, https://github.com/wbsmolen/aerospork/issues[open an
+issue] that describes your use case.
 
 ==== When a rule runs
 
@@ -1419,6 +1517,24 @@ that you switched to, and `AEROSPORK_PREV_WORKSPACE`, the workspace that you swi
 * The order in which AeroSpork runs the callbacks can change between versions. Do not depend on it.
 * A focus change inside a callback does not start the callback again. A change of focus inside these
   callbacks is not a supported pattern, and its handling can change in a later version.
+
+[#on-mode-changed-callback]
+==== on-mode-changed
+
+`on-mode-changed` runs each time the binding mode changes: after `mode <name>`, after you leave a mode
+from the menu, and after a reload that drops the mode you were in, which puts you back in `main`. It
+does not run at startup, for `mode` with the mode you are already in, or for `enable`.
+
+A command run by `on-mode-changed` gets `AEROSPORK_MODE`, the mode that you switched to, and
+`AEROSPORK_PREV_MODE`, the mode that you switched from. A status bar can show the mode without asking
+`list-modes --current` again and again:
+
+[source,toml]
+----
+on-mode-changed = ['exec-and-forget sketchybar --trigger aerospork_mode_change MODE=$AEROSPORK_MODE']
+----
+
+A `mode` command inside the callback changes the mode, but does not start the callback again.
 
 [#exec-on-workspace-change-callback]
 ==== exec-on-workspace-change (deprecated)
@@ -1516,6 +1632,12 @@ and parser errors that link to the line.
 The first time the Settings window saves after you open it, and each time you apply Raw TOML,
 AeroSpork writes a backup next to your config: `<config>.toml.<yyyyMMdd-HHmmss>.backup`. AeroSpork
 keeps the five most recent backups. The Restore menu of the Raw TOML pane lists them.
+
+When your config is a symbolic link, for example from a dotfiles repository, a save writes the file
+that the link points to and keeps the link. The backups go next to the link, and each one holds the
+contents of the file. When the file is in a folder that AeroSpork cannot write, such as the Nix
+store, AeroSpork refuses the save, so edit the file where it is managed. A save replaces the file,
+so a hard link to your config keeps the old contents.
 
 ==== What the Settings window does not change
 

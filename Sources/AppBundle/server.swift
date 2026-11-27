@@ -3,11 +3,13 @@ import Common
 
 /// The CLI reads stdin before it connects, then does exactly one request/response and closes, so
 /// nothing legitimate is ever slow on the socket. Anything that is, is a stuck or hostile client
-/// holding a thread hostage. Applies to each frame, in each direction.
+/// holding a thread hostage. Applies to each frame, in each direction. A `subscribe` stream keeps it on
+/// each write, and waits for the client's hang-up without it (`streamEvents`).
 private let clientFrameTimeoutSec = 30
 
-func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUserName).sock") {
-    DispatchQueue.global().async {
+func startUnixSocketServer(socketFile: String = cliSocketPath(appId: aeroSporkAppId)) {
+    // A thread of its own: the loop never returns, so on `DispatchQueue.global()` it held a pool worker forever.
+    Thread.detachNewThread {
         guard let listener = UnixSocketListener.bind(to: socketFile) else {
             // Not `die`. /tmp is world-writable and sticky, so another account can create this path
             // before us, and then we can neither remove it nor bind it. Dying here would let it stop
@@ -16,11 +18,42 @@ func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUs
             return
         }
         AppLog.server.notice("CLI socket listening on \(socketFile, privacy: .public)")
-        while true {
-            guard let connection = listener.accept() else { continue }
+        acceptConnections({ listener.accept() }) { connection in
             connection.setFrameTimeout(seconds: clientFrameTimeoutSec)
             Task { await newConnection(connection) }
         }
+    }
+}
+
+/// How long the accept loop pauses after `consecutiveFailures` accepts in a row came back empty. nil
+/// means retry at once.
+///
+/// One empty accept is ordinary: a signal (EINTR), or one client run by another user. A streak means
+/// accept keeps failing, usually because the process is out of file descriptors (EMFILE), which no
+/// retry fixes until a connection closes. Without the pause that streak spins a core inside the
+/// window manager. It also slows a flood of connects from another user, which is no loss.
+func acceptBackoff(consecutiveFailures: Int) -> Duration? {
+    consecutiveFailures <= 1 ? nil : .milliseconds(100)
+}
+
+/// The accept loop, with the accept call passed in so a test can hand it one that always fails. It
+/// returns only when its thread is cancelled, which only a test does.
+func acceptConnections(_ accept: () -> UnixSocketConnection?, handle: (UnixSocketConnection) -> Void) {
+    var failures = 0
+    while !Thread.current.isCancelled {
+        guard let connection = accept() else {
+            failures += 1
+            // Once per streak, not per failure: `AppLog` is always on.
+            if failures == 10 {
+                AppLog.server.error("CLI socket: accept failed 10 times in a row (out of file descriptors, or rejected peers); backing off")
+            }
+            if let pause = acceptBackoff(consecutiveFailures: failures) {
+                Thread.sleep(forTimeInterval: Double(pause.components.seconds) + Double(pause.components.attoseconds) / 1e18)
+            }
+            continue
+        }
+        failures = 0
+        handle(connection)
     }
 }
 
@@ -29,22 +62,24 @@ func startUnixSocketServer(socketFile: String = "/tmp/\(aeroSporkAppId)-\(unixUs
 /// keeps the two ids in sync instead of hardcoding a second literal that can rot.
 var releaseServerSocketPath: String {
     check(isDebug && aeroSporkAppId.hasSuffix(".debug"))
-    return "/tmp/\(aeroSporkAppId.dropLast(".debug".count))-\(unixUserName).sock"
+    return cliSocketPath(appId: String(aeroSporkAppId.dropLast(".debug".count)))
 }
 
-func sendCommandToReleaseServer(args: [String]) {
+/// Best effort. It runs on the main actor at launch, before this build's own socket exists, and again at
+/// quit, so a release server that is running but wedged must not hang the debug build: after `timeout`
+/// it gives up.
+func sendCommandToReleaseServer(args: [String], socketPath: String = releaseServerSocketPath, timeout: Duration = .seconds(2)) {
     check(isDebug)
-    guard let socket = UnixSocketConnection.connect(to: releaseServerSocketPath) else { return } // release server not running
+    guard let socket = UnixSocketConnection.connect(to: socketPath) else { return } // release server not running
     defer { socket.close() }
+    socket.setFrameTimeout(timeout)
     guard let data = try? JSONEncoder().encode(ClientRequest(args: args, stdin: "")) else { return }
     socket.sendMessage(data)
     _ = try? socket.recvMessage()
 }
 
-private let serverVersionAndHash = "\(aeroSporkAppVersion) \(gitHash)"
-
 func serverAnswer(_ exitCode: Int32, stdout: String = "", stderr: String = "") -> ServerAnswer {
-    ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: serverVersionAndHash)
+    ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: aeroSporkVersionAndHash)
 }
 
 /// The answers that need no window tree: help text, argument errors, and commands the socket
@@ -53,8 +88,55 @@ func serverAnswer(_ exitCode: Int32, stdout: String = "", stderr: String = "") -
 func nonRunningAnswer(command: (any Command)?, help: String?, err: String?) -> ServerAnswer? {
     if let help { return serverAnswer(ExitCode.success, stdout: help) }
     if let err { return serverAnswer(ExitCode.badArgs, stderr: err) }
+    // Defence in depth. The socket parses an args array, where `exec-and-forget` is not registered and
+    // fails as `err` above, so a request from the socket never reaches this branch.
     if command?.isExec == true { return serverAnswer(ExitCode.badArgs, stderr: "exec-and-forget is prohibited in CLI") }
     return nil
+}
+
+/// The frame for `ans`. An answer over the frame limit, which `sendMessage` refuses, becomes a small
+/// failure that says so: otherwise the client gets nothing and reports that the server did not answer.
+func encodedAnswer(_ ans: ServerAnswer) -> Data? {
+    guard let data = try? JSONEncoder().encode(ans) else { return nil }
+    if data.count <= Int(UnixSocketConnection.maxFrameSize) { return data }
+    return try? JSONEncoder().encode(serverAnswer(
+        ExitCode.failure,
+        stderr: "The output is too large to send (\(data.count) bytes, the limit is \(UnixSocketConnection.maxFrameSize) bytes)",
+    ))
+}
+
+/// What makes two CLI failures the same record in the log.
+struct CliFailureKey: Equatable {
+    let args: [String]
+    let exitCode: Int32
+    let stderr: String
+}
+
+/// Whether to log `failure`, given the failure that answered the command before it (nil after a
+/// success). `AppLog` is always on, and a status bar polling a failing query, such as
+/// `list-windows --focused` on an empty workspace, wrote a record on every poll.
+func shouldLogCliFailure(_ failure: CliFailureKey, last: CliFailureKey?) -> Bool { failure != last }
+
+/// On the main actor because connections run concurrently.
+@MainActor private var lastCliFailure: CliFailureKey? = nil
+@MainActor private var lastCliFailureRepeats = 0
+
+/// Logs a failed socket command, once per run of identical failures, and the run's length when it
+/// ends. Only the socket comes here: keybindings run in-process.
+@MainActor func logCliAnswer(args: [String], _ answer: ServerAnswer) {
+    let failure = answer.exitCode == ExitCode.success ? nil : CliFailureKey(args: args, exitCode: answer.exitCode, stderr: answer.stderr)
+    if let failure, !shouldLogCliFailure(failure, last: lastCliFailure) {
+        lastCliFailureRepeats += 1
+        return
+    }
+    if let last = lastCliFailure, lastCliFailureRepeats > 0 {
+        AppLog.server.error("'\(last.args.joined(separator: " "), privacy: .public)': previous failure repeated \(lastCliFailureRepeats) times")
+    }
+    lastCliFailure = failure
+    lastCliFailureRepeats = 0
+    if let failure {
+        AppLog.server.error("'\(args.joined(separator: " "), privacy: .public)' exited \(failure.exitCode): \(failure.stderr, privacy: .public)")
+    }
 }
 
 /// Runs a blocking socket call on `queue` and suspends until it returns.
@@ -69,13 +151,41 @@ private func blockingSocketCall<T: Sendable>(on queue: DispatchQueue, _ body: @e
     }
 }
 
+let serverDisabledMessage = "\(aeroSporkAppName) server is disabled and doesn't accept commands. Run 'aerospork enable on' to enable it"
+
+/// `subscribe`: the snapshot, then a frame for each event, until the client hangs up, the broadcaster drops it
+/// for falling behind, or `enable off` ends every stream. The main actor is taken only to register, which is
+/// where the snapshot is read. The frames are written on the subscriber's own queue.
+private func streamEvents(_ events: Set<SubscribeEvent>, to socket: UnixSocketConnection, waitingOn queue: DispatchQueue) async {
+    let subscriber = Subscriber(
+        events: events,
+        send: { answer in encodedAnswer(answer).map { socket.sendMessage($0) } ?? false },
+        hangUp: { socket.shutdown() },
+    )
+    // One main-actor step, so an `enable off` cannot fall between the check and the registration.
+    let refusal: String? = await MainActor.run {
+        if !TrayMenuModel.shared.isEnabled { return serverDisabledMessage }
+        if EventBroadcaster.shared.add(subscriber) { return nil }
+        return "\(aeroSporkAppName) already streams to \(EventBroadcaster.maxSubscribers) subscribers. Stop one, then subscribe again"
+    }
+    if let refusal {
+        let data = encodedAnswer(serverAnswer(ExitCode.failure, stderr: refusal))
+        _ = await blockingSocketCall(on: queue) { data.map { socket.sendMessage($0) } }
+        return
+    }
+    await blockingSocketCall(on: queue) { socket.waitForHangUp() }
+    await EventBroadcaster.shared.remove(subscriber)
+    socket.shutdown() // a write blocked on a client that stopped reading fails now, not at its deadline
+    await subscriber.drain() // before `newConnection` closes the descriptor the writes use
+}
+
 /// Holds nothing while it waits on the client. The main actor is only taken to run the command, and
 /// the reply is written after `runSession` has returned and left `sessionGate`, so a client that
 /// stops reading delays itself and not the session queued behind it.
 func newConnection(_ socket: UnixSocketConnection) async {
     let ioQueue = DispatchQueue(label: "\(aeroSporkAppId).cli-connection")
     func answerToClient(_ ans: ServerAnswer) async {
-        guard let data = try? JSONEncoder().encode(ans) else { return }
+        guard let data = encodedAnswer(ans) else { return }
         _ = await blockingSocketCall(on: ioQueue) { socket.sendMessage(data) }
     }
     defer {
@@ -101,7 +211,7 @@ func newConnection(_ socket: UnixSocketConnection) async {
             await answerToClient(serverAnswer(
                 ExitCode.badArgs,
                 stderr: """
-                    Can't parse request '\(String(describing: String(data: rawRequest, encoding: .utf8)).singleQuoted)'.
+                    Can't parse request '\(String(decoding: rawRequest.prefix(200), as: UTF8.self))'.
                     Error: \(_request.failureOrNil.prettyDescription)
                     """,
             ))
@@ -109,16 +219,17 @@ func newConnection(_ socket: UnixSocketConnection) async {
         }
         let (command, help, err) = parseCommand(request.args).unwrap()
         guard let token: RunSessionGuard = await .isServerEnabled(orIsEnableCommand: command) else {
-            await answerToClient(serverAnswer(
-                ExitCode.failure,
-                stderr: "\(aeroSporkAppName) server is disabled and doesn't accept commands. " +
-                    "Run 'aerospork enable on' to enable it",
-            ))
+            await answerToClient(serverAnswer(ExitCode.failure, stderr: serverDisabledMessage))
             continue
         }
         if let ans = nonRunningAnswer(command: command, help: help, err: err) {
             await answerToClient(ans)
             continue
+        }
+        // Before `runSession`: a stream holds no session and never waits on `sessionGate`.
+        if let command = command as? SubscribeCommand {
+            await streamEvents(command.args.subscribedEvents, to: socket, waitingOn: ioQueue)
+            return
         }
         if let command {
             let _answer: Result<ServerAnswer, Error> = await Task { @MainActor in
@@ -132,19 +243,13 @@ func newConnection(_ socket: UnixSocketConnection) async {
                         exitCode: cmdResult.exitCode,
                         stdout: cmdResult.stdout.joined(separator: "\n"),
                         stderr: cmdResult.stderr.joined(separator: "\n"),
-                        serverVersionAndHash: serverVersionAndHash,
+                        serverVersionAndHash: aeroSporkVersionAndHash,
                     )
                 }
             }.result
             let answer = _answer.getOrNil() ??
                 serverAnswer(ExitCode.failure, stderr: "Fail to await main thread. \(_answer.failureOrNil?.localizedDescription ?? "")")
-            // Only failures, and only over the socket -- keybindings run in-process and never reach
-            // here -- so this is bounded by how often the user's CLI actually breaks.
-            if answer.exitCode != ExitCode.success {
-                AppLog.server.error(
-                    "'\(request.args.joined(separator: " "), privacy: .public)' exited \(answer.exitCode): \(answer.stderr, privacy: .public)",
-                )
-            }
+            await logCliAnswer(args: request.args, answer)
             await answerToClient(answer)
             continue
         }

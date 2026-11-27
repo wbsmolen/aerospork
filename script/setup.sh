@@ -39,16 +39,14 @@ if /bin/test -z "${NUKE_PATH:-}"; then
 fi
 
 swift() {
-    # Escape hatch: the swiftly-pinned toolchain can't compile against a beta macOS SDK -- the
-    # frontend spins at 100% CPU forever on the TOMLKit manifest. Set AEROSPORK_SWIFT=xcrun (with
-    # DEVELOPER_DIR pointing at the matching Xcode) to build with the Xcode toolchain instead.
-    if /bin/test "${AEROSPORK_SWIFT:-}" = "xcrun"; then
-        /usr/bin/xcrun swift "$@"
-    elif /usr/bin/which swiftly &> /dev/null; then
+    # Xcode's toolchain by default (DEVELOPER_DIR or xcode-select picks the Xcode). The swiftly
+    # toolchain pinned by .swift-version can't compile against a beta macOS SDK: the frontend spins
+    # at 100% CPU forever on the TOMLKit manifest. So it is opt-in only, with AEROSPORK_SWIFT=swiftly.
+    # AEROSPORK_SWIFT=xcrun (or unset) means Xcode's toolchain.
+    if /bin/test "${AEROSPORK_SWIFT:-}" = "swiftly"; then
         swiftly run swift "$@"
     else
-        echo "warning: swiftly is not installed. Fallback to plain swift. Swift compilation might not be reproducible" > /dev/stderr
-        /usr/bin/env swift "$@"
+        /usr/bin/xcrun swift "$@"
     fi
 }
 

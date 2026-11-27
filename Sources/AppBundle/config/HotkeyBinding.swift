@@ -5,8 +5,8 @@ import Foundation
 import TOMLKit
 
 // Global hotkeys are registered with Carbon's `RegisterEventHotKey`. Only the currently active
-// mode's bindings are registered at any time; switching modes unregisters the old set and
-// registers the new one (the net effect of the old enable/disable toggling).
+// mode's bindings are registered at any time. A mode switch or a reload changes only the
+// registrations that differ (`hotkeyRegistrationPlan`).
 
 /// Bookkeeping for one live Carbon hotkey registration.
 @MainActor private struct RegisteredHotKey {
@@ -25,13 +25,6 @@ import TOMLKit
 
 /// Four-char code "ASHk" (AeroSpork HotKey) used as our `EventHotKeyID.signature`.
 private let hotKeySignature: UInt32 = 0x4153_486B
-
-@MainActor func resetHotKeys() {
-    for (_, entry) in registeredHotKeys {
-        UnregisterEventHotKey(entry.ref)
-    }
-    registeredHotKeys = [:]
-}
 
 private func carbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
     var result: UInt32 = 0
@@ -70,10 +63,7 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
         let startTime = Date()
         debugLog("HOTKEY: \(entry.notation) pressed")
 
-        if let commands = config.modes[activeMode]?.bindings[entry.bindingId]?.commands {
-            let commandCount = commands.count
-            debugLog("HOTKEY: Will execute \(commandCount) command(s)")
-        }
+        debugLog("HOTKEY: Will execute \(config.modes[activeMode]?.bindings[entry.bindingId]?.commands.count ?? 0) command(s)")
 
         try await runSession(.hotkeyBinding, .checkServerIsEnabledOrDie) { () throws in
             _ = try await config.modes[activeMode]?.bindings[entry.bindingId]?.commands
@@ -91,10 +81,13 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
     // A reload can drop the mode you are in. Staying "in" it registers no hotkeys at all, which
     // includes the one that would get you out. nil is different: it is `enable off`, and stays.
     let targetMode = targetMode.map { config.modes[$0] == nil ? mainModeId : $0 }
-    resetHotKeys()
-    installHotKeyEventHandlerIfNeeded()
     let targetBindings = targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
-    for binding in targetBindings.values {
+    let plan = hotkeyRegistrationPlan(current: registeredHotKeys.mapValues(\.bindingId), target: targetBindings)
+    for id in plan.unregister {
+        if let entry = registeredHotKeys.removeValue(forKey: id) { UnregisterEventHotKey(entry.ref) }
+    }
+    installHotKeyEventHandlerIfNeeded()
+    for binding in plan.register {
         nextHotKeyId += 1
         let id = nextHotKeyId
         var ref: EventHotKeyRef?
@@ -118,7 +111,45 @@ private func hotKeyEventHandler(_ nextHandler: EventHandlerCallRef?, _ event: Ev
             AppLog.config.error("Hotkey \(binding.descriptionWithKeyNotation, privacy: .public) not registered (status \(status, privacy: .public))")
         }
     }
+    let previous = activeMode
     activeMode = targetMode
+    // nil is `enable off`, and the reload at startup activates the mode already active: neither fires.
+    // A mode change made by an `on-mode-changed` callback does not fire again, or two callbacks that
+    // switch A -> B -> A would loop forever.
+    if let previous, let targetMode, previous != targetMode {
+        EventBroadcaster.shared.emit(.modeChanged, ["mode": .string(targetMode), "prev-mode": .string(previous)])
+        if !config.onModeChanged.isEmpty, refreshSessionEvent?.isOnModeChanged != true {
+            runOnModeChanged(previous, targetMode)
+        }
+    }
+}
+
+/// Runs `on-mode-changed` in a session of its own. Detached: `activateMode` runs inside a session,
+/// and a session must not wait for another (#refresh-and-layout). A test swaps it, because a real
+/// session cannot run headlessly.
+@MainActor var runOnModeChanged: @MainActor (_ from: String, _ to: String) -> Void = { from, to in
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    let commands = config.onModeChanged
+    runDetached("onModeChangedCallbacks") {
+        try await runSession(.onModeChanged, token) {
+            _ = try await commands.runCmdSeq(CmdEnv.defaultEnv.copy(\.modeChange, (from: from, to: to)), .emptyStdin)
+        }
+    }
+}
+
+/// The registrations to drop and the bindings to register, to go from `current` (Carbon id to binding
+/// id) to `target` (keyed by binding id, as a mode keeps them).
+///
+/// Unregistering every key and registering again dropped a press queued across the gap (the handler
+/// looks its id up later), and let the combo reach the focused app meanwhile. A kept registration
+/// behaves the same, because the handler looks the command up in `config` when the key is pressed. A
+/// binding another app owns failed to register, so it is not in `current` and is tried again.
+// ponytail: a kept registration keeps its old notation, which only debug logs read.
+func hotkeyRegistrationPlan(current: [UInt32: String], target: [String: HotkeyBinding]) -> (unregister: [UInt32], register: [HotkeyBinding]) {
+    let unregister = current.filter { target[$0.value] == nil }.keys.sorted()
+    let kept = Set(current.values)
+    let register = target.filter { !kept.contains($0.key) }.sorted { $0.key < $1.key }.map(\.value)
+    return (unregister, register)
 }
 
 struct HotkeyBinding: Equatable, Sendable {
@@ -172,15 +203,26 @@ func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ er
     return result
 }
 
+/// The one message for a word that is not a modifier, in a binding and in `mod`.
+func modifierError(_ segment: String) -> String {
+    "'\(segment)' is not a modifier. Use cmd, alt, ctrl or shift"
+}
+
 func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String: Key]) -> ParsedToml<(NSEvent.ModifierFlags, Key)> {
     let rawKeys = raw.split(separator: "-")
     let modifiers: ParsedToml<NSEvent.ModifierFlags> = rawKeys.dropLast()
         .mapAllOrFailure {
-            modifiersMap[String($0)].orFailure(.semantic(backtrace, "Can't parse modifiers in '\(raw)' binding"))
+            modifiersMap[String($0)].orFailure(.semantic(backtrace, modifierError(String($0))))
         }
         .map { NSEvent.ModifierFlags($0) }
-    let key: ParsedToml<Key> = rawKeys.last.flatMap { mapping[String($0)] }
-        .orFailure(.semantic(backtrace, "Can't parse the key in '\(raw)' binding"))
+    let last = rawKeys.last.map(String.init) ?? ""
+    // Single characters are left out of the hint: every word starts with one, so `escape` would get `e`.
+    // Built only on failure: `orFailure` takes an autoclosure, and every binding of every load parses here.
+    let key: ParsedToml<Key> = mapping[last].orFailure(.semantic(
+        backtrace,
+        "Can't parse the key in '\(raw)' binding"
+            + (last.isEmpty ? "" : didYouMeanSuffix(last, from: mapping.keys.filter { $0.count > 1 }.sorted())),
+    ))
     return modifiers.flatMap { modifiers -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
         key.flatMap { key -> ParsedToml<(NSEvent.ModifierFlags, Key)> in
             .success((modifiers, key))

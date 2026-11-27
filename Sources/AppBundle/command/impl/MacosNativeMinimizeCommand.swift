@@ -15,7 +15,7 @@ struct MacosNativeMinimizeCommand: Command {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         guard let window = requireWindow(from: target, io) else { return false }
         let newState: Bool = try await !window.isMacosMinimized
-        window.asMacWindow().setNativeMinimized(newState)
+        window.setNativeMinimized(newState)
         if newState { // minimize
             // Record where it came from BEFORE binding. `macosMinimizedWindowsContainer` is global,
             // so once the window is in it the tree no longer knows its workspace -- and

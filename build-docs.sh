@@ -29,7 +29,8 @@ build-site() {
     cd - > /dev/null
 
     git rev-parse HEAD > .site/version.html
-    if ! test -z "$(git status --porcelain)"; then
+    # Not appcast.xml: a release modifies it just before deploy-site.sh builds these docs.
+    if ! test -z "$(git status --porcelain -- . ':!updates-site/appcast.xml')"; then
         echo "git working directory is dirty" >> .site/version.html
     fi
 }

@@ -38,7 +38,10 @@ final class TestApp: AbstractApp {
     }
     /// Fail the focused-window read the way an app that misses `axMessagingTimeout` does.
     @MainActor var focusedWindowReadTimesOut = false
+    /// On a real app, each read is an AX round trip.
+    @MainActor var focusedWindowReads = 0
     @MainActor func getFocusedWindow() throws -> Window? {
+        focusedWindowReads += 1
         if focusedWindowReadTimesOut { throw NativeFocusUnknown() }
         return _focusedWindow
     }

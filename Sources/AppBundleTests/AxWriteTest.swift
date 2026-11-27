@@ -57,6 +57,23 @@ final class FakeAxElement: AxUiElementMock {
         }
     }
 
+    /// The batch, recorded as ONE read under its own key. Implemented here rather than inherited, so a
+    /// `getFrame` that is no longer a protocol requirement shows up as two single reads instead.
+    func getFrame() -> (topLeft: CGPoint?, size: CGSize?) {
+        reads.append(FakeAxElement.frameRead)
+        return (attrs[Ax.topLeftCornerAttr.key].flatMap(Ax.topLeftCornerAttr.getter), attrs[Ax.sizeAttr.key].flatMap(Ax.sizeAttr.getter))
+    }
+
+    static let frameRead = "getFrame"
+
+    /// The same, for the fullscreen and minimized batch.
+    func getNativeFlags() -> (fullscreen: Bool?, minimized: Bool?) {
+        reads.append(FakeAxElement.nativeFlagsRead)
+        return (attrs[Ax.isFullscreenAttr.key].flatMap(Ax.isFullscreenAttr.getter), attrs[Ax.minimizedAttr.key].flatMap(Ax.minimizedAttr.getter))
+    }
+
+    static let nativeFlagsRead = "getNativeFlags"
+
     func containingWindowId() -> CGWindowID? { 1 }
 
     func resetCounters() {
@@ -131,24 +148,24 @@ final class AxWriteTest: XCTestCase {
         assertEquals(unreadable.writes, [kAXSizeAttribute, kAXPositionAttribute, kAXSizeAttribute])
     }
 
-    /// The guard must stop at the first attribute that already disagrees.
+    /// Both values in one batched read, through the element's OWN `getFrame`.
     ///
-    /// Both reads used to be evaluated and then `&&`ed, so a window that needed moving -- i.e. every
-    /// window on the workspace you just switched to -- paid a second cross-thread AX round trip
-    /// whose answer could not change the outcome. Counted, not timed.
-    func testGuardStopsReadingAtFirstDisagreement() {
-        let wrongSize = window(size: CGSize(width: 10, height: 10))
-        assertFalse(isFrameSatisfied(wrongSize, targetTopLeft, targetSize))
-        assertEquals(wrongSize.reads, [kAXSizeAttribute])
-
-        // ...and when the size does match, the position still has to be checked.
-        let wrongPosition = window(topLeft: .zero)
-        assertFalse(isFrameSatisfied(wrongPosition, targetTopLeft, targetSize))
-        assertEquals(wrongPosition.reads, [kAXSizeAttribute, kAXPositionAttribute])
+    /// `getFrame` must stay a protocol requirement. As an extension-only method, the generic
+    /// `isFrameSatisfied`/`parkAxWindow` would dispatch statically to the two-read default, and production's
+    /// `AXUIElement` batch would never run. This fake implements the batch itself, so that regression reads as
+    /// two single reads here. Counted, not timed.
+    func testGuardReadsTheFrameOnceThroughTheElementsOwnBatch() {
+        for win in [window(), window(size: CGSize(width: 10, height: 10)), window(topLeft: .zero)] {
+            _ = isFrameSatisfied(win, targetTopLeft, targetSize)
+            assertEquals(win.reads, [FakeAxElement.frameRead])
+        }
+        let parked = window()
+        parkAxWindow(parked, app: FakeAxElement()) { _ in targetTopLeft }
+        assertEquals(parked.reads, [FakeAxElement.frameRead])
     }
 
-    /// `hideInCorner` passes a position and no size, for every window of every invisible workspace
-    /// on every refresh. Reading the size there would be pure waste.
+    /// A one-sided guard reads only its side: `setAxTopLeftCorner` asks about the position alone, and
+    /// reading the size there would be pure waste.
     func testGuardOnlyReadsWhatItWasAsked() {
         let posOnly = window()
         _ = isFrameSatisfied(posOnly, targetTopLeft, nil)
@@ -157,6 +174,24 @@ final class AxWriteTest: XCTestCase {
         let sizeOnly = window()
         _ = isFrameSatisfied(sizeOnly, nil, targetSize)
         assertEquals(sizeOnly.reads, [kAXSizeAttribute])
+    }
+
+    /// Parking: the spot comes from the size read in the same batch, a window already there costs no write, and
+    /// a window whose size cannot be read is left alone.
+    func testParkingWritesThePositionOnlyWhenTheWindowIsNotThere() {
+        let spot = { (size: CGSize) in CGPoint(x: -size.width, y: 900) }
+        let there = window(topLeft: spot(targetSize))
+        parkAxWindow(there, app: FakeAxElement(), at: spot)
+        assertEquals(there.writes, [])
+
+        let elsewhere = window()
+        parkAxWindow(elsewhere, app: FakeAxElement(), at: spot)
+        assertEquals(elsewhere.writes, [kAXPositionAttribute])
+        assertEquals(elsewhere.get(Ax.topLeftCornerAttr), spot(targetSize))
+
+        let unreadable = FakeAxElement()
+        parkAxWindow(unreadable, app: FakeAxElement(), at: spot)
+        assertEquals(unreadable.writes, [])
     }
 
     // MARK: write ordering
@@ -289,6 +324,19 @@ final class AxFocusWriteTest: XCTestCase {
     }
 }
 
+/// What a new window costs to classify. Every read is an AX round trip, during registration.
+final class AxWindowTypeReadTest: XCTestCase {
+    /// `isWindowHeuristicOld` always reads the subrole and `isDialogHeuristic` read it again.
+    func testTheWindowTypeReadsTheSubroleOnce() {
+        for (subrole, expected) in [(kAXStandardWindowSubrole, AxUiElementWindowType.dialog), (kAXDialogSubrole, .dialog)] {
+            let win = FakeAxElement()
+            win.seed(Ax.subroleAttr, subrole)
+            assertEquals(win.getWindowType(axApp: FakeAxElement(), appBundleId: nil), expected)
+            assertEquals(win.reads.count(where: { $0 == kAXSubroleAttribute }), 1)
+        }
+    }
+}
+
 /// The paired native-state read behind `normalizeLayoutReason`.
 ///
 /// That function asks every window of every workspace for its fullscreen and minimized flags on
@@ -296,7 +344,9 @@ final class AxFocusWriteTest: XCTestCase {
 /// window; `readMacosNativeState` is the single-traversal form. Asserted on the AX mock's recorded
 /// operations rather than on wall-clock, per dev-docs/performance.md.
 final class AxNativeStateReadTest: XCTestCase {
-    func testAnOrdinaryWindowIsAskedBothFlagsOnce() {
+    /// One batched read through the element's own `getNativeFlags`, not the two-read default, so a
+    /// `getNativeFlags` that is no longer a protocol requirement fails here.
+    func testAnOrdinaryWindowIsAskedBothFlagsInOneRead() {
         let win = FakeAxElement()
         win.seed(Ax.isFullscreenAttr, false)
         win.seed(Ax.minimizedAttr, false)
@@ -304,21 +354,20 @@ final class AxNativeStateReadTest: XCTestCase {
         let state = readMacosNativeState(win)
         assertEquals(state.fullscreen, false)
         assertEquals(state.minimized, false)
-        // Exactly one read each -- no duplicate probing.
-        assertEquals(win.reads, [Ax.isFullscreenAttr.key, Ax.minimizedAttr.key])
+        assertEquals(win.reads, [FakeAxElement.nativeFlagsRead])
     }
 
-    /// The short-circuit, and the reason it is worth keeping: the minimized read is an IPC to an app
-    /// that may be wedged, and a fullscreen window cannot be minimized.
-    func testAFullscreenWindowIsNeverAskedAboutMinimized() {
+    /// The short-circuit used to save the minimized read, an IPC; a batch has no second IPC to save.
+    /// What stays is the answer: a fullscreen window cannot be minimized, whatever the app says.
+    func testAFullscreenWindowIsNeverMinimized() {
         let win = FakeAxElement()
         win.seed(Ax.isFullscreenAttr, true)
-        win.seed(Ax.minimizedAttr, true) // would be a lie; must not be consulted
+        win.seed(Ax.minimizedAttr, true) // would be a lie; must not count
 
         let state = readMacosNativeState(win)
         assertEquals(state.fullscreen, true)
         assertEquals(state.minimized, false)
-        assertEquals(win.reads, [Ax.isFullscreenAttr.key])
+        assertEquals(win.reads, [FakeAxElement.nativeFlagsRead])
     }
 
     /// A window that answers nothing (dying, or an unresponsive app) must read as "conventional",

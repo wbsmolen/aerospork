@@ -40,18 +40,26 @@ func runRefreshSessionBlocking(
         debugLog("REFRESH: Completed blocking refresh in \(String(format: "%.1f", elapsed))ms")
     }
     if !TrayMenuModel.shared.isEnabled { return }
+    // Before anything collects windows or saves the memory file. See `noteTrustLost`.
+    guard AXIsProcessTrusted() else { noteTrustLost(); return }
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
             MacApp.timedOutThisPass = []
             try await syncFocusFromMacOs()
+            // Before anything parks a sticky window. After cmd-tab to another workspace, the pre-layout below would
+            // park it and the full layout bring it back.
+            followVisibleWorkspaces()
 
-            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
+            // Shows the workspace that became visible and parks what left the screen. Windows parked already wait for
+            // the full layout below: their jobs would queue on each app's thread ahead of the enumeration `refresh()`.
+            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces(parkOnlyUnparked: true) }
 
             refreshModel()
             try await refresh()
             gcMonitors()
 
             updateTrayText()
+            EventBroadcaster.shared.emitWorkspaceWindowsChanges()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
             // Here as well as at quit: a crash, a force quit and `killall -9` never reach the quit
@@ -77,9 +85,10 @@ func runSession<T>(
         let elapsed = Date().timeIntervalSince(startTime) * 1000
         debugLog("SESSION: Completed in \(String(format: "%.1f", elapsed))ms")
     }
-    refreshScheduler.sessionWillStart() // Give priority to runSession
-    defer { refreshScheduler.sessionDidEnd() }
+    let session = refreshScheduler.sessionWillStart() // Give priority to runSession
+    defer { refreshScheduler.sessionDidEnd(session) }
     let ticket = await sessionGate.enter()
+    refreshScheduler.sessionDidAcquireGate(session)
     defer { sessionGate.leave(ticket) }
     try checkCancellation() // superseded while queued, e.g. by the next step of a mouse drag
     return try await $refreshSessionEvent.withValue(event) {
@@ -107,6 +116,7 @@ func runSession<T>(
             refreshModel()
 
             updateTrayText()
+            EventBroadcaster.shared.emitWorkspaceWindowsChanges()
             try await layoutWorkspaces()
             // After layout, which awaits: this is what gets pushed to macOS, so it must be the latest.
             let focusAfter = focus.windowOrNil
@@ -146,6 +156,9 @@ struct RunSessionGuard: Sendable {
 
 @MainActor
 func refreshModel() {
+    // First: the collection below then releases a workspace whose only window was sticky, and the focus
+    // callbacks see the move together with the switch that caused it, not as a focus change of its own.
+    followVisibleWorkspaces()
     Workspace.garbageCollectUnusedWorkspaces()
     // Deliberately BEFORE layoutWorkspaces(), despite the temptation to move it after.
     //
@@ -163,16 +176,77 @@ func refreshModel() {
     normalizeContainers()
 }
 
+/// The windows `sticky` pinned, by id. Not cleared when a window is collected: the lock screen collects live
+/// windows, and they come back with the same id. Ids are never reused within a WindowServer session.
+/// ponytail: a closed sticky window costs one lookup per refresh until AeroSpork restarts; prune if that adds up.
+@MainActor var stickyWindowIds: Set<UInt32> = []
+
+/// Where each sticky window was at the end of the last pass: its workspace, and the monitor that showed it.
+@MainActor var stickyPlaces: [UInt32: (workspace: String, monitor: CGPoint)] = [:]
+
+/// Moves each sticky window onto the workspace its monitor shows now, where it keeps its frame. Here rather than in
+/// `setActiveWorkspace`, which focus, monitor rearranges and the restores all call, sometimes halfway through
+/// rebuilding the tree: one pass per refresh covers every way the visible workspace changes. An empty set is the
+/// whole cost for anyone without a sticky window.
+@MainActor
+func followVisibleWorkspaces() {
+    var places: [UInt32: (workspace: String, monitor: CGPoint)] = [:]
+    defer { stickyPlaces = places }
+    for id in stickyWindowIds {
+        guard let window = Window.get(byId: id) else { continue }
+        switch window.parent {
+            case let workspace as Workspace:
+                // Its monitor is the one it was on, not its workspace's: `move-workspace-to-monitor` and
+                // `summon-workspace` take a workspace to another monitor and leave it visible, and the window stays.
+                // A window something moved since, or a monitor that is gone, goes by where its workspace is.
+                let remembered = stickyPlaces[id].flatMap { place in
+                    place.workspace == workspace.name ? monitors.first { $0.rect.topLeftCorner == place.monitor } : nil
+                }
+                let monitor = remembered ?? workspace.workspaceMonitor
+                places[id] = (workspace.name, monitor.rect.topLeftCorner)
+                if remembered == nil && workspace.isVisible { continue }
+                let target = monitor.activeWorkspace
+                if target == workspace { continue }
+                places[id] = (target.name, monitor.rect.topLeftCorner)
+                // Not the target's focus fallback, unless it has nothing else: the switch goes where it went before.
+                let mru = target.mostRecentWindowRecursive
+                window.bindAsFloatingWindow(to: target)
+                mru?.markAsMostRecentChild()
+            case is TilingContainer:
+                window.isSticky = false // tiled since: a sticky window is a floating one
+            default:
+                continue // minimized, hidden or native fullscreen: macOS has it, and `takeAwaySlot` brings it back
+        }
+    }
+}
+
 @MainActor
 private func refresh() async throws {
+    if shouldResetMouseManipulation(flag: currentlyManipulatedWithMouseWindowId != nil, buttonDown: isLeftMouseButtonDown) {
+        try await resetManipulatedWithMouseIfPossible()
+    }
+    let pendingDead = MacApp.pendingDead
     let mapping = try await MacApp.refreshAllAndGetAliveWindowIds(frontmostAppBundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
     // Set, not Array: this is membership-tested once per window below, so an Array made it O(W^2).
     let aliveWindowIds = Set(mapping.values.flatMap { $0 })
 
+    var collected = 0
     for window in MacWindow.allWindows {
         if !aliveWindowIds.contains(window.windowId) {
+            if MacApp.pendingDead.contains(window.windowId) { // here, not in the filter: the listed loop can re-add an id
+                let app = window.macApp
+                AppLog.session.notice("window \(window.windowId, privacy: .public) of \(app.bundleId ?? "?", privacy: .public) (\(app.pid, privacy: .public)) is gone from WindowServer; removing its tile; process gone: \(processIsGone(app.pid), privacy: .public)")
+            }
             window.garbageCollect(skipClosedWindowsCache: false)
+            collected += 1
         }
+    }
+    // Settled: collected, or listed by an app that answers. A later sweep finds any the lock screen kept from the filter.
+    MacApp.pendingDead.subtract(pendingDead)
+    // Whether lock-aware GC is needed at all: one record if windows die while the screen is locked. A query,
+    // not a flag kept from notifications, which one missed unlock would leave stuck. About 0.3 ms, so only here.
+    if collected > 0, (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] != nil {
+        AppLog.session.notice("collected \(collected, privacy: .public) windows while the screen is locked")
     }
     for (app, windowIds) in mapping {
         for windowId in windowIds {
@@ -267,8 +341,19 @@ func hideSpot(for size: CGSize, on v: Rect, otherMonitors: [Rect], sliver: CGFlo
     return (candidates.first { overlap($0) == 0 } ?? candidates.min { overlap($0) < overlap($1) }!).spot
 }
 
+/// Which windows of an invisible workspace a layout parks. Not a native fullscreen window: macOS ignores the move,
+/// so its frame never matches and it would be rewritten on every refresh, for as long as it stays fullscreen. Nor
+/// a background tab, which gets the group's frame back when it's selected, wherever it was put in the meantime.
+/// With `onlyUnparked`, not a window parked already, which only needs the re-check that a full layout gives it.
+func shouldPark(inNativeFullscreen: Bool, isBackgroundTab: Bool, isParked: Bool, onlyUnparked: Bool) -> Bool {
+    !inNativeFullscreen && !isBackgroundTab && !(onlyUnparked && isParked)
+}
+
 @MainActor
-func layoutWorkspaces() async throws {
+func layoutWorkspaces(parkOnlyUnparked: Bool = false) async throws {
+    // No screens: every frame would be computed against a placeholder rect. The reconnect lays out again.
+    let monitors = monitors
+    if monitors.isEmpty { return }
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.compactMap { $0 as? MacWindow }.forEach { $0.unhideFromCorner() }
@@ -276,7 +361,6 @@ func layoutWorkspaces() async throws {
         }
         return
     }
-    let monitors = monitors
 
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
@@ -287,11 +371,13 @@ func layoutWorkspaces() async throws {
     for workspace in Workspace.all where !workspace.isVisible {
         let monitor = workspace.workspaceMonitor
         let others = monitors.map(\.rect).filter { $0.topLeftCorner != monitor.rect.topLeftCorner }
-        // Not a native fullscreen window: macOS ignores the move, so its frame never matches and it
-        // would be rewritten on every refresh, for as long as it stays fullscreen. Nor a background tab,
-        // which gets the group's frame back when it's selected, wherever it was put in the meantime.
-        for window in workspace.allLeafWindowsRecursive where !(window.parent is MacosFullscreenWindowsContainer) && !window.isBackgroundTab {
-            try await (window as? MacWindow)?.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
+        for window in workspace.allLeafWindowsRecursive.compactMap({ $0 as? MacWindow }) where shouldPark(
+            inNativeFullscreen: window.parent is MacosFullscreenWindowsContainer,
+            isBackgroundTab: window.isBackgroundTab,
+            isParked: window.isHiddenInCorner,
+            onlyUnparked: parkOnlyUnparked,
+        ) {
+            try await window.hideInCorner(on: monitor.visibleRect, otherMonitors: others)
         }
     }
 }

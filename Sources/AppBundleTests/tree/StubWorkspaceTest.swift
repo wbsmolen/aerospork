@@ -16,6 +16,18 @@ import XCTest
 final class StubWorkspaceTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
+    /// Focus moving inside the shown workspace re-shows it. That must not overwrite what the monitor
+    /// showed before, which is what it goes back to when its workspace is taken away.
+    func testReShowingTheVisibleWorkspaceKeepsThePreviousOne() {
+        for name in ["A", "B"] { // windows keep both alive once hidden; "A" sorts first
+            TestWindow.new(id: name == "A" ? 1 : 2, parent: Workspace.get(byName: name).rootTilingContainer)
+            XCTAssertTrue(Workspace.get(byName: name).focusWorkspace())
+        }
+        XCTAssertTrue(Workspace.get(byName: "C").focusWorkspace())
+        XCTAssertTrue(mainMonitor.setActiveWorkspace(Workspace.get(byName: "C")))
+        assertEquals(getStubWorkspace(for: mainMonitor).name, "B")
+    }
+
     func testAnIdleMonitorGetsTheLowestWorkspaceTheUserBound() {
         config.preservedWorkspaceNames = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
         assertEquals(getStubWorkspace(for: mainMonitor).name, "1")

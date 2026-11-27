@@ -1,38 +1,38 @@
 #compdef aerospork
 
-_aerospork_cmd_56 () {
+_aerospork_cmd_55 () {
     true
 }
 
-_aerospork_cmd_18 () {
+_aerospork_cmd_23 () {
     aerospork list-apps --format '%{app-bundle-id}%{tab}%{app-name}'
 }
 
-_aerospork_cmd_19 () {
+_aerospork_cmd_24 () {
     aerospork list-apps --format '%{app-pid}%{tab}%{app-name}'
 }
 
-_aerospork_cmd_57 () {
+_aerospork_cmd_58 () {
     aerospork config --get mode --keys | xargs -I{} aerospork config --get mode.{}.binding --keys
 }
 
-_aerospork_cmd_43 () {
+_aerospork_cmd_52 () {
     aerospork config --get mode --keys
 }
 
-_aerospork_cmd_59 () {
+_aerospork_cmd_61 () {
     aerospork list-windows --all --format '%{window-id}%{tab}%{app-name} - %{window-title}'
 }
 
-_aerospork_cmd_38 () {
+_aerospork_cmd_54 () {
     aerospork list-monitors --format '%{monitor-id}%{tab}%{monitor-name}'
 }
 
-_aerospork_cmd_52 () {
+_aerospork_cmd_59 () {
     aerospork list-workspaces --all
 }
 
-_aerospork_cmd_5 () {
+_aerospork_cmd_9 () {
     aerospork config --major-keys
 }
 
@@ -168,112 +168,117 @@ _aerospork_subword_1 () {
 }
 
 _aerospork () {
-    local -a literals=("move-mouse" "--count" "-v" "smart" "macos-native-fullscreen" "mute-toggle" "height" "toggle" "all-monitors-outer-frame" "h_accordion" "all" "--window-id" "monitor-force-center" "list-apps" "flatten-workspace-tree" "mode" "width" "summon-workspace" "focus-back-and-forth" "list-monitors" "h_tiles" "prev" "window-force-center" "trigger-binding" "-h" "move-node-to-workspace" "wrap-around-the-workspace" "enable" "--ignore-floating" "--visible" "close-all-windows-but-current" "--help" "--macos-native-hidden" "off" "move-workspace-to-monitor" "--boundaries" "set" "workspace-back-and-forth" "--quit-if-last-window" "window-lazy-center" "workspace" "--major-keys" "accordion" "--focused" "tiling" "--app-bundle-id" "--mouse" "balance-sizes" "opposite" "on" "--auto-back-and-forth" "--version" "--json" "join-with" "reload-config" "--workspace" "floating" "--mode" "--boundaries-action" "resize" "visible" "close" "up" "layout" "--fail-if-noop" "list-exec-env-vars" "fail" "--monitor" "--focus-follows-window" "split" "--pid" "mute-on" "v_tiles" "monitor-lazy-center" "--keys" "wrap-around-all-monitors" "--wrap-around" "horizontal" "create-implicit-container" "config" "--no-outer-gaps" "focused" "mute-off" "--all-keys" "--show-secrets" "--all" "left" "right" "--config-path" "--get" "--empty" "tiles" "--no-gui" "--format" "smart-opposite" "list-modes" "--dry-run" "move-node-to-monitor" "move" "focus" "down" "list-workspaces" "volume" "no" "stop" "debug-windows" "macos-native-minimize" "list-windows" "mouse" "next" "--dfs-index" "open-settings" "fullscreen" "focus-monitor" "--current" "v_accordion" "vertical")
+    local -a literals=("move-mouse" "--count" "mode-changed" "-v" "smart" "macos-native-fullscreen" "mute-toggle" "height" "toggle" "all-monitors-outer-frame" "h_accordion" "all" "--window-id" "monitor-force-center" "list-apps" "flatten-workspace-tree" "mode" "width" "summon-workspace" "focus-back-and-forth" "list-monitors" "h_tiles" "prev" "window-force-center" "trigger-binding" "-h" "move-node-to-workspace" "wrap-around-the-workspace" "enable" "focused-monitor-changed" "--ignore-floating" "--visible" "close-all-windows-but-current" "--help" "--macos-native-hidden" "off" "move-workspace-to-monitor" "--boundaries" "set" "workspace-back-and-forth" "--quit-if-last-window" "window-lazy-center" "workspace" "--major-keys" "accordion" "--focused" "tiling" "--app-bundle-id" "--mouse" "balance-sizes" "opposite" "sticky" "on" "--auto-back-and-forth" "--version" "--json" "join-with" "reload-config" "--workspace" "floating" "--swap-focus" "--mode" "--boundaries-action" "resize" "visible" "close" "up" "layout" "--fail-if-noop" "--tree" "fail" "list-exec-env-vars" "--focus-follows-window" "split" "--monitor" "--pid" "mute-on" "v_tiles" "monitor-lazy-center" "--keys" "wrap-around-all-monitors" "--wrap-around" "subscribe" "horizontal" "create-implicit-container" "config" "--no-outer-gaps" "focused" "mute-off" "--all-keys" "--show-secrets" "workspace-windows-changed" "--all" "left" "right" "swap" "--config-path" "--get" "--empty" "tiles" "--no-gui" "dfs-next" "smart-opposite" "--format" "list-modes" "focus-changed" "--dry-run" "window-detected" "move-node-to-monitor" "dfs-prev" "move" "focus" "down" "list-workspaces" "volume" "no" "stop" "debug-windows" "macos-native-minimize" "list-windows" "mouse" "next" "--dfs-index" "open-settings" "fullscreen" "focus-monitor" "focused-workspace-changed" "--current" "v_accordion" "vertical")
 
     local -A descriptions
 
     local -A literal_transitions
-    literal_transitions[1]="([1]=115 [3]=43 [54]=121 [55]=122 [35]=123 [5]=71 [38]=43 [60]=92 [62]=28 [96]=113 [14]=93 [41]=108 [64]=124 [66]=125 [15]=4 [98]=126 [70]=15 [20]=47 [16]=114 [19]=43 [99]=69 [100]=75 [18]=119 [24]=57 [25]=43 [102]=127 [26]=128 [103]=100 [106]=16 [107]=16 [108]=19 [28]=129 [48]=4 [80]=85 [112]=43 [31]=86 [52]=43 [113]=130 [32]=43 [114]=87)"
-    literal_transitions[2]="([11]=3 [109]=3 [82]=3)"
-    literal_transitions[3]="([11]=3 [2]=39 [109]=3 [91]=40 [94]=41 [30]=40 [53]=39 [82]=3)"
-    literal_transitions[4]="([56]=5)"
-    literal_transitions[6]="([56]=7 [77]=6)"
-    literal_transitions[9]="([12]=8 [77]=9 [69]=9)"
-    literal_transitions[10]="([81]=11 [65]=11 [12]=12 [34]=13 [50]=14)"
-    literal_transitions[11]="([81]=11 [65]=11 [12]=12 [50]=14)"
-    literal_transitions[13]="([12]=76 [65]=43)"
-    literal_transitions[14]="([12]=53 [81]=14 [65]=14)"
-    literal_transitions[15]="([49]=16 [12]=17 [78]=16 [117]=16)"
-    literal_transitions[16]="([12]=76)"
-    literal_transitions[18]="([77]=18 [69]=18)"
-    literal_transitions[19]="([71]=20 [2]=21 [56]=22 [94]=23 [44]=24 [86]=24 [46]=25 [53]=21 [68]=26)"
-    literal_transitions[21]="([71]=20 [2]=32 [56]=22 [94]=33 [44]=24 [86]=24 [46]=25 [53]=32 [68]=26)"
-    literal_transitions[22]="([82]=31 [61]=31)"
-    literal_transitions[24]="([94]=56 [2]=43 [53]=43)"
-    literal_transitions[26]="([11]=109 [109]=109 [82]=109)"
-    literal_transitions[28]="([12]=27 [39]=28)"
-    literal_transitions[30]="([81]=131 [65]=11 [12]=132 [34]=13 [50]=14)"
-    literal_transitions[31]="([71]=20 [2]=32 [61]=31 [56]=22 [94]=33 [46]=25 [53]=32 [82]=31 [68]=26)"
-    literal_transitions[32]="([71]=20 [2]=32 [46]=25 [56]=22 [53]=32 [68]=26 [94]=33)"
-    literal_transitions[35]="([10]=51 [21]=51 [57]=51 [78]=51 [92]=51 [45]=51 [73]=51 [43]=51 [116]=51 [117]=51)"
-    literal_transitions[36]="([53]=36 [90]=37 [75]=36)"
-    literal_transitions[38]="([51]=38 [65]=38)"
-    literal_transitions[39]="([30]=40 [2]=39 [91]=40 [94]=41 [53]=39)"
-    literal_transitions[40]="([30]=40 [2]=39 [104]=39 [91]=40 [94]=41 [53]=39)"
-    literal_transitions[42]="([87]=43 [88]=43 [101]=43 [63]=43)"
-    literal_transitions[44]="([9]=45 [41]=45)"
-    literal_transitions[45]="([12]=66 [36]=44 [59]=67)"
-    literal_transitions[47]="([2]=47 [94]=46 [53]=47 [47]=84 [44]=84)"
-    literal_transitions[48]="([65]=48 [12]=49 [34]=50 [50]=50)"
-    literal_transitions[50]="([12]=117 [65]=50)"
-    literal_transitions[51]="([10]=51 [21]=51 [57]=51 [78]=51 [92]=51 [45]=51 [73]=51 [43]=51 [116]=51 [117]=51)"
-    literal_transitions[55]="([65]=55 [12]=54 [69]=55)"
-    literal_transitions[57]="([58]=59)"
-    literal_transitions[58]="([58]=114)"
-    literal_transitions[60]="([105]=61 [27]=61 [67]=61 [76]=61)"
-    literal_transitions[61]="([36]=107 [59]=60 [29]=61)"
-    literal_transitions[62]="([22]=63 [110]=63)"
-    literal_transitions[63]="([77]=43)"
-    literal_transitions[65]="([12]=64 [65]=65 [69]=65)"
-    literal_transitions[67]="([67]=45 [79]=45 [105]=45)"
-    literal_transitions[68]="([67]=69 [79]=69 [105]=69)"
-    literal_transitions[69]="([36]=101 [59]=68 [87]=45 [88]=45 [12]=70 [101]=45 [63]=45)"
-    literal_transitions[71]="([65]=48 [12]=72 [34]=50 [50]=50)"
-    literal_transitions[74]="([110]=9 [12]=73 [22]=9 [101]=9 [63]=9 [87]=9 [88]=9 [77]=74 [69]=74)"
-    literal_transitions[75]="([12]=76 [101]=61 [29]=77 [63]=61 [36]=78 [59]=79 [87]=61 [88]=61 [111]=56)"
-    literal_transitions[77]="([36]=78 [59]=79 [87]=61 [88]=61 [101]=61 [29]=77 [63]=61)"
-    literal_transitions[78]="([9]=77 [41]=77)"
-    literal_transitions[79]="([105]=77 [27]=77 [67]=77 [76]=77)"
-    literal_transitions[80]="([51]=80 [65]=80)"
-    literal_transitions[81]="([78]=16 [117]=16 [49]=16)"
-    literal_transitions[83]="([30]=135 [2]=83 [91]=135 [94]=82 [53]=83 [68]=2)"
-    literal_transitions[84]="([104]=47 [2]=47 [94]=46 [53]=47 [47]=84 [44]=84)"
-    literal_transitions[85]="([84]=43 [42]=43 [75]=36 [53]=36 [90]=37 [89]=43)"
-    literal_transitions[86]="([39]=43)"
-    literal_transitions[87]="([110]=63 [101]=63 [22]=63 [63]=63 [87]=63 [88]=63 [77]=88)"
-    literal_transitions[88]="([87]=63 [88]=63 [110]=63 [101]=63 [22]=63 [63]=63)"
-    literal_transitions[89]="([17]=90 [4]=90 [7]=90 [95]=90)"
-    literal_transitions[92]="([17]=90 [4]=90 [7]=90 [12]=91 [95]=90)"
-    literal_transitions[93]="([2]=93 [94]=94 [53]=93 [33]=95)"
-    literal_transitions[95]="([104]=93 [2]=93 [94]=94 [53]=93 [33]=95)"
-    literal_transitions[96]="([56]=5)"
-    literal_transitions[97]="([110]=6 [56]=98 [22]=6 [101]=6 [63]=6 [87]=6 [88]=6 [77]=99)"
-    literal_transitions[99]="([110]=6 [101]=6 [56]=98 [22]=6 [63]=6 [87]=6 [88]=6 [77]=99)"
-    literal_transitions[100]="([63]=43 [37]=56 [6]=43 [72]=43 [101]=43 [83]=43)"
-    literal_transitions[101]="([9]=69 [41]=69)"
-    literal_transitions[102]="([65]=102 [12]=104 [69]=102)"
-    literal_transitions[103]="([65]=65 [12]=64 [69]=65)"
-    literal_transitions[105]="([65]=48 [12]=49 [34]=50 [50]=50)"
-    literal_transitions[107]="([9]=61 [41]=61)"
-    literal_transitions[108]="([51]=80 [65]=80 [110]=63 [22]=63 [77]=62)"
-    literal_transitions[109]="([11]=109 [2]=32 [71]=20 [109]=109 [56]=22 [94]=33 [68]=26 [46]=25 [53]=32 [82]=109)"
-    literal_transitions[110]="([74]=111 [40]=111 [13]=111 [23]=111)"
-    literal_transitions[111]="([65]=43)"
-    literal_transitions[113]="([115]=43)"
-    literal_transitions[115]="([65]=110 [40]=111 [13]=111 [23]=111 [74]=111)"
-    literal_transitions[119]="([65]=118)"
-    literal_transitions[120]="([110]=18 [22]=18 [77]=120 [69]=120)"
-    literal_transitions[121]="([87]=43 [88]=43 [12]=116 [101]=43 [63]=43)"
-    literal_transitions[122]="([93]=122 [97]=122)"
-    literal_transitions[123]="([110]=6 [56]=112 [22]=6 [101]=6 [63]=6 [87]=6 [88]=6 [77]=99)"
-    literal_transitions[124]="([10]=51 [92]=51 [12]=34 [21]=51 [57]=51 [78]=51 [45]=51 [73]=51 [43]=51 [116]=51 [117]=51)"
-    literal_transitions[125]="([85]=43)"
-    literal_transitions[126]="([110]=9 [12]=133 [22]=9 [101]=9 [63]=9 [87]=9 [88]=9 [65]=102 [77]=74 [69]=126)"
-    literal_transitions[127]="([2]=136 [91]=135 [94]=137 [44]=24 [30]=135 [86]=24 [53]=136 [68]=2)"
-    literal_transitions[128]="([69]=128 [65]=55 [110]=18 [12]=54 [77]=120 [22]=18)"
-    literal_transitions[129]="([65]=134 [34]=111 [8]=43 [50]=111)"
-    literal_transitions[130]="([81]=131 [65]=10 [12]=29 [34]=13 [50]=14)"
-    literal_transitions[131]="([81]=131 [65]=11 [12]=132 [50]=14)"
-    literal_transitions[134]="([34]=111 [50]=111)"
-    literal_transitions[135]="([30]=135 [2]=83 [104]=83 [91]=135 [94]=82 [53]=83 [68]=2)"
-    literal_transitions[136]="([2]=83 [91]=135 [94]=82 [44]=24 [30]=135 [86]=24 [53]=83 [68]=2)"
-    literal_transitions[138]="([53]=138 [75]=138)"
+    literal_transitions[1]="([1]=117 [4]=15 [57]=128 [58]=86 [37]=129 [6]=68 [40]=15 [64]=71 [96]=101 [66]=119 [105]=74 [15]=89 [43]=109 [68]=130 [72]=16 [16]=2 [109]=67 [74]=78 [21]=20 [17]=121 [20]=15 [111]=8 [112]=131 [19]=123 [25]=57 [26]=15 [114]=97 [27]=132 [115]=21 [118]=133 [119]=79 [120]=27 [29]=134 [83]=112 [50]=2 [86]=135 [52]=68 [124]=15 [33]=81 [55]=15 [125]=108 [34]=15 [126]=125)"
+    literal_transitions[2]="([59]=3)"
+    literal_transitions[4]="([69]=4 [13]=5 [73]=4)"
+    literal_transitions[6]="([13]=50 [69]=6 [73]=6)"
+    literal_transitions[8]="([38]=95 [63]=96 [94]=45 [95]=45 [13]=7 [113]=45 [67]=45)"
+    literal_transitions[9]="([38]=10 [63]=11 [94]=12 [95]=12 [113]=12 [31]=9 [67]=12)"
+    literal_transitions[10]="([10]=9 [43]=9)"
+    literal_transitions[11]="([117]=9 [28]=9 [71]=9 [81]=9)"
+    literal_transitions[12]="([38]=111 [63]=144 [31]=12)"
+    literal_transitions[13]="([3]=13 [106]=13 [92]=13 [108]=13 [127]=13 [30]=13)"
+    literal_transitions[16]="([91]=15)"
+    literal_transitions[18]="([69]=18 [13]=17 [73]=18)"
+    literal_transitions[20]="([2]=20 [104]=19 [56]=20 [49]=60 [46]=60)"
+    literal_transitions[21]="([67]=15 [39]=14 [7]=15 [77]=15 [113]=15 [89]=15)"
+    literal_transitions[22]="([87]=23 [69]=23 [13]=24 [36]=25 [53]=26)"
+    literal_transitions[23]="([87]=23 [69]=23 [13]=24 [53]=26)"
+    literal_transitions[25]="([13]=82 [69]=15)"
+    literal_transitions[26]="([13]=120 [87]=26 [69]=26)"
+    literal_transitions[27]="([76]=28 [2]=29 [59]=30 [104]=31 [46]=32 [93]=32 [48]=33 [56]=29 [75]=34)"
+    literal_transitions[29]="([76]=28 [2]=83 [59]=30 [104]=84 [46]=32 [93]=32 [48]=33 [56]=83 [75]=34)"
+    literal_transitions[30]="([88]=92 [65]=92)"
+    literal_transitions[32]="([104]=14 [2]=15 [56]=15)"
+    literal_transitions[34]="([12]=105 [121]=105 [88]=105)"
+    literal_transitions[36]="([87]=51 [69]=23 [13]=52 [36]=25 [53]=26)"
+    literal_transitions[37]="([54]=37 [69]=37)"
+    literal_transitions[38]="([23]=39 [122]=39)"
+    literal_transitions[39]="([82]=15)"
+    literal_transitions[41]="([32]=99 [2]=41 [99]=99 [104]=40 [56]=41 [75]=75)"
+    literal_transitions[42]="([122]=43 [113]=43 [59]=44 [23]=43 [67]=43 [94]=43 [95]=43 [82]=42)"
+    literal_transitions[43]="([59]=139 [82]=43)"
+    literal_transitions[45]="([13]=46 [38]=47 [63]=48)"
+    literal_transitions[47]="([10]=45 [43]=45)"
+    literal_transitions[48]="([71]=45 [85]=45 [117]=45)"
+    literal_transitions[49]="([69]=6 [13]=50 [73]=6)"
+    literal_transitions[51]="([87]=51 [69]=23 [13]=52 [53]=26)"
+    literal_transitions[53]="([79]=54 [42]=54 [14]=54 [24]=54)"
+    literal_transitions[54]="([69]=15)"
+    literal_transitions[55]="([122]=43 [59]=44 [23]=43 [113]=43 [67]=43 [94]=43 [95]=43 [82]=42)"
+    literal_transitions[56]="([59]=3)"
+    literal_transitions[57]="([62]=59)"
+    literal_transitions[58]="([62]=121)"
+    literal_transitions[60]="([116]=20 [2]=20 [104]=19 [56]=20 [49]=60 [46]=60)"
+    literal_transitions[61]="([69]=61 [13]=62 [36]=63 [53]=63)"
+    literal_transitions[63]="([13]=77 [69]=63)"
+    literal_transitions[64]="([94]=15 [95]=15 [113]=15 [67]=15)"
+    literal_transitions[67]="([122]=137 [13]=66 [23]=137 [113]=137 [67]=137 [94]=137 [95]=137 [69]=18 [82]=142 [73]=67)"
+    literal_transitions[68]="([69]=61 [13]=69 [36]=63 [53]=63)"
+    literal_transitions[70]="([56]=70 [80]=70)"
+    literal_transitions[71]="([18]=72 [5]=72 [8]=72 [13]=73 [103]=72)"
+    literal_transitions[74]="([128]=74 [56]=74)"
+    literal_transitions[75]="([12]=76 [121]=76 [88]=76)"
+    literal_transitions[76]="([12]=76 [2]=104 [121]=76 [99]=115 [104]=103 [32]=115 [56]=104 [88]=76)"
+    literal_transitions[78]="([51]=79 [13]=80 [84]=79 [130]=79)"
+    literal_transitions[79]="([13]=82)"
+    literal_transitions[81]="([41]=15)"
+    literal_transitions[83]="([76]=28 [2]=83 [48]=33 [59]=30 [56]=83 [75]=34 [104]=84)"
+    literal_transitions[86]="([101]=86 [107]=86)"
+    literal_transitions[87]="([56]=87 [98]=88 [80]=87)"
+    literal_transitions[89]="([2]=89 [104]=90 [56]=89 [35]=91)"
+    literal_transitions[91]="([116]=89 [2]=89 [104]=90 [56]=89 [35]=91)"
+    literal_transitions[92]="([76]=28 [2]=83 [65]=92 [59]=30 [104]=84 [48]=33 [56]=83 [88]=92 [75]=34)"
+    literal_transitions[93]="([13]=94 [61]=93 [82]=93)"
+    literal_transitions[95]="([10]=8 [43]=8)"
+    literal_transitions[96]="([71]=8 [85]=8 [117]=8)"
+    literal_transitions[97]="([2]=98 [99]=99 [104]=100 [46]=32 [32]=99 [93]=32 [56]=98 [75]=75)"
+    literal_transitions[98]="([2]=41 [99]=99 [104]=40 [46]=32 [32]=99 [93]=32 [56]=41 [75]=75)"
+    literal_transitions[99]="([32]=99 [2]=41 [116]=41 [99]=99 [104]=40 [56]=41 [75]=75)"
+    literal_transitions[101]="([113]=93 [13]=102 [102]=93 [61]=101 [67]=93 [94]=93 [95]=93 [82]=101 [110]=93)"
+    literal_transitions[104]="([32]=115 [2]=104 [99]=115 [104]=103 [56]=104)"
+    literal_transitions[105]="([12]=105 [2]=83 [76]=28 [121]=105 [59]=30 [104]=84 [75]=34 [48]=33 [56]=83 [88]=105)"
+    literal_transitions[106]="([11]=107 [22]=107 [60]=107 [84]=107 [100]=107 [47]=107 [78]=107 [45]=107 [129]=107 [130]=107)"
+    literal_transitions[107]="([11]=107 [22]=107 [60]=107 [84]=107 [100]=107 [47]=107 [78]=107 [45]=107 [129]=107 [130]=107)"
+    literal_transitions[108]="([87]=51 [69]=22 [13]=35 [36]=25 [53]=26)"
+    literal_transitions[109]="([54]=110 [69]=110 [122]=39 [23]=39 [82]=38)"
+    literal_transitions[110]="([54]=110 [69]=110)"
+    literal_transitions[111]="([10]=12 [43]=12)"
+    literal_transitions[112]="([3]=13 [93]=15 [92]=13 [106]=13 [108]=13 [30]=13 [127]=13)"
+    literal_transitions[113]="([122]=114 [23]=114 [82]=113 [73]=113)"
+    literal_transitions[114]="([82]=114 [73]=114)"
+    literal_transitions[115]="([32]=115 [2]=104 [116]=104 [99]=115 [104]=103 [56]=104)"
+    literal_transitions[116]="([18]=72 [5]=72 [8]=72 [103]=72)"
+    literal_transitions[117]="([69]=53 [42]=54 [14]=54 [24]=54 [79]=54)"
+    literal_transitions[119]="([13]=118 [41]=119)"
+    literal_transitions[123]="([69]=124)"
+    literal_transitions[125]="([122]=39 [113]=39 [23]=39 [67]=39 [94]=39 [95]=39 [82]=127)"
+    literal_transitions[127]="([94]=39 [95]=39 [122]=39 [113]=39 [23]=39 [67]=39)"
+    literal_transitions[128]="([94]=15 [95]=15 [13]=85 [113]=15 [67]=15)"
+    literal_transitions[129]="([122]=43 [59]=138 [23]=43 [113]=43 [67]=43 [94]=43 [95]=43 [82]=42)"
+    literal_transitions[130]="([11]=107 [100]=107 [13]=122 [22]=107 [60]=107 [84]=107 [47]=107 [78]=107 [45]=107 [129]=107 [130]=107)"
+    literal_transitions[131]="([13]=82 [113]=12 [31]=9 [67]=12 [38]=10 [63]=11 [94]=12 [95]=12 [123]=14)"
+    literal_transitions[132]="([73]=132 [69]=4 [122]=114 [13]=5 [82]=113 [23]=114)"
+    literal_transitions[133]="([13]=82 [70]=15)"
+    literal_transitions[134]="([69]=145 [36]=54 [9]=15 [53]=54)"
+    literal_transitions[135]="([90]=15 [44]=15 [80]=87 [56]=87 [98]=88 [97]=15)"
+    literal_transitions[137]="([13]=136 [82]=137 [73]=137)"
+    literal_transitions[140]="([84]=79 [130]=79 [51]=79)"
+    literal_transitions[142]="([122]=137 [13]=141 [23]=137 [113]=137 [67]=137 [94]=137 [95]=137 [82]=142 [73]=142)"
+    literal_transitions[143]="([69]=61 [13]=62 [36]=63 [53]=63)"
+    literal_transitions[144]="([117]=12 [28]=12 [71]=12 [81]=12)"
+    literal_transitions[145]="([36]=54 [53]=54)"
 
     local -A match_anything_transitions
-    match_anything_transitions=([7]=6 [54]=55 [76]=43 [112]=97 [34]=35 [37]=138 [128]=65 [66]=45 [96]=96 [123]=96 [80]=38 [133]=126 [46]=47 [106]=43 [119]=111 [5]=43 [29]=30 [82]=83 [25]=32 [20]=32 [56]=43 [94]=93 [114]=43 [31]=31 [33]=32 [108]=38 [103]=103 [118]=111 [132]=131 [64]=65 [70]=69 [26]=109 [55]=65 [109]=109 [53]=14 [3]=3 [137]=136 [117]=50 [2]=3 [116]=42 [97]=96 [126]=103 [91]=89 [59]=106 [41]=39 [22]=31 [102]=103 [72]=105 [52]=52 [49]=48 [27]=28 [104]=102 [98]=99 [8]=9 [73]=74 [23]=21 [87]=52 [57]=58 [12]=11 [17]=81)
+    match_anything_transitions=([7]=8 [76]=76 [40]=41 [24]=23 [34]=105 [125]=126 [122]=106 [44]=42 [66]=67 [88]=70 [136]=137 [123]=54 [80]=140 [46]=45 [85]=64 [5]=4 [105]=105 [82]=15 [14]=15 [65]=15 [56]=56 [94]=93 [31]=29 [33]=83 [28]=83 [69]=143 [103]=104 [118]=119 [139]=43 [132]=6 [50]=6 [55]=56 [109]=37 [129]=56 [3]=15 [138]=55 [124]=54 [77]=63 [126]=126 [59]=65 [67]=49 [4]=6 [92]=92 [102]=101 [52]=51 [49]=49 [120]=26 [100]=98 [18]=49 [19]=20 [62]=61 [84]=83 [121]=15 [30]=92 [75]=76 [90]=89 [73]=116 [35]=36 [57]=58 [110]=37 [17]=18 [141]=142)
 
     declare -A subword_transitions
-    subword_transitions[90]="([1]=16)"
+    subword_transitions[72]="([1]=79)"
 
     local state=1
     local word_index=2
@@ -358,7 +363,7 @@ _aerospork () {
             _aerospork_subword_${subword_id} complete "${words[$CURRENT]}" completions_no_description_trailing_space completions_trailing_space suffixes_trailing_space descriptions_trailing_space completions_no_description_no_trailing_space completions_no_trailing_space suffixes_no_trailing_space descriptions_no_trailing_space
         done
     fi
-    local -A commands=([7]=52 [54]=59 [76]=59 [64]=59 [70]=59 [112]=52 [26]=38 [55]=52 [109]=38 [53]=59 [3]=38 [34]=59 [137]=56 [117]=59 [37]=5 [128]=52 [2]=38 [116]=59 [97]=56 [126]=56 [66]=59 [96]=56 [91]=59 [59]=43 [123]=56 [72]=59 [41]=56 [22]=52 [80]=52 [102]=56 [133]=59 [52]=56 [49]=59 [27]=59 [46]=56 [106]=57 [119]=52 [5]=52 [104]=59 [29]=59 [82]=56 [98]=52 [25]=18 [8]=59 [73]=59 [23]=56 [20]=19 [87]=56 [57]=57 [56]=56 [94]=56 [114]=43 [31]=52 [33]=56 [12]=59 [108]=52 [17]=59 [103]=56 [118]=52 [132]=59)
+    local -A commands=([7]=61 [76]=54 [50]=61 [129]=55 [55]=55 [40]=55 [24]=61 [109]=59 [3]=59 [124]=59 [34]=54 [138]=59 [77]=61 [125]=55 [122]=61 [44]=59 [126]=55 [66]=61 [88]=9 [59]=52 [136]=61 [123]=59 [67]=55 [4]=59 [102]=61 [80]=61 [92]=59 [52]=61 [49]=55 [46]=61 [85]=61 [5]=61 [120]=61 [100]=55 [105]=54 [18]=55 [19]=55 [62]=61 [84]=55 [82]=61 [121]=52 [30]=59 [14]=55 [75]=54 [90]=55 [65]=58 [73]=61 [35]=61 [57]=58 [56]=55 [94]=61 [110]=59 [31]=55 [33]=23 [69]=61 [28]=24 [17]=61 [103]=55 [118]=61 [139]=59 [141]=61 [132]=59)
 
     if [[ -v "commands[$state]" ]]; then
         local command_id=${commands[$state]}

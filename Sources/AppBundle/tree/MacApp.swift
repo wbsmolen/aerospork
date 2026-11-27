@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import os
 
 /// Per-element AX message timeout, in seconds.
 ///
@@ -38,6 +39,31 @@ final class MacApp: AbstractApp {
     /// the rest of the pass skips the app. Cleared when a pass starts, so an app that recovers is asked
     /// again at once.
     @MainActor static var timedOutThisPass: Set<pid_t> = []
+    /// Registered windows the sweep found gone from WindowServer, for the next pass to collect wherever AX
+    /// cannot say so: an unreaped zombie, or an element whose remote end died while its app lives. The
+    /// `.cannotComplete` such an element answers means "unanswered", not "destroyed" (#39), so only
+    /// WindowServer can tell. Ids are never reused, so carrying them to a later pass is safe.
+    @MainActor static var pendingDead: Set<UInt32> = []
+    /// Since when each app's window list has gone unanswered, and whether that episode has its record yet.
+    /// `timedOutThisPass` forgets every pass, so a stopped app left no trace in the logs.
+    @MainActor private(set) static var unansweredSince: [pid_t: (since: Date, logged: Bool)] = [:]
+    private static let unansweredLogAfter: TimeInterval = 60
+
+    /// Notes whether an app answered its window-list read. True once per episode, when it has gone unanswered
+    /// for a minute; an answer ends the episode. Never per refresh, since `AppLog` is kept (#logging).
+    @MainActor static func noteAnswer(pid: pid_t, answered: Bool, now: Date) -> Bool {
+        if answered {
+            unansweredSince.removeValue(forKey: pid)
+            return false
+        }
+        guard let episode = unansweredSince[pid] else {
+            unansweredSince[pid] = (now, false)
+            return false
+        }
+        if episode.logged || now.timeIntervalSince(episode.since) < unansweredLogAfter { return false }
+        unansweredSince[pid]?.logged = true
+        return true
+    }
 
     /*conforms*/ let name: String? // Kept: reading `localizedName` asks LaunchServices, and the menu bar lists every window's app per refresh.
     /*conforms*/ var execPath: String? { nsApp.executableURL?.path }
@@ -70,7 +96,15 @@ final class MacApp: AbstractApp {
     /// app is tiled before the user notices), doubling to a 30s ceiling for apps that simply have
     /// no usable AX interface. At the ceiling that is ~1 probe/30s instead of ~20/s under the 50ms
     /// refresh debounce.
-    @MainActor private static var failedPids: [pid_t: (nextAttempt: Date, backoff: TimeInterval, launchDate: Date?)] = [:]
+    ///
+    /// Not private: the tests plant an entry for a dead pid, to check `forgetFailedRegistrationsOfGoneProcesses`.
+    @MainActor static var failedPids: [pid_t: (nextAttempt: Date, backoff: TimeInterval, launchDate: Date?)] = [:]
+
+    /// An entry leaves `failedPids` on a success or a pid reuse, so one for a process that exited stayed forever.
+    /// A `kill(pid, 0)` per entry: not only the pass's `gone` set, which misses a process LaunchServices dropped.
+    @MainActor static func forgetFailedRegistrationsOfGoneProcesses() {
+        failedPids = failedPids.filter { !processIsGone($0.key) }
+    }
     private static let registrationRetryMinDelay: TimeInterval = 1
     private static let registrationRetryMaxDelay: TimeInterval = 30
 
@@ -133,6 +167,9 @@ final class MacApp: AbstractApp {
         // Never our own windows. Registered, the Settings window was bound to whichever workspace was
         // focused and parked off screen on the next switch -- so it "never appeared" (#40).
         if nsApp.processIdentifier == ProcessInfo.processInfo.processIdentifier { return nil }
+        // A dead pid, even one still in allAppsMap: `focusedApp` passes on whatever LaunchServices calls
+        // frontmost, and a failed registration of it would re-arm the follow-up refreshes. See `isGone`.
+        if nsApp.isGone { return nil }
         let pid = nsApp.processIdentifier
 
         if let existing = allAppsMap[pid] { return existing }
@@ -215,6 +252,16 @@ final class MacApp: AbstractApp {
         return allAppsMap[pid]
     }
 
+    /// A collected window's pending jobs, each with a lock of its own, which stayed until the app quit. Every
+    /// native tab is a window id, so a long-lived Finder or Terminal grew these for weeks. Cancelling is harmless:
+    /// the window is dead, or if it is detected again, registration writes its frame again.
+    @MainActor
+    func forget(_ windowId: UInt32) {
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        nativeStateJobs.removeValue(forKey: windowId)?.cancel()
+        if isDebugLoggingEnabled { parkTrace.withLock { $0.forget(windowId) } }
+    }
+
     @MainActor
     func closeAndUnregisterAxWindow(_ windowId: UInt32) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
@@ -245,16 +292,14 @@ final class MacApp: AbstractApp {
                 // if it had spends `updateFocusCache`'s record of what macOS last said -- so the app's
                 // next, stale answer reads as a focus change and bounces the user back across a workspace
                 // switch. On macOS 26 and 27 a busy app's read fails `.cannotComplete` after
-                // the full timeout. (`windowOrNil` makes a second AX call, `_AXUIElementGetWindow`, which
-                // can still time out and read as nil; not covered.)
+                // the full timeout. (A window AeroSpork does not know yet costs a second AX call,
+                // `_AXUIElementGetWindow`, which can still time out and read as nil; not covered.)
                 var raw: AnyObject?
                 let error = AXUIElementCopyAttributeValue(axApp.threadGuarded, Ax.focusedWindowAttr.key as CFString, &raw)
                 if error == .cannotComplete { throw NativeFocusUnknown() }
-                let axWindow = (error == .success ? raw.flatMap(Ax.focusedWindowAttr.getter) : nil)
-                    .flatMap {
-                        guard let casted = $0.ax.cast else { return nil as AxWindow? }
-                        return windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, casted, axObserver.threadGuarded)
-                    }
+                let element = error == .success ? raw.flatMap { CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil } : nil
+                let axWindow = identifyWindows(element.map { [$0] } ?? [], known: knownElements(windows.threadGuarded)).first
+                    .flatMap { windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax, axObserver.threadGuarded) }
                 return axWindow?.windowId
             }
         } catch let unknown as NativeFocusUnknown {
@@ -341,15 +386,9 @@ final class MacApp: AbstractApp {
     /// awaits nothing: the spot depends on it because a parked window must not reach another monitor.
     func hideAxWindow(_ windowId: UInt32, at spot: @escaping @Sendable (CGSize) -> CGPoint) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
-            guard let size = window.get(Ax.sizeAttr) else { return }
-            let point = spot(size)
-            // This runs for every window of every invisible workspace on every refresh; without the
-            // guard that was an unconditional AX position write per hidden window, forever.
-            if isFrameSatisfied(window, point, nil) { return }
-            disableAnimations(app: axApp.threadGuarded) {
-                _ = window.set(Ax.topLeftCornerAttr, point)
-            }
+        setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp, bundleId] window, job in
+            let check = parkAxWindow(window, app: axApp.threadGuarded, at: spot)
+            if isDebugLoggingEnabled, let check { traceParkCheck(windowId, bundleId, check) }
         }
     }
 
@@ -378,7 +417,7 @@ final class MacApp: AbstractApp {
     func knownTabsBeside(_ windowId: UInt32) async throws -> [UInt32] {
         try await withWindow(windowId) { [axApp, windows, bundleId] window, job in
             guard (window.tabTitles?.count ?? 0) > 1 else { return [] }
-            let listed = Set(listedWindows(axApp.threadGuarded, bundleId).map(\.windowId))
+            let listed = Set(listedWindows(axApp.threadGuarded, bundleId, known: windows.threadGuarded).map(\.windowId))
             return windows.threadGuarded.keys.filter { !listed.contains($0) }
         } ?? []
     }
@@ -460,9 +499,7 @@ final class MacApp: AbstractApp {
     /// `runInLoop` round trips per window -- two suspensions, two continuations, twice the
     /// opportunity for the refresh to be cancelled mid-window and start over.
     ///
-    /// The short-circuit is preserved exactly: `minimized` is not read at all when the window is
-    /// fullscreen, because a fullscreen window cannot be minimized and the read is an IPC to a
-    /// possibly-wedged app.
+    /// Inside the hop, both flags are one AX round trip too (`readMacosNativeState`).
     @MainActor
     func macosNativeState(_ windowId: UInt32) async throws -> (fullscreen: Bool, minimized: Bool)? {
         try await withWindow(windowId) { window, job in
@@ -487,22 +524,37 @@ final class MacApp: AbstractApp {
     /// than whatever the notifications have said since, and one that turned back is merely asked for
     /// windows it doesn't have.
     @MainActor static func noteRegularApps(_ apps: [NSRunningApplication]) -> Bool {
-        let new = apps.filter { regularApps[$0.processIdentifier] == nil }
+        // LaunchServices keeps listing an app that exited with a job still loaded. See `isGone`.
+        let new = apps.filter { regularApps[$0.processIdentifier] == nil && !processIsGone($0.processIdentifier) }
         for app in new { regularApps[app.processIdentifier] = app }
         return !new.isEmpty
     }
 
     /// Every 30 seconds, off the main thread: each app it asks about is a round trip to LaunchServices.
     static func startRegularAppSweep() {
-        Task.detached(priority: .utility) {
+        _ = Task.detached(priority: .utility) {
             while !Task.isCancelled {
                 try await Task.sleep(for: .seconds(30))
                 let regular = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
                 await MainActor.run {
-                    if noteRegularApps(regular) { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
+                    // A gone app sends no events, so nothing else would refresh to collect its windows.
+                    let anyGone = allAppsMap.values.contains { $0.nsApp.isGone }
+                    // Nothing else says Accessibility was granted again, and refreshes skipped until then.
+                    let trustBack = noteTrustRegained(isTrusted: AXIsProcessTrusted())
+                    let deadWindows = noteWindowsGoneFromWindowServer()
+                    if noteRegularApps(regular) || anyGone || deadWindows || trustBack { runRefreshSession(.globalObserver("regularAppSweep"), screenIsDefinitelyUnlocked: false) }
                 }
             }
         }
+    }
+
+    /// Adds the registered windows WindowServer no longer has to `pendingDead`, and says whether there were any.
+    /// One WindowServer read per sweep, never per refresh. In healthy operation nothing is found and no refresh runs.
+    @MainActor static func noteWindowsGoneFromWindowServer() -> Bool {
+        let registered = Set(MacWindow.allWindowsMap.keys) // first: then every id in it predates the read below
+        let dead = windowsGoneFromWindowServer(registered: registered, alive: windowServerWindowIds(), backgroundTabs: backgroundTabs)
+        pendingDead.formUnion(dead)
+        return !dead.isEmpty
     }
 
     /// One app launched, activated, unhid or terminated.
@@ -512,11 +564,14 @@ final class MacApp: AbstractApp {
 
     @MainActor
     static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: [UInt32]] {
-        for (_, app) in MacApp.allAppsMap { // gc dead apps
+        // One liveness check per app per pass. `refreshAndGetAliveWindowIds` checks again after its
+        // `await`, for an app that dies in the middle of the pass.
+        let gone = Set((Array(regularApps.values) + allAppsMap.values.map(\.nsApp)).filter(\.isGone).map(\.processIdentifier))
+        regularApps = regularApps.filter { !gone.contains($0.key) } // or the loop below registers it again
+        forgetFailedRegistrationsOfGoneProcesses()
+        for (pid, app) in MacApp.allAppsMap where gone.contains(pid) { // gc dead apps
             try checkCancellation()
-            if app.nsApp.isTerminated {
-                app.destroy()
-            }
+            app.destroy()
         }
         return try await withThrowingTaskGroup(of: (pid_t, [UInt32]).self, returning: [MacApp: [UInt32]].self) { group in
             func refreshTheApp(_ nsApp: NSRunningApplication) {
@@ -548,16 +603,17 @@ final class MacApp: AbstractApp {
 
     @MainActor
     private func refreshAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [UInt32] {
-        if nsApp.isTerminated {
+        if nsApp.isGone {
             destroy()
             return []
         }
         guard let thread else { return [] }
         let previousTabs = backgroundTabsSeen
+        let pendingDead = MacApp.pendingDead
         let outcome = try await thread.runInLoop { [axObserver, windows, axApp, bundleId] (job) -> (ids: [UInt32], tabs: [UInt32: UInt32], timedOut: Bool) in
             var result: [UInt32: AxWindow] = windows.threadGuarded
             let listStart = DispatchTime.now()
-            let listed = listedWindows(axApp.threadGuarded, bundleId)
+            let listed = listedWindows(axApp.threadGuarded, bundleId, known: result)
             // Once one read has waited out the timeout the rest would too; keeping the window is what a
             // timed-out `isDestroyed()` answers anyway. See `timedOutThisPass`.
             var timedOut = isAxTimeout(since: listStart)
@@ -567,6 +623,9 @@ final class MacApp: AbstractApp {
                 let listedIds = Set(listed.map(\.windowId))
                 result = try result.filter {
                     try job.checkCancellation()
+                    // Before the timeout shortcut, which keeps everything: WindowServer answers where the app
+                    // cannot. An app that answers and lists the window wins.
+                    if pendingDead.contains($0.key) && !listedIds.contains($0.key) { return false }
                     if timedOut { return true }
                     // Listed means alive, so one read answers for most windows. The list leaves out
                     // windows on other macOS Spaces, which is why the rest get asked individually.
@@ -595,13 +654,23 @@ final class MacApp: AbstractApp {
             return (Array(result.keys), tabs, timedOut)
         }
         if outcome.timedOut { MacApp.timedOutThisPass.insert(pid) }
+        if MacApp.noteAnswer(pid: pid, answered: !outcome.timedOut, now: .now) {
+            let windowCount = MacWindow.allWindowsMap.values.count(where: { $0.macApp === self })
+            AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) has not answered Accessibility for a minute; keeping its \(windowCount, privacy: .public) windows; process gone: \(processIsGone(self.pid), privacy: .public)")
+        }
         backgroundTabsSeen = outcome.tabs
         return outcome.ids
     }
 
     @MainActor
     private func destroy() {
+        if !nsApp.isTerminated {
+            // The Discord case (see `isGone`): the one record that says LaunchServices lied. Once per app.
+            let windowCount = MacWindow.allWindowsMap.values.count(where: { $0.macApp === self })
+            AppLog.session.notice("app \(self.bundleId ?? "?", privacy: .public) (\(self.pid, privacy: .public)) is gone but LaunchServices still lists it; removing \(windowCount, privacy: .public) windows")
+        }
         MacApp.allAppsMap.removeValue(forKey: pid)
+        MacApp.unansweredSince.removeValue(forKey: pid)
         for (_, job) in setFrameJobs {
             job.cancel()
         }
@@ -662,13 +731,26 @@ func isAxTimeout(elapsedSeconds: Double) -> Bool {
 /// window, and nothing showed which of its windows had left the screen.
 /// ponytail: Finder only, the one app on a whole Mac that answers this way. The second read would otherwise fall
 /// on every app without a window, on every refresh.
-private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?) -> [WindowIdAndAxUiElement] {
-    let listed = axApp.get(Ax.windowsAttr) ?? []
-    return listed.isEmpty && bundleId == "com.apple.finder" ? axApp.get(Ax.childWindowsAttr) ?? [] : listed
+///
+/// A window in `known` costs no window id read (`identifyWindows`), so with no new windows a refresh reads one list
+/// per app and nothing per window.
+private func listedWindows(_ axApp: AXUIElement, _ bundleId: String?, known: [UInt32: AxWindow]) -> [WindowIdAndAxUiElement] {
+    let index = knownElements(known)
+    let listed = identifyWindows(axApp.get(Ax.windowElementsAttr) ?? [], known: index)
+    if !listed.isEmpty || bundleId != "com.apple.finder" { return listed }
+    // Its other children are a menu bar and the desktop.
+    let children = axApp.get(Ax.childrenAttr)?.compactMap(\.cast) ?? []
+    return identifyWindows(children, known: index) { $0.get(Ax.roleAttr) == kAXWindowRole }
+}
+
+/// The reverse of an app's `windows`: which window each tracked element is.
+private func knownElements(_ known: [UInt32: AxWindow]) -> [AXUIElement: UInt32] {
+    Dictionary(known.map { ($0.value.ax, $0.key) }, uniquingKeysWith: { first, _ in first })
 }
 
 private func axRect(_ window: AXUIElement) -> Rect? {
-    guard let topLeftCorner = window.get(Ax.topLeftCornerAttr), let size = window.get(Ax.sizeAttr) else { return nil }
+    let frame = window.getFrame()
+    guard let topLeftCorner = frame.topLeft, let size = frame.size else { return nil }
     return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
 }
 
@@ -737,7 +819,7 @@ private class AxWindow {
     static func new(windowId: UInt32, _ ax: AXUIElement, _ observer: AXObserver) -> AxWindow? {
         _ = AXUIElementSetMessagingTimeout(ax, axMessagingTimeout)
         let keys = [kAXUIElementDestroyedNotification, kAXWindowDeminiaturizedNotification, kAXWindowMiniaturizedNotification, kAXMovedNotification, kAXResizedNotification]
-        return AxSubscription.subscribe(observer, ax, keys).map { AxWindow(windowId: windowId, ax, $0) }
+        return AxSubscription.subscribe(observer, ax, keys, windowId: windowId).map { AxWindow(windowId: windowId, ax, $0) }
     }
 }
 
@@ -774,22 +856,84 @@ extension [UInt32: AxWindow] {
 /// an app that ignores, clamps or times out its writes. Every caller passes a concrete
 /// `AXUIElement`, so the generic specializes to exactly the previous code.
 func isFrameSatisfied(_ window: some AxUiElementMock, _ topLeft: CGPoint?, _ size: CGSize?) -> Bool {
-    let tolerance = 1.0
-    // Bail on the first disagreement. Each `get` is a cross-thread AX round trip, and the two used
-    // to be evaluated unconditionally before being `&&`ed -- so every window that actually needed
-    // moving (i.e. every window on the workspace you just switched to) paid a position read whose
-    // answer could not change the outcome. See AxWriteTest.testGuardStopsReadingAtFirstDisagreement.
-    if let size {
-        guard let actual = window.get(Ax.sizeAttr),
-              abs(actual.width - size.width) < tolerance, abs(actual.height - size.height) < tolerance
-        else { return false }
+    // Each read is a cross-thread AX round trip. Both values come in one batched read, which costs what one
+    // single read does; a one-sided guard reads only the value it was asked about. See AxWriteTest.
+    switch (topLeft, size) {
+        case (nil, nil): return true
+        case (let topLeft?, nil): return isAt(window.get(Ax.topLeftCornerAttr), topLeft)
+        case (nil, let size?): return isSized(window.get(Ax.sizeAttr), size)
+        case (let topLeft?, let size?):
+            let actual = window.getFrame()
+            return isSized(actual.size, size) && isAt(actual.topLeft, topLeft)
     }
-    if let topLeft {
-        guard let actual = window.get(Ax.topLeftCornerAttr),
-              abs(actual.x - topLeft.x) < tolerance, abs(actual.y - topLeft.y) < tolerance
-        else { return false }
+}
+
+/// AX rounds, so within a point is at the target. Unreadable is never satisfied: "unknown" means "write it".
+private func isAt(_ actual: CGPoint?, _ target: CGPoint) -> Bool {
+    guard let actual else { return false }
+    return abs(actual.x - target.x) < 1 && abs(actual.y - target.y) < 1
+}
+
+private func isSized(_ actual: CGSize?, _ target: CGSize) -> Bool {
+    guard let actual else { return false }
+    return abs(actual.width - target.width) < 1 && abs(actual.height - target.height) < 1
+}
+
+/// The `hideAxWindow` body, generic so the tests can drive it. The spot depends on the size, and both come
+/// from one batched read. Returns the spot and where the window was before any write, nil if unreadable.
+@discardableResult
+func parkAxWindow(_ window: some AxUiElementMock, app: some AxUiElementMock, at spot: (CGSize) -> CGPoint) -> (spot: CGPoint, actual: CGPoint?)? {
+    let actual = window.getFrame()
+    guard let size = actual.size else { return nil }
+    let point = spot(size)
+    // This runs for every window of every invisible workspace on every refresh; without the
+    // guard that was an unconditional AX position write per hidden window, forever.
+    if isAt(actual.topLeft, point) { return (point, actual.topLeft) }
+    disableAnimations(app: app) {
+        _ = window.set(Ax.topLeftCornerAttr, point)
     }
-    return true
+    return (point, actual.topLeft)
+}
+
+/// Trace only: does an app move a parked window without the `kAXMoved`/`kAXResized` notification that
+/// every window subscribes to? Re-reading parked windows on every layout could only be skipped if it never
+/// does. Touched only while `AEROSPORK_DEBUG_LOG` is set: one insert per notification, one lookup per check.
+private struct ParkTrace {
+    /// Where the last check left each parked window.
+    var parkedAt: [UInt32: CGPoint] = [:]
+    /// Windows with a move or resize notification since their last check.
+    var notified: Set<UInt32> = []
+    mutating func forget(_ windowId: UInt32) {
+        parkedAt.removeValue(forKey: windowId)
+        notified.remove(windowId)
+    }
+}
+
+/// Every app thread writes here, so one lock. Uncontended, and only while tracing.
+private let parkTrace = OSAllocatedUnfairLock(initialState: ParkTrace())
+
+/// Called for each move or resize notification, with its refcon, which carries the window id (`axRefcon`).
+func noteFrameNotification(_ refcon: UnsafeMutableRawPointer?) {
+    guard isDebugLoggingEnabled, let windowId = axRefconWindowId(refcon) else { return }
+    parkTrace.withLock { _ = $0.notified.insert(windowId) }
+}
+
+private func traceParkCheck(_ windowId: UInt32, _ bundleId: String?, _ check: (spot: CGPoint, actual: CGPoint?)) {
+    let (parkedAt, notified) = parkTrace.withLock { trace in
+        defer { trace.parkedAt[windowId] = check.spot }
+        return (trace.parkedAt[windowId], trace.notified.remove(windowId) != nil)
+    }
+    if parkedWindowMovedWithoutNotification(parkedAt: parkedAt, spot: check.spot, actual: check.actual, notified: notified) {
+        debugLog("Parked window moved without a notification: \(bundleId ?? "no bundle id") window \(windowId) "
+            + "was at \(check.actual.prettyDescription), parked at \(check.spot)")
+    }
+}
+
+/// A re-check found the window away from the spot the previous check left it at, and no move or resize
+/// notification arrived in between. Our own park write notifies too, so the check after a write never counts.
+func parkedWindowMovedWithoutNotification(parkedAt: CGPoint?, spot: CGPoint, actual: CGPoint?, notified: Bool) -> Bool {
+    guard !notified, let parkedAt, let actual else { return false }
+    return isAt(parkedAt, spot) && !isAt(actual, spot)
 }
 
 /// The AX writes that hand focus to a window. Extracted from `MacApp.nativeFocus` so the sequence is
@@ -798,14 +942,15 @@ func isFrameSatisfied(_ window: some AxUiElementMock, _ topLeft: CGPoint?, _ siz
 /// `kAXFocusedAttribute` first, and it is the load-bearing one: it is what
 /// `kAXFocusedWindowAttribute` reports back, which is what `getNativeFocusedWindow` reads. `isMain`
 /// only changes which window the app considers primary for ordering.
-/// The two AX reads behind `macosNativeState`, over the mockable element seam.
+/// The AX read behind `macosNativeState`, over the mockable element seam.
 ///
-/// Extracted so the *read pattern* is assertable: that both flags come from one traversal, and that
-/// a fullscreen window is never asked whether it is minimized.
+/// Extracted so the *read pattern* is assertable: both flags in one batched read. It used to skip the
+/// minimized read for a fullscreen window, to save an IPC; a batch has no second IPC to save, so only
+/// the answer is kept: a fullscreen window is never minimized.
 func readMacosNativeState(_ window: some AxUiElementMock) -> (fullscreen: Bool, minimized: Bool) {
-    let fullscreen = window.get(Ax.isFullscreenAttr) == true
-    // Short-circuit: a fullscreen window is never minimized, and this read is an IPC.
-    return (fullscreen, fullscreen ? false : window.get(Ax.minimizedAttr) == true)
+    let flags = window.getNativeFlags()
+    let fullscreen = flags.fullscreen == true
+    return (fullscreen, !fullscreen && flags.minimized == true)
 }
 
 func setAxFocus(_ window: some AxUiElementMock) {
@@ -836,3 +981,17 @@ func disableAnimations<T>(app: some AxUiElementMock, _ body: () -> T) -> T {
     }
     return body()
 }
+
+extension NSRunningApplication {
+    /// `isTerminated`, or the process is gone while LaunchServices still holds its record.
+    ///
+    /// An app that exits with a launchd job still loaded stays in `lsappinfo` as
+    /// "exited-with-subordinates": Discord does this when its ShipIt updater relaunches it. No
+    /// termination notification arrives, `isTerminated` stays false for good, and every AX read of the
+    /// dead pid answers `.cannotComplete`, which is what a busy app answers. Since #39 a busy app keeps
+    /// its windows, so the dead app's windows kept empty tiles until logout.
+    var isGone: Bool { isTerminated || processIsGone(processIdentifier) }
+}
+
+/// `kill(pid, 0)` sends nothing; ESRCH means no such process. EPERM (not ours to signal) is alive.
+func processIsGone(_ pid: pid_t) -> Bool { kill(pid, 0) != 0 && errno == ESRCH }

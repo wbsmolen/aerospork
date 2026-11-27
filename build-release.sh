@@ -19,10 +19,10 @@ done
 if test -z "$codesign_identity"; then codesign_identity="$(default_signing_identity)"; fi
 warn_if_only_app_store_distribution
 
-# Put Sources/Common/versionGenerated.swift back the way it was before this script stamped the
-# release version into it.
+# Put Sources/Common/versionGenerated.swift and gitHashGenerated.swift back the way they were before
+# this script stamped the release version and the commit into them, on success and on failure alike.
 #
-# It is a CHECKED-IN generated file whose committed value has to equal what `generate.sh` produces
+# Each is a CHECKED-IN generated file whose committed value has to equal what `generate.sh` produces
 # with no arguments, because run-tests.sh runs `generate.sh --all` and then fails on a dirty tree.
 # Without this restore, every release leaves the tree modified, and the next `git commit -a` -- the
 # appcast update, right after -- silently sweeps the stamped version into the repo and breaks CI on
@@ -31,11 +31,15 @@ warn_if_only_app_store_distribution
 version_file="Sources/Common/versionGenerated.swift"
 version_file_backup="$(mktemp)"
 cp "$version_file" "$version_file_backup"
-restore_version_file() {
+git_hash_file="Sources/Common/gitHashGenerated.swift"
+git_hash_file_backup="$(mktemp)"
+cp "$git_hash_file" "$git_hash_file_backup"
+restore_generated_files() {
     cp "$version_file_backup" "$version_file"
-    rm -f "$version_file_backup"
+    cp "$git_hash_file_backup" "$git_hash_file"
+    rm -f "$version_file_backup" "$git_hash_file_backup"
 }
-trap restore_version_file EXIT
+trap restore_generated_files EXIT
 # Fail here rather than after the build: signing is the last step, and discovering there is no
 # identity then wastes the entire universal build.
 if test -z "$codesign_identity"; then
@@ -47,7 +51,7 @@ fi
 echo "Signing with: $codesign_identity"
 
 generate-git-hash() {
-cat > Sources/Common/gitHashGenerated.swift <<EOF
+cat > "$git_hash_file" <<EOF
 public let gitHash = "$(git rev-parse HEAD)"
 public let gitShortHash = "$(git rev-parse --short HEAD)"
 EOF
@@ -72,15 +76,6 @@ swift build -c release --arch arm64 --arch x86_64 --product aerospork # CLI
 # the `cp` below died. Ask the toolchain where it put the binary instead of guessing.
 cli_bin_path="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path | tail -1)"
 
-# todo: make xcodebuild use the same toolchain as swift
-# toolchain="$(plutil -extract CFBundleIdentifier raw ~/Library/Developer/Toolchains/swift-6.1-RELEASE.xctoolchain/Info.plist)"
-# xcodebuild -toolchain "$toolchain" \
-# Unfortunately, Xcode 16 fails with:
-#     2025-05-05 15:51:15.618 xcodebuild[4633:13690815] Writing error result bundle to /var/folders/s1/17k6s3xd7nb5mv42nx0sd0800000gn/T/ResultBundle_2025-05-05_15-51-0015.xcresult
-#     xcodebuild: error: Could not resolve package dependencies:
-#       <unknown>:0: warning: legacy driver is now deprecated; consider avoiding specifying '-disallow-use-new-driver'
-#     <unknown>:0: error: unable to execute command: <unknown>
-
 rm -rf .release && mkdir .release
 
 xcode_configuration="Release"
@@ -97,11 +92,6 @@ xcodebuild-pretty .release/xcodebuild.log clean build \
     -destination "generic/platform=macOS" \
     -configuration "$xcode_configuration" \
     -derivedDataPath .xcode-build
-
-# Revert ONLY the file `generate-git-hash` stamped above. This used to be a bare `git checkout .`,
-# which discards every uncommitted change in the working tree -- and the "guard" that was supposed
-# to prevent that (script/check-uncommitted-files.sh) exits 0 after merely printing a warning.
-git checkout -- Sources/Common/gitHashGenerated.swift
 
 # -R, not -r: a framework's Versions/Current and top-level stubs are symlinks, and flattening
 # them into regular files makes codesign fail with "bundle format is ambiguous".

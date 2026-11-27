@@ -15,7 +15,7 @@ final class RefreshSessionEventTest: XCTestCase {
         ]
         let notAsked: [RefreshSessionEvent] = [
             .globalObserver("didActivateApplication"), .startup,
-            .onFocusedMonitorChanged, .onFocusedWorkspaceChanged, .onFocusChanged,
+            .onFocusedMonitorChanged, .onFocusedWorkspaceChanged, .onFocusChanged, .onModeChanged,
         ]
         for event in asked {
             XCTAssertTrue(event.isUserInitiated, "\(event) is something a person did")

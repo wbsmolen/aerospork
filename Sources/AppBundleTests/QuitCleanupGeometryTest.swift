@@ -86,7 +86,6 @@ final class QuitCleanupGeometryTest: XCTestCase {
             MonitorImpl(monitorAppKitNsScreenScreensId: 1, name: "left", rect: left, visibleRect: left),
             MonitorImpl(monitorAppKitNsScreenScreensId: 2, name: "right", rect: right, visibleRect: right),
         ]
-        defer { testMonitors = [defaultTestMonitor] }
         let workspace = Workspace.get(byName: "hidden")
         workspace.assignMonitor(testMonitors[0])
         // Parked at the left monitor's bottom-right corner: almost all of it, centre included, on the right one.

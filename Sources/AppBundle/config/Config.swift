@@ -49,8 +49,8 @@ var defaultConfigUrl: URL {
 }
 @MainActor let defaultConfig: Config = {
     // Try to load default config from file, but use hardcoded defaults if not available
-    if let configString = try? String(contentsOf: defaultConfigUrl) {
-        let result = parseConfig(configString, isUserConfig: false)
+    if let configString = try? String(contentsOf: defaultConfigUrl, encoding: .utf8) {
+        let result = parseConfig(configString)
         switch result {
             case .success(let config):
                 return config
@@ -84,11 +84,15 @@ var defaultConfigUrl: URL {
 /// succeed, which points `configUrl` back at the user's file and clears `configLoadFailure`.
 @MainActor var isRunningFallbackDefaults: Bool { configUrl == defaultConfigUrl && configLoadFailure != nil }
 
+/// The failure is in the file's TOML, which Raw TOML loads with the parser's error on it. Two configs,
+/// or one that can't be read, are in no text Settings has, so Raw TOML can neither show nor fix them.
+@MainActor var configFailureIsInTheText: Bool { configLoadFailure?.hasPrefix(configParseFailurePrefix) == true }
+
 struct Config: ConvenienceCopyable {
     var afterStartupCommand: [any Command] = []
     /// Sink for keys the generic table walker must not write: deprecated no-ops, and the v2 keys
     /// that are desugared by hand in `applyConfigV2`.
-    var _deprecatedNoOp: Void = ()
+    var _handledElsewhere: Void = ()
     var enableNormalizationFlattenContainers: Bool = true
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
@@ -96,6 +100,8 @@ struct Config: ConvenienceCopyable {
     var automaticallyUnhideMacosHiddenApps: Bool = false
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
+    /// Where a new tiled window goes. See `Window.nestWithTileItOpenedBeside`.
+    var newWindowPlacement: NewWindowPlacement = .sibling
     /// Deprecated, but honoured -- `focus.swift` spawns it on every workspace change.
     var execOnWorkspaceChange: [String] = []
     var keyMapping = KeyMapping()
@@ -104,6 +110,7 @@ struct Config: ConvenienceCopyable {
     var onFocusChanged: [any Command] = []
     var onFocusedWorkspaceChanged: [any Command] = []
     var onFocusedMonitorChanged: [any Command] = []
+    var onModeChanged: [any Command] = []
 
     var gaps: Gaps = .zero
     var workspaceToMonitorForceAssignment: [String: [MonitorDescription]] = [:]
@@ -127,4 +134,10 @@ struct Config: ConvenienceCopyable {
 /// `CaseIterable` so `parseEnum` can list the accepted values in the error message.
 enum DefaultContainerOrientation: String, CaseIterable {
     case horizontal, vertical, auto
+}
+
+/// `sibling`: a new tiled window goes beside the focused one, in its container. `nest`: the two share
+/// the focused window's tile, in a new container of their own.
+enum NewWindowPlacement: String, CaseIterable {
+    case sibling, nest
 }

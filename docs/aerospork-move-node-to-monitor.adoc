@@ -23,6 +23,7 @@ aerospork move-node-to-monitor [-h|--help] [--window-id <window-id>] [--focus-fo
 `move-node-to-monitor` moves the focused window to the visible workspace of another monitor.
 Focus stays on the workspace where it was, unless you give `--focus-follows-window`.
 You choose the monitor by direction, by order, or by pattern.
+A sticky window stops being sticky. See aerospork-sticky(1).
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]

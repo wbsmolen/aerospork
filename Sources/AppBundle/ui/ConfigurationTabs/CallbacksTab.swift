@@ -32,7 +32,7 @@ struct CallbacksTab: View {
             commandSection(
                 "Focus changed",
                 icon: "scope",
-                help: "Any focus change at all: window, workspace or monitor. Fires the most often — keep it cheap.",
+                help: "Any focus change at all: window, workspace or monitor. Fires the most often, so keep it cheap.",
                 placeholder: "move-mouse window-lazy-center",
                 keyPath: \.settings.callbacks.onFocusChanged,
             )
@@ -74,7 +74,7 @@ struct CallbacksTab: View {
     ) -> some View {
         Section {
             if viewModel[keyPath: keyPath].isEmpty {
-                SettingsHint("Nothing here yet. Anything you add runs every time this event fires — `exec-and-forget` for a shell command, or an aerospork command directly.")
+                SettingsHint("Nothing here yet. Anything you add runs every time this event fires: `exec-and-forget` for a shell command, or an aerospork command directly.")
             }
             ForEach(viewModel[keyPath: keyPath]) { row in
                 HStack(spacing: 8) {

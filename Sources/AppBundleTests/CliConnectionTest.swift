@@ -46,6 +46,38 @@ final class CliConnectionTest: XCTestCase {
         assertEquals(answer.exitCode, ExitCode.badArgs)
     }
 
+    /// A subscriber is quiet for as long as nothing happens. The frame timeout, which ends any other connection
+    /// that stays silent, must not end its stream.
+    func testAnIdleSubscriberOutlivesTheFrameTimeout() async throws {
+        setUpWorkspacesForTests()
+        TrayMenuModel.shared.isEnabled = true
+        defer { EventBroadcaster.shared.removeAll(sending: serverAnswer(ExitCode.failure)) }
+        let client = serverConnectionForTests(frameTimeout: .milliseconds(300))
+        defer { client.close() }
+        try sendRequest(client, ["subscribe", "mode-changed"])
+        assertEquals(eventJson(try await nextAnswer(client))["event"] as? String, "snapshot")
+
+        try await Task.sleep(for: .seconds(1))
+        EventBroadcaster.shared.emit(.modeChanged, ["mode": .string("resize"), "prev-mode": .string("main")])
+        assertEquals(eventJson(try await nextAnswer(client))["event"] as? String, "mode-changed")
+    }
+
+    /// `sendMessage` refuses a frame over the limit, so an oversize answer used to reach the client as
+    /// silence: "No response from AeroSpork server".
+    func testAnOversizeAnswerBecomesAFailureThatSaysSo() throws {
+        // Decoded, not compared as bytes: JSONEncoder's key order changes from one run to the next.
+        let small = try JSONDecoder().decode(ServerAnswer.self, from: try XCTUnwrap(encodedAnswer(serverAnswer(ExitCode.success, stdout: "ok"))))
+        assertEquals(small.exitCode, ExitCode.success)
+        assertEquals(small.stdout, "ok")
+
+        let huge = serverAnswer(ExitCode.success, stdout: String(repeating: "x", count: Int(UnixSocketConnection.maxFrameSize)))
+        let data = try XCTUnwrap(encodedAnswer(huge))
+        XCTAssertLessThan(data.count, 1000)
+        let answer = try JSONDecoder().decode(ServerAnswer.self, from: data)
+        assertEquals(answer.exitCode, ExitCode.failure)
+        XCTAssertTrue(answer.stderr.contains("too large"), answer.stderr)
+    }
+
     /// `main()` exits, so its order can only be read. Whatever feeds the pipe can take as long as it
     /// likes, and the server hangs up on a connection that says nothing.
     func testTheCliReadsStdinBeforeItConnects() throws {

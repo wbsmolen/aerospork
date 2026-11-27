@@ -1,0 +1,89 @@
+= aerospork-swap(1)
+include::util/man-attributes.adoc[]
+:manname: aerospork-swap
+// tag::purpose[]
+:manpurpose: Swap the focused window with another window and keep the layout
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospork swap [-h|--help] [--window-id <window-id>] [--swap-focus] [--wrap-around]
+               (left|down|up|right|dfs-next|dfs-prev)
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+`swap` trades the places of two tiled windows.
+Each window takes the other's place and the other's size, so the layout stays the same.
+`move` reshapes the tree when a window crosses into another container, and `swap` never does.
+
+`swap left` swaps with the nearest window to the left, as `focus left` would pick it, and so on for the other directions.
+`swap dfs-next` and `swap dfs-prev` swap with the next or the previous window in a depth-first walk of the tiled windows of the workspace, the order that `focus --dfs-index` counts in.
+
+The focused window keeps the focus, so focus moves with it to its new place.
+A native tab group is one tile, so `swap` moves the whole group.
+`swap` works only on tiled windows: a floating window has no place in the tree to trade.
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+
+--window-id <window-id>::
+include::util/window-id-flag-desc.adoc[]
+
+--swap-focus::
+Give the focus to the other window, which now sits where the focused window was. Focus stays in the same place on the screen.
+
+--wrap-around::
+At the edge of the workspace, swap with the window at the opposite edge.
+With `dfs-next` and `dfs-prev`, the last window swaps with the first.
+
+// =========================================================== Arguments
+include::util/conditional-arguments-header.adoc[]
+
+(left|down|up|right|dfs-next|dfs-prev):: The window to swap with.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`swap` exits 1 when no window is focused, when the window is not tiled, and when there is no window to swap with, for example at the edge of the workspace without `--wrap-around`.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Given this layout
++
+----
+h_tiles
+├── window 1 (focused)
+└── v_tiles
+    ├── window 2
+    └── window 3
+----
++
+`swap right` gives this layout when window 2 was focused more recently than window 3.
+`move right` would put window 1 into the `v_tiles` container instead.
++
+----
+h_tiles
+├── window 2
+└── v_tiles
+    ├── window 1 (focused)
+    └── window 3
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-move(1), aerospork-focus(1)
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

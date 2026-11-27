@@ -16,14 +16,21 @@ struct RawTomlTab: View {
     }
 
     @ObservedObject var viewModel: ConfigurationViewModel
+    /// Observed here and nowhere else, so typing re-renders this pane alone. `@ObservedObject`, not
+    /// a plain read through `viewModel`: without it `.task(id:)` never sees the new text.
+    @ObservedObject private var raw: RawTomlBuffer
     @State private var validationDiagnostic: ConfigurationWriter.ValidationDiagnostic?
     @State private var validationPending = false
     @State private var cursorLine = 1
     @State private var cursorColumn = 1
     @State private var jumpToLine: Int?
-    @State private var configPath = ""
     @State private var backups: [URL] = []
     @State private var sectionHeaders: [SectionHeader] = []
+
+    init(viewModel: ConfigurationViewModel) {
+        self.viewModel = viewModel
+        raw = viewModel.raw
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +39,7 @@ struct RawTomlTab: View {
             // Not `TextEditor`: it applies macOS text substitutions, and smart quotes turn the `'`
             // in `key = 'focus left'` into `'`, which is not valid TOML.
             CodeEditor(
-                text: $viewModel.rawToml,
+                text: $raw.text,
                 jumpToLine: jumpToLine,
                 errorLine: validationDiagnostic?.line,
             ) { line, column in
@@ -46,25 +53,34 @@ struct RawTomlTab: View {
         // Parsing a full config on every keystroke makes fast typing contend with the main-actor
         // SwiftUI update that produced it. `task(id:)` gives us cancellation for free: only the
         // last buffer in a burst is validated, while Apply remains disabled during the short wait.
-        .task(id: viewModel.rawToml) {
-            let needsValidation = viewModel.rawTomlEdited
+        .task(id: raw.text) {
+            let needsValidation = Self.needsValidation(edited: viewModel.rawTomlEdited, fallback: isRunningFallbackDefaults)
             validationPending = needsValidation
             guard needsValidation else {
                 validationDiagnostic = nil
-                sectionHeaders = Self.sections(in: viewModel.rawToml)
+                sectionHeaders = Self.sections(in: raw.text)
                 return
             }
             validationDiagnostic = nil
             try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled else { return }
-            sectionHeaders = Self.sections(in: viewModel.rawToml)
-            validationDiagnostic = ConfigurationWriter.diagnostic(viewModel.rawToml)
+            sectionHeaders = Self.sections(in: raw.text)
+            validationDiagnostic = ConfigurationWriter.diagnostic(raw.text)
             validationPending = false
         }
+        // "Show config error…" in the menu. A `@Published` publisher replays its value on subscribe,
+        // so a line set before this pane appeared is taken when it does.
+        .onReceive(viewModel.$pendingJumpLine.compactMap { $0 }) { line in
+            viewModel.pendingJumpLine = nil
+            jump(to: line)
+        }
         .task {
-            // Both calls touch the file system. Raw TOML publishes on every keystroke, so leaving
-            // them in computed view properties turned typing into repeated directory scans.
-            configPath = (findCustomConfigUrl().urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+            // A structured edit still waiting on its 600 ms autosave is written before Raw TOML can be
+            // typed in. Otherwise the save is refused for unapplied Raw TOML edits, and the next Apply or
+            // Revert drops the edit without a word.
+            await viewModel.flushPendingAutoSave()
+            // Touches the file system. The pane re-renders on every keystroke, so leaving it in a
+            // computed view property turned typing into repeated directory scans.
             backups = viewModel.configBackups()
         }
     }
@@ -72,13 +88,13 @@ struct RawTomlTab: View {
     private var pathBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "doc.plaintext").foregroundStyle(.secondary)
-            Text(configPath)
+            Text(viewModel.configPath)
                 .font(.system(.callout, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .textSelection(.enabled)
-            CopyButton(value: configPath, help: "Copy config path")
+            CopyButton(value: viewModel.configPath, help: "Copy config path")
             Spacer(minLength: 12)
             Text("Ln \(cursorLine), Col \(cursorColumn)")
                 .font(.callout)
@@ -99,13 +115,12 @@ struct RawTomlTab: View {
             .help("Jump to a TOML section")
             // Both were permanent menu bar rows. They belong next to the text they act on.
             Button("Open in \(getTextEditorToOpenConfig().deletingPathExtension().lastPathComponent)") {
-                openConfigInExternalEditor()
+                viewModel.openConfigInEditor()
             }
             .buttonStyle(.borderless)
-            .help("External edits are picked up automatically — the config file is watched")
+            .help("External edits are picked up automatically: the config file is watched")
 
-            // Kept only because the watcher cannot arm on a file that does not exist yet: someone
-            // who creates their first config entirely outside the app has no other way in.
+            // The watcher picks up outside edits on its own. This loads the file now, by hand.
             if let token: RunSessionGuard = .isServerEnabled {
                 Button("Reload") {
                     runDetached("rawTomlApply") {
@@ -114,7 +129,11 @@ struct RawTomlTab: View {
                     }
                 }
                 .buttonStyle(.borderless)
-                .help("Only needed for a config file created outside the app — every other edit is picked up on save.")
+                // Reload replaces the buffer with the file, so it would throw away unapplied typing.
+                .disabled(viewModel.rawTomlEdited)
+                .help(viewModel.rawTomlEdited
+                    ? "Apply or revert your edits first"
+                    : "Load the config file again now. Edits made in other apps are picked up on their own.")
             }
         }
         .padding(.horizontal, 14)
@@ -182,7 +201,9 @@ struct RawTomlTab: View {
                 }
             }
         } else if viewModel.rawTomlEdited {
-            StatusLabel("Valid — press Apply (⌘S) to write it", kind: .ok)
+            StatusLabel("Valid. Press Apply (⌘S) to write it.", kind: .ok)
+        } else if !viewModel.rawTomlIsTheFile {
+            StatusLabel("Not the file on disk: Settings can't open it", kind: .warning)
         } else {
             StatusLabel("Matches the file on disk", kind: .neutral)
         }
@@ -203,6 +224,10 @@ struct RawTomlTab: View {
         guard let date = backupTimestampParser.date(from: stamp) else { return url.lastPathComponent }
         return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
     }
+
+    /// In fallback mode the buffer is the file that failed to load, so its error must show before
+    /// the user types anything. Apply stays gated on `rawTomlEdited` alone.
+    static func needsValidation(edited: Bool, fallback: Bool) -> Bool { edited || fallback }
 
     private func jump(to line: Int) {
         // Clearing first makes repeated clicks on the same destination actionable.
@@ -330,9 +355,13 @@ struct CodeEditor: NSViewRepresentable {
         context.coordinator.onSelectionChange = onSelectionChange
         guard let textView = scroll.documentView as? NSTextView else { return }
         if textView.string != text {
-            // Only on an external change (Revert / Restore backup): assigning `string` resets the
-            // insertion point, which would fight the user on every keystroke if done unconditionally.
-            textView.string = text
+            // Only on an external change (Revert, Restore, a reload, a structured save): replacing
+            // the text resets the insertion point, which would fight the user on every keystroke if
+            // done unconditionally. The flag keeps `textDidChange` from writing the binding back
+            // in the middle of this view update.
+            context.coordinator.isApplyingExternalText = true
+            Self.replaceText(in: textView, with: text)
+            context.coordinator.isApplyingExternalText = false
             TomlSyntaxHighlighter.apply(to: textView)
             context.coordinator.ruler?.refreshLineStarts()
         }
@@ -344,6 +373,25 @@ struct CodeEditor: NSViewRepresentable {
                 // the selection and first responder synchronously here re-enters AppKit mid-render.
                 Task { @MainActor in Self.select(line: jumpToLine, in: textView) }
             }
+        }
+    }
+
+    /// Replaces the whole buffer as one undoable edit, so ⌘Z brings back what the user typed.
+    /// Assigning `string` registered no undo step and left the typing steps on the window's stack,
+    /// recorded against ranges of the old text: undo then cut a run out of the middle of a longer
+    /// new text, or raised `NSRangeException` on a shorter one. A corrupted buffer that still
+    /// parsed was one Apply away from the file.
+    static func replaceText(in textView: NSTextView, with text: String) {
+        guard let storage = textView.textStorage else { return }
+        let whole = NSRange(location: 0, length: storage.length)
+        textView.breakUndoCoalescing()
+        if textView.shouldChangeText(in: whole, replacementString: text) {
+            storage.replaceCharacters(in: whole, with: text)
+            textView.didChangeText()
+        } else {
+            // Refused, so there is no step to undo into: drop the steps that no longer fit instead.
+            storage.replaceCharacters(in: whole, with: text)
+            textView.undoManager?.removeAllActions(withTarget: storage)
         }
     }
 
@@ -368,6 +416,8 @@ struct CodeEditor: NSViewRepresentable {
         var onSelectionChange: ((Int, Int) -> Void)?
         fileprivate weak var ruler: LineNumberRulerView?
         var lastJumpToLine: Int?
+        /// Set while `updateNSView` replaces the text with the binding's own value.
+        var isApplyingExternalText = false
         private var highlightTask: Task<Void, Never>?
 
         init(text: Binding<String>, onSelectionChange: ((Int, Int) -> Void)?) {
@@ -376,7 +426,7 @@ struct CodeEditor: NSViewRepresentable {
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
+            guard !isApplyingExternalText, let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
             highlightTask?.cancel()
             highlightTask = Task { @MainActor [weak textView, weak self] in
@@ -475,7 +525,7 @@ fileprivate final class LineNumberRulerView: NSRulerView {
         return max(0, lower - 1)
     }
 
-    /// Kept, not asked for while drawing. See `KeyRecorderField.RecorderView`.
+    /// Kept, not asked for while drawing. See `RecorderView`.
     private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
     private static let errorNumberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
 

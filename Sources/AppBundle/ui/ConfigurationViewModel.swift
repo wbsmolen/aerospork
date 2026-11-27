@@ -19,8 +19,9 @@ final class ConfigurationViewModel: ObservableObject {
             object: nil,
             queue: .main,
         ) { [weak self] _ in
-            Task { @MainActor in self?.liveMonitors = self?.loadMonitors() ?? [] }
+            Task { @MainActor in self?.refreshLiveMonitors() }
         }
+        raw.didChange = { [unowned self] in syncPendingRawEdits() }
     }
 
     /// What the panes edit. Everything a save can write lives here.
@@ -60,9 +61,28 @@ final class ConfigurationViewModel: ObservableObject {
     @Published var liveMonitors: [MonitorRow] = []
 
     // Raw TOML editor -- the guarantee that nothing in the config is unreachable from the GUI.
-    @Published var rawToml = ""
+    /// Its own observable, so a keystroke re-renders the Raw TOML pane alone. As a `@Published` on
+    /// this view model it re-ran the window body and all seven panes on every key. Only `RawTomlTab`
+    /// observes it; the window must never read it.
+    let raw = RawTomlBuffer()
+    var rawToml: String {
+        get { raw.text }
+        set { raw.text = newValue }
+    }
+
     private var loadedRawToml = ""
+    /// False while the buffer is not the file: a config Settings can't read never reaches it, so Raw
+    /// TOML must not call it "Matches the file on disk".
+    @Published private(set) var rawTomlIsTheFile = false
     var rawTomlEdited: Bool { rawToml != loadedRawToml }
+    /// `rawTomlEdited`, published only when it flips. The window locks the structured panes on it: a
+    /// structured save refuses while raw edits are pending, and the next raw Apply reloaded `settings`
+    /// and silently threw the structured edit away. Reading `rawTomlEdited` there would observe every keystroke.
+    @Published private(set) var hasPendingRawEdits = false
+
+    private func syncPendingRawEdits() {
+        if hasPendingRawEdits != rawTomlEdited { hasPendingRawEdits = rawTomlEdited }
+    }
 
     /// Set ONLY by the Raw TOML pane's Apply button.
     ///
@@ -72,6 +92,26 @@ final class ConfigurationViewModel: ObservableObject {
     var rawTomlApplyRequested = false
 
     @Published var errorMessage: String?
+
+    /// Set by the menu's "Show config error…" before it opens Settings. Static, because the view
+    /// model does not exist until the window first opens. Taken by the next load, or through
+    /// `showConfigErrorNotification` when the window is already open and no load follows.
+    static var errorJumpRequested = false
+    static let showConfigErrorNotification = Notification.Name("aerosporkShowConfigError")
+    /// The line Raw TOML moves to next. `jumpToLine` is the pane's own `@State`, so the request
+    /// passes through here, and `RawTomlTab` clears it once it has jumped.
+    @Published var pendingJumpLine: Int?
+
+    /// A semantic error has no line: then the pane just opens.
+    func takeErrorJumpRequest() {
+        guard Self.errorJumpRequested else { return }
+        Self.errorJumpRequested = false
+        pendingJumpLine = ConfigurationWriter.diagnostic(rawToml)?.line
+    }
+
+    /// The config file General and Raw TOML show. Looked up on reload, after a save and after "Open in…", never in a
+    /// pane body: the lookup touches the disk, and a body can run on every keystroke.
+    @Published private(set) var configPath = ""
     private var isSaving = false
     /// Changes only after a complete reload. Views with non-persisted presentation state use this
     /// to seed themselves once without recomputing while the user is typing.
@@ -133,8 +173,11 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
-    struct MonitorRow: Identifiable {
-        let id = UUID()
+    /// Equatable with an id that survives a reload, so a screen-change notification that changes
+    /// nothing publishes nothing, and `ForEach` keeps each box (its focus and hover) across one that does.
+    /// A minted `UUID()` tore every box down on each DisplayLink connect step and Dock frame change.
+    struct MonitorRow: Identifiable, Equatable {
+        var id: String { uuid ?? "\(name)#\(position)" }
         var name: String
         var resolution: String
         var uuid: String?
@@ -183,11 +226,20 @@ final class ConfigurationViewModel: ObservableObject {
     // MARK: - Loading
 
     private var externalReloadObserver: NSObjectProtocol?
+    private var showConfigErrorObserver: NSObjectProtocol?
 
     func loadConfiguration() async {
         ConfigurationWriter.startBackupSession()
         reloadFromConfig()
+        takeErrorJumpRequest()
         guard externalReloadObserver == nil else { return }
+        showConfigErrorObserver = NotificationCenter.default.addObserver(
+            forName: Self.showConfigErrorNotification,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            Task { @MainActor in self?.takeErrorJumpRequest() }
+        }
         // Someone edited the config in an editor while this window is open. Our `loaded` snapshot is
         // now stale, and editing any section would write that stale text back over their change.
         externalReloadObserver = NotificationCenter.default.addObserver(
@@ -199,13 +251,17 @@ final class ConfigurationViewModel: ObservableObject {
                 guard let self else { return }
                 if self.hasUnsavedChanges || self.rawTomlEdited {
                     // Don't clobber what the user is in the middle of typing -- tell them instead.
-                    self.errorMessage = "The config file changed on disk. Revert to load it, or apply your changes to overwrite it."
+                    self.errorMessage = Self.diskConflictMessage
                 } else {
                     self.reloadFromConfig()
                 }
             }
         }
     }
+
+    /// Shown with "Discard edits and load from disk", which works on every pane. It used to name Revert
+    /// and Apply, which exist only on Raw TOML.
+    static let diskConflictMessage = "The config file changed on disk while you had unsaved edits."
 
     func revertChanges() {
         reloadFromConfig()
@@ -254,7 +310,7 @@ final class ConfigurationViewModel: ObservableObject {
         autoSaveTask = nil
     }
 
-    /// Called when the settings window goes away: a pending edit is written now, not dropped.
+    /// Called when the settings window goes away, or Raw TOML opens: a pending edit is written now, not dropped.
     ///
     /// It used to be cancelled, so a change made less than 600ms before closing the window was
     /// discarded without a word -- the toggle had moved, the file had not. The save runs the same guards
@@ -264,7 +320,7 @@ final class ConfigurationViewModel: ObservableObject {
         cancelPendingAutoSave()
         await saveConfiguration()
         if let errorMessage {
-            AppLog.config.notice("Settings closed with an edit that could not be saved: \(errorMessage, privacy: .public)")
+            AppLog.config.notice("An edit could not be saved when Settings closed or opened Raw TOML: \(errorMessage, privacy: .public)")
         }
     }
 
@@ -277,9 +333,33 @@ final class ConfigurationViewModel: ObservableObject {
         }
     }
 
+    /// Assigns only a changed list: the screen notification fires for every connect step and Dock
+    /// or menu bar frame change, and each publish re-renders every pane.
+    func refreshLiveMonitors() {
+        let rows = loadMonitors()
+        if rows != liveMonitors { liveMonitors = rows }
+    }
+
+    /// "Open in…" can create the first config, so the path is read again after it.
+    func openConfigInEditor() {
+        if let reason = openConfigInExternalEditor() { errorMessage = reason }
+        refreshConfigPath()
+    }
+
+    private func refreshConfigPath() {
+        configPath = (searchUserConfig()?.urlOrNil ?? defaultConfigUrl).path(percentEncoded: false)
+    }
+
     private func reloadFromConfig() {
-        liveMonitors = loadMonitors()
-        adopt(configBaseText(), config)
+        refreshLiveMonitors()
+        refreshConfigPath()
+        switch configBaseText() {
+            case .success(let text): adopt(text, config)
+            // Not `adopt("")`: Raw TOML would show an empty buffer for a file the user never saw.
+            case .failure(let reason):
+                errorMessage = reason
+                rawTomlIsTheFile = false
+        }
     }
 
     /// Load from config text instead of the real config file. A Raw TOML apply goes through here,
@@ -304,6 +384,7 @@ final class ConfigurationViewModel: ObservableObject {
             if case .perMonitor = value { true } else { false }
         }
         rawToml = text
+        rawTomlIsTheFile = true
         // Both spellings declare workspaces the runtime keeps alive; see `Config.persistentWorkspaces`.
         definedWorkspaces = workspaceNames(table, "workspaces") + workspaceNames(table, "persistent-workspaces")
         inheritedBindings = loadInheritedBindings(table)
@@ -316,19 +397,19 @@ final class ConfigurationViewModel: ObservableObject {
     func markLoaded() {
         loaded = settings
         loadedRawToml = rawToml
+        syncPendingRawEdits()
     }
 
-    private func loadMonitors() -> [MonitorRow] {
+    func loadMonitors() -> [MonitorRow] {
         sortedMonitors.enumerated().map { offset, monitor in
             // `fingerprint` is part of the protocol. Downcasting discarded fingerprints from test
             // and alternate monitor implementations and also performed a needless runtime cast per
             // display whenever Settings reloaded.
             let fingerprint = monitor.fingerprint
-            let width = fingerprint?.widthPixels ?? Int(monitor.width)
-            let height = fingerprint?.heightPixels ?? Int(monitor.height)
             return MonitorRow(
                 name: monitor.name,
-                resolution: "\(width)×\(height)",
+                // Points, the unit of fingerprint `width` (which is the screen frame, so the same value).
+                resolution: "\(Int(monitor.width))×\(Int(monitor.height))",
                 uuid: fingerprint?.displayUUID,
                 position: offset + 1,
                 isMain: monitor.rect.topLeftCorner == .zero,
@@ -580,7 +661,15 @@ final class ConfigurationViewModel: ObservableObject {
         }
         errorMessage = nil
 
-        let base = configBaseText()
+        // Before the Raw TOML branch as well: Apply replaces the whole file, and the file it would
+        // replace is one nobody could read, so nobody has seen what it holds.
+        let base: String
+        switch configBaseText() {
+            case .success(let text): base = text
+            case .failure(let reason):
+                errorMessage = "\(reason). Nothing was saved, and the file is unchanged."
+                return
+        }
 
         // An unapplied raw buffer must not be silently committed by an unrelated structured edit,
         // and the structured edit must not silently overwrite what the user typed in the raw tab.
@@ -593,9 +682,10 @@ final class ConfigurationViewModel: ObservableObject {
         // only then failed to reload, leaving a broken file plus two separate error surfaces. Raw
         // TOML replaces the whole file, so all it has to be is valid.
         let rendered = ConfigurationWriter.render(baseText: base, from: self)
+        var validated: ConfigurationWriter.Validated?
         let refusal = rawTomlApplyRequested
-            ? ConfigurationWriter.validate(rendered)
-            : ConfigurationWriter.refusal(rendered: rendered, base: base, from: self)
+            ? ConfigurationWriter.validate(rendered, validated: &validated)
+            : ConfigurationWriter.refusal(rendered: rendered, base: base, from: self, validated: &validated)
         if let refusal {
             errorMessage = refusal
             return
@@ -607,10 +697,10 @@ final class ConfigurationViewModel: ObservableObject {
             if rendered != base {
                 if rawTomlApplyRequested { ConfigurationWriter.startBackupSession() }
                 try ConfigurationWriter.write(rendered)
-                // The file watcher refreshes after its reload; this save suppresses the watcher for its own
-                // write and did not, so a gap, layout or normalization change did nothing on screen until
+                // The file watcher refreshes after its reload; it skips this save's bytes, which this apply
+                // records, and this did not, so a gap, layout or normalization change did nothing on screen until
                 // some unrelated window event. Not under XCTest, where a refresh enumerates the machine's apps.
-                if reloadConfig(), !isUnitTest {
+                if applySavedConfig(validated), !isUnitTest {
                     runRefreshSession(.globalObserver("settingsSaved"), screenIsDefinitelyUnlocked: false)
                 }
             }
@@ -632,6 +722,9 @@ final class ConfigurationViewModel: ObservableObject {
     /// source of that write; re-reading it gains nothing. Raw TOML is the opposite: it replaced what
     /// every other pane is showing, and panes left on the old values would write them back.
     func didWrite(_ rendered: String) {
+        // The first save creates the config, and the watcher stays quiet for the app's own write, so
+        // nothing else would move General and Raw TOML off the bundled default's path.
+        refreshConfigPath()
         if rawTomlApplyRequested { return load(fromText: rendered) }
         rawToml = rendered
         let rulesOnDisk = loaded.windowRules
@@ -640,6 +733,14 @@ final class ConfigurationViewModel: ObservableObject {
         // saved, and calling them saved lost any other rule edit made alongside it.
         if settings.windowRules.contains(where: \.hasNoCommand) { loaded.windowRules = rulesOnDisk }
     }
+}
+
+/// The Raw TOML buffer, apart from the view model that every pane observes.
+@MainActor
+final class RawTomlBuffer: ObservableObject {
+    @Published var text = "" { didSet { didChange?() } }
+    /// The view model's hook, so `hasPendingRawEdits` follows the editor's own writes to `text`.
+    var didChange: (() -> Void)?
 }
 
 // MARK: - The snapshot
@@ -653,6 +754,7 @@ extension ConfigurationViewModel {
             var automaticallyUnhideMacosHiddenApps = false
             var defaultRootContainerLayout = "tiles"
             var defaultRootContainerOrientation = "auto"
+            var newWindowPlacement = "sibling"
             var accordionPadding = 30
             var enableNormalizationFlattenContainers = true
             var enableNormalizationOppositeOrientation = true
@@ -737,6 +839,7 @@ extension ConfigurationViewModel.Settings {
         .bool("enable-normalization-opposite-orientation-for-nested-containers", \.general.enableNormalizationOppositeOrientation, \.enableNormalizationOppositeOrientationForNestedContainers),
         .init("default-root-container-layout", \.general.defaultRootContainerLayout, { c, _ in c.defaultRootContainerLayout.rawValue }, ConfigurationWriter.escapedLiteral),
         .init("default-root-container-orientation", \.general.defaultRootContainerOrientation, { c, _ in c.defaultRootContainerOrientation.rawValue }, ConfigurationWriter.escapedLiteral),
+        .init("new-window-placement", \.general.newWindowPlacement, { c, _ in c.newWindowPlacement.rawValue }, ConfigurationWriter.escapedLiteral),
         .init("accordion-padding", \.general.accordionPadding, { c, _ in c.accordionPadding }, { String($0) }),
         .commands("after-startup-command", \.callbacks.afterStartup),
         .commands("on-focus-changed", \.callbacks.onFocusChanged),

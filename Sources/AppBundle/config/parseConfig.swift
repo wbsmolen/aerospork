@@ -2,62 +2,114 @@ import AppKit
 import Common
 import TOMLKit
 
+/// `found` stands in for the search for the user's config, so a test can hand it files of its own.
+///
+/// It reads and reports, and records nothing: `reload-config --dry-run` reads too, and a dry run that
+/// cleared the failure took the fallback banner away while the defaults still ran. The one read that
+/// is applied records it, through `recordConfigHealth`.
 @MainActor
-func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
-    let customConfigUrl: URL
-    let isUserConfig: Bool
-    switch findCustomConfigUrl() {
+func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil) -> Result<(Config, URL), String> {
+    var warnings: [String] = []
+    return readConfig(forceConfigUrl: forceConfigUrl, found: found, warnings: &warnings)
+}
+
+@MainActor
+func readConfig(forceConfigUrl: URL? = nil, found: ConfigFile? = nil, warnings: inout [String]) -> Result<(Config, URL), String> {
+    // Before the search, not after it. The forced read is `initAppBundle`'s fallback once the user's
+    // config failed, and it `check`s the result. When the search itself was what failed (two
+    // configs), the fallback failed the same way and the app died at startup.
+    if let forceConfigUrl { return readConfig(at: forceConfigUrl, warnings: &warnings) }
+    guard let customConfig = found ?? searchUserConfig() else { return .failure("tests may not touch a real config") }
+    switch customConfig {
         case .file(let url):
-            customConfigUrl = url
-            isUserConfig = true
+            return readConfig(at: url, warnings: &warnings)
         case .noCustomConfigExists:
-            customConfigUrl = defaultConfigUrl
-            isUserConfig = false
             // A migrating user's first launch: the config they brought is right there and not read,
             // so they get the default keymap and no hint why.
             if let hint = upstreamConfigLeftBehindHint() {
                 AppLog.config.notice("\(hint, privacy: .public)")
                 printStderr(hint)
             }
+            return readConfig(at: defaultConfigUrl, warnings: &warnings)
         case .ambiguousConfigError(let candidates):
             let msg = """
-                Ambiguous config error. Several configs found:
+                \(ambiguousConfigFailurePrefix) Several configs found:
                 \(candidates.map(\.path).joined(separator: "\n"))
                 """
             return .failure(msg)
     }
-    let configUrl: URL = forceConfigUrl ?? customConfigUrl
-    let finalIsUserConfig = forceConfigUrl != nil ? true : isUserConfig
+}
 
-    let configContent = try? String(contentsOf: configUrl)
-    var warnings: [TomlParseError] = []
-    let parseResult = configContent.map { parseConfig($0, isUserConfig: finalIsUserConfig, warnings: &warnings) } ?? .success(defaultConfig)
+/// The search `readConfig` runs and the watcher compares. Under XCTest only `testConfigOverride`, and nil
+/// without one.
+@MainActor
+func searchUserConfig() -> ConfigFile? {
+    isUnitTest ? testConfigOverride.map { findCustomConfigUrl(among: [$0]) } : findCustomConfigUrl()
+}
 
-    // Reading the BUNDLED default is the startup fallback, not a load of the user's config.
-    // Recording health here would erase the only surviving record that the user's config failed --
-    // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
-    let recordHealth = configUrl != defaultConfigUrl
+@MainActor
+func readConfig(at configUrl: URL) -> Result<(Config, URL), String> {
+    var warnings: [String] = []
+    return readConfig(at: configUrl, warnings: &warnings)
+}
+
+@MainActor
+func readConfig(at configUrl: URL, warnings: inout [String]) -> Result<(Config, URL), String> {
+    // Parsed once, at launch, with `Config()` behind it, so the startup fallback cannot fail. It is also
+    // the no-file case's config, which parsed the bundled file again on every reload.
+    if configUrl == defaultConfigUrl {
+        warnings = []
+        return .success((defaultConfig, configUrl))
+    }
+    let configContent: String
+    switch readConfigText(at: configUrl) {
+        case .success(let text):
+            configContent = text
+        case .failure(let reason):
+            return .failure(reason)
+    }
+    var parseWarnings: [TomlParseError] = []
+    let parseResult = parseConfig(configContent, warnings: &parseWarnings)
 
     switch parseResult {
         case .success(let parsedConfig):
-            if recordHealth {
-                configLoadFailure = nil
-                configWarnings = warnings.map(\.description)
-                for warning in configWarnings { printStderr("\(configUrl.lastPathComponent): \(warning)") }
-            }
+            warnings = parseWarnings.map(\.description)
+            for warning in warnings { printStderr("\(configUrl.lastPathComponent): \(warning)") }
             return .success((parsedConfig, configUrl))
         case .failure(let errors):
             let msg = """
-                Failed to parse \(configUrl.absoluteURL.path)
+                \(configParseFailurePrefix)\(configUrl.absoluteURL.path)
 
                 \(errors.map(\.description).joined(separator: "\n\n"))
                 """
-            if recordHealth { configLoadFailure = msg }
             return .failure(msg)
     }
 }
 
+/// How the two failures that are not "can't read this file" start. The banner and the menu word their
+/// recovery by which one `configLoadFailure` is.
+let configParseFailurePrefix = "Failed to parse "
+let ambiguousConfigFailurePrefix = "Ambiguous config error."
 
+/// What the banner and the menu warning show, from the read that is applied.
+///
+/// `searched` says the read looked for the user's config, so the bundled default it returned means
+/// none exists. A forced read of the default does not say that.
+@MainActor
+func recordConfigHealth(_ result: Result<(Config, URL), String>, warnings: [String], searched: Bool = false) {
+    switch result {
+        case .success((_, let url)):
+            // A forced read of the BUNDLED default is the startup fallback, not a load of the user's
+            // config. Recording it would erase the only surviving record that the user's config failed --
+            // `initAppBundle` retries with the default immediately after, and the retry always succeeds.
+            // A search that found no config is a healthy load: deleting a broken config left its banner.
+            guard url != defaultConfigUrl || searched else { return }
+            configLoadFailure = nil
+            configWarnings = warnings
+        case .failure(let msg):
+            configLoadFailure = msg
+    }
+}
 
 extension ParserProtocol {
     func transformRawConfig(_ raw: S,
@@ -113,12 +165,16 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "on-focus-changed": Parser(\.onFocusChanged) { parseCommandOrCommands($0).toParsedToml($1) },
     "on-focused-monitor-changed": Parser(\.onFocusedMonitorChanged) { parseCommandOrCommands($0).toParsedToml($1) },
     "on-focused-workspace-changed": Parser(\.onFocusedWorkspaceChanged) { parseCommandOrCommands($0).toParsedToml($1) },
+    "on-mode-changed": Parser(\.onModeChanged) { parseCommandOrCommands($0).toParsedToml($1) },
 
     "enable-normalization-flatten-containers": Parser(\.enableNormalizationFlattenContainers, parseBool),
     "enable-normalization-opposite-orientation-for-nested-containers": Parser(\.enableNormalizationOppositeOrientationForNestedContainers, parseBool),
 
     "default-root-container-layout": Parser(\.defaultRootContainerLayout, parseLayout),
     "default-root-container-orientation": Parser(\.defaultRootContainerOrientation, parseDefaultContainerOrientation),
+    "new-window-placement": Parser(\.newWindowPlacement) { raw, backtrace in
+        parseString(raw, backtrace).flatMap { parseEnum($0, NewWindowPlacement.self).toParsedToml(backtrace) }
+    },
 
     "start-at-login": Parser(\.startAtLogin, parseBool),
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),
@@ -131,11 +187,11 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     // Config v2. All parsed manually, in `applyConfigV2`, because each of them desugars into a
     // field that a v1 key already writes -- letting the generic table walker set them would make
     // the winner depend on TOML iteration order.
-    "mod": Parser(\._deprecatedNoOp, skipParsing(())),
-    "workspaces": Parser(\._deprecatedNoOp, skipParsing(())),
-    "keys": Parser(\._deprecatedNoOp, skipParsing(())),
-    "monitors": Parser(\._deprecatedNoOp, skipParsing(())),
-    "on-window": Parser(\._deprecatedNoOp, skipParsing(())),
+    "mod": Parser(\._handledElsewhere, skipParsing(())),
+    "workspaces": Parser(\._handledElsewhere, skipParsing(())),
+    "keys": Parser(\._handledElsewhere, skipParsing(())),
+    "monitors": Parser(\._handledElsewhere, skipParsing(())),
+    "on-window": Parser(\._handledElsewhere, skipParsing(())),
 
     // Upstream's spelling of "these workspaces always exist". Read by the generic walker, NOT listed
     // in `configV2RootKeys`: that would reclassify an upstream `[mode.*]` config as v2 and skip its
@@ -170,12 +226,12 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     // Accepted so an old config still loads; they do nothing. Removing them outright would turn
     // them into "Unknown top-level key", which IS fatal -- the exact failure P1-1 exists to stop.
-    "after-login-command": Parser(\._deprecatedNoOp, deprecatedNoOp(
+    "after-login-command": Parser(\._handledElsewhere, deprecatedNoOp(
         "after-login-command is deprecated and does nothing. Use after-startup-command.")),
-    "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._deprecatedNoOp, deprecatedNoOp(
+    "non-empty-workspaces-root-containers-layout-on-startup": Parser(\._handledElsewhere, deprecatedNoOp(
         "non-empty-workspaces-root-containers-layout-on-startup is deprecated and does nothing. " +
             "There is no startup-specific layout: every workspace root container uses default-root-container-layout.")),
-    "indent-for-nested-containers-with-the-same-orientation": Parser(\._deprecatedNoOp, deprecatedNoOp(
+    "indent-for-nested-containers-with-the-same-orientation": Parser(\._handledElsewhere, deprecatedNoOp(
         "indent-for-nested-containers-with-the-same-orientation is deprecated and does nothing. See https://github.com/wbsmolen/aerospork/issues/96")),
 ].merging(upstreamOnlyKeyParsers) { own, _ in own } // upstream-only keys: reported and ignored
 
@@ -199,7 +255,7 @@ private func deprecatedNoOp(_ msg: String) -> @Sendable (TOMLValueConvertible, T
 }
 
 extension ParsedCmd where T == any Command {
-    internal func toEither() -> Parsed<T> { // Changed to internal
+    internal func toEither() -> Parsed<T> {
         return switch self {
             case .cmd(let a):
                 a.info.allowInConfig
@@ -222,7 +278,11 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
         return parseCommand(rawString).toEither().map { [$0] }
     } else if let rawArray = raw.array {
         let commands: Parsed<[any Command]> = (0 ..< rawArray.count).mapAllOrFailure { index in
-            let rawString: String = rawArray[index].string ?? expectedActualTypeError(expected: .string, actual: rawArray[index].type)
+            // The type error used to be handed to `parseCommand` as if it were a command, which reported
+            // "Unrecognized subcommand 'Expected'" and no index.
+            guard let rawString = rawArray[index].string else {
+                return .failure("[\(index)]: " + expectedActualTypeError(expected: .string, actual: rawArray[index].type))
+            }
             return parseCommand(rawString).toEither()
         }
         return commands.filter("macos-native-* commands are only allowed to be the last commands in the list") {
@@ -233,14 +293,14 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 }
 
-@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true) -> Result<Config, [TomlParseError]> {
+@MainActor func parseConfig(_ rawToml: String) -> Result<Config, [TomlParseError]> {
     var discarded: [TomlParseError] = []
-    return parseConfig(rawToml, isUserConfig: isUserConfig, warnings: &discarded)
+    return parseConfig(rawToml, warnings: &discarded)
 }
 
 /// `warnings` collects the non-fatal findings (deprecated keys). They are reported to the user but
 /// must not fail the load; only `.failure` refuses the config.
-@MainActor func parseConfig(_ rawToml: String, isUserConfig: Bool = true, warnings: inout [TomlParseError]) -> Result<Config, [TomlParseError]> {
+@MainActor func parseConfig(_ rawToml: String, warnings: inout [TomlParseError]) -> Result<Config, [TomlParseError]> {
     let rawTable: TOMLTable
     do {
         rawTable = try TOMLTable(string: rawToml)
@@ -249,7 +309,15 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     } catch let e {
         return .failure([.syntax(e.localizedDescription)])
     }
+    return parseConfig(table: rawTable, rawToml: rawToml, warnings: &warnings)
+}
 
+/// The same, for a caller that already holds the parsed table of `rawToml`, so the text is not parsed twice.
+@MainActor func parseConfig(
+    table rawTable: TOMLTable,
+    rawToml: String,
+    warnings: inout [TomlParseError],
+) -> Result<Config, [TomlParseError]> {
     var errors: [TomlParseError] = []
 
     var config = rawTable.parseTable(Config(), configParser, .emptyRoot, &errors)
@@ -259,43 +327,41 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     }
 
     let isV2 = isConfigV2(rawTable)
+    let mapping = config.keyMapping.resolve()
     if let modes = rawTable[modeConfigRootKey].flatMap({
         // In v2 the main mode is `[keys]` (plus whatever `mod` generated), so `[mode.*]` is a
         // supplement -- demanding `[mode.main]` as well would mean writing an empty section.
-        parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve(), requireMainMode: !isV2)
+        parseModes($0, .rootKey(modeConfigRootKey), &errors, mapping, requireMainMode: !isV2)
     }) {
         config.modes = modes
     }
 
-    if isV2 { applyConfigV2(rawTable, &config, &errors) }
+    if isV2 { applyConfigV2(rawTable, &config, &errors, mapping) }
 
     // Declared workspaces always exist -- see `Workspace.garbageCollectUnusedWorkspaces`. `workspaces`
     // was added in `applyConfigV2` and `persistent-workspaces` by the table walker; a force-assignment
-    // is a declaration too, since pinning a workspace to a monitor says it exists. Unlike the
-    // binding-derived names below, this holds for the bundled default as well: copying the default to
-    // a file of your own must not change what it does.
+    // is a declaration too, since pinning a workspace to a monitor says it exists.
     config.persistentWorkspaces.formUnion(config.workspaceToMonitorForceAssignment.keys)
 
-    // Only preserve workspace names if this is a user config, not the default config
-    if isUserConfig {
-        config.preservedWorkspaceNames = config.modes.values.lazy
-            .flatMap { (mode: Mode) -> [HotkeyBinding] in Array(mode.bindings.values) }
-            .flatMap { (binding: HotkeyBinding) -> [String] in
-                binding.commands.filterIsInstance(of: WorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw } +
-                    binding.commands.filterIsInstance(of: MoveNodeToWorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw }
-            }
-            + (config.workspaceToMonitorForceAssignment).keys
-    } else {
-        // For default config, only preserve workspaces with force assignments
-        config.preservedWorkspaceNames = Array(config.workspaceToMonitorForceAssignment.keys)
-    }
+    // The names a binding reaches, for `getStubWorkspace`. Only names: no workspace is made for them.
+    // The same for the bundled default as for any file, so copying the default to a file of your own
+    // does not change what it does. (The default once got only its force-assigned names here.)
+    config.preservedWorkspaceNames = config.modes.values.lazy
+        .flatMap { (mode: Mode) -> [HotkeyBinding] in Array(mode.bindings.values) }
+        .flatMap { (binding: HotkeyBinding) -> [String] in
+            binding.commands.filterIsInstance(of: WorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw } +
+                binding.commands.filterIsInstance(of: MoveNodeToWorkspaceCommand.self).compactMap { $0.args.target.val.workspaceNameOrNil()?.raw }
+        }
+        + (config.workspaceToMonitorForceAssignment).keys
 
     if config.enableNormalizationFlattenContainers {
         let containsSplitCommand = config.modes.values.lazy.flatMap { $0.bindings.values }
             .flatMap { $0.commands }
             .contains { $0 is SplitCommand }
         if containsSplitCommand {
-            errors += [.semantic(
+            // A warning, not an error. It was fatal, so one `split` binding cost the user every binding
+            // they had, while `SplitCommand` already refuses at run time with this same advice.
+            errors += [.deprecation(
                 // `.emptyRoot` because the conflict is between two coordinates in different
                 // sections (a `split` binding and a top-level flag) and `TomlBacktrace` can only
                 // name one. Pointing at either alone would be misleading. A `.pair` of backtraces
@@ -305,7 +371,7 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
                 The config contains:
                 1. usage of 'split' command
                 2. enable-normalization-flatten-containers = true
-                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is disabled.
+                These two settings don't play nicely together. 'split' command has no effect when enable-normalization-flatten-containers is enabled.
 
                 My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
                 """,
@@ -392,14 +458,9 @@ private func parseDefaultContainerOrientation(_ raw: TOMLValueConvertible, _ bac
     parseString(raw, backtrace).flatMap { parseEnum($0, DefaultContainerOrientation.self).toParsedToml(backtrace) }
 }
 
-
-
-
 func parseBool(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Bool> {
     raw.bool.orFailure(expectedActualTypeError(expected: .bool, actual: raw.type, backtrace))
 }
-
-
 
 extension TOMLTable {
     func parseTable<T: ConvenienceCopyable>(
@@ -415,7 +476,7 @@ extension TOMLTable {
             if let parser = fieldsParser[key] {
                 raw = parser.transformRawConfig(raw, value, backtrace, &errors)
             } else {
-                errors.append(unknownKeyError(backtrace))
+                errors.append(unknownKeyError(backtrace, key, among: fieldsParser.keys))
             }
         }
 
@@ -423,8 +484,9 @@ extension TOMLTable {
     }
 }
 
-func unknownKeyError(_ backtrace: TomlBacktrace) -> TomlParseError {
-    .semantic(backtrace, backtrace.isRootKey ? "Unknown top-level key" : "Unknown key")
+/// `candidates` are the keys that table accepts, for a "did you mean" on a near miss.
+func unknownKeyError(_ backtrace: TomlBacktrace, _ key: String, among candidates: some Collection<String>) -> TomlParseError {
+    .semantic(backtrace, (backtrace.isRootKey ? "Unknown top-level key" : "Unknown key") + didYouMeanSuffix(key, from: candidates.sorted()))
 }
 
 func expectedActualTypeError(expected: TOMLType, actual: TOMLType, _ backtrace: TomlBacktrace) -> TomlParseError {

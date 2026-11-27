@@ -1,7 +1,7 @@
 import Common
 import TOMLKit
 
-struct WindowDetectedCallback: ConvenienceCopyable, Equatable {
+struct WindowDetectedCallback: ConvenienceCopyable {
     var matcher: WindowDetectedCallbackMatcher = WindowDetectedCallbackMatcher()
     var checkFurtherCallbacks: Bool = false
     var rawRun: [any Command]? = nil
@@ -18,14 +18,9 @@ struct WindowDetectedCallback: ConvenienceCopyable, Equatable {
         }
         return .dict(result)
     }
-
-    static func == (lhs: WindowDetectedCallback, rhs: WindowDetectedCallback) -> Bool {
-        return lhs.matcher == rhs.matcher && lhs.checkFurtherCallbacks == rhs.checkFurtherCallbacks &&
-            zip(lhs.run, rhs.run).allSatisfy { $0.equals($1) }
-    }
 }
 
-struct WindowDetectedCallbackMatcher: ConvenienceCopyable, Equatable {
+struct WindowDetectedCallbackMatcher: ConvenienceCopyable {
     var appId: String?
     var appNameRegexSubstring: Regex<AnyRegexOutput>?
     var windowTitleRegexSubstring: Regex<AnyRegexOutput>?
@@ -38,7 +33,7 @@ struct WindowDetectedCallbackMatcher: ConvenienceCopyable, Equatable {
             resultParts.append("appId=\"\(appId)\"")
         }
         if appNameRegexSubstring != nil {
-            resultParts.append("appNameRegexSubstrin=Regex")
+            resultParts.append("appNameRegexSubstring=Regex")
         }
         if windowTitleRegexSubstring != nil {
             resultParts.append("windowTitleRegexSubstring=Regex")
@@ -52,16 +47,6 @@ struct WindowDetectedCallbackMatcher: ConvenienceCopyable, Equatable {
             resultParts.append("during-aerospork-startup=\(duringAeroSporkStartup)")
         }
         return .string(resultParts.joined(separator: ", "))
-    }
-
-    static func == (lhs: WindowDetectedCallbackMatcher, rhs: WindowDetectedCallbackMatcher) -> Bool {
-        check(
-            lhs.appNameRegexSubstring == nil &&
-                lhs.windowTitleRegexSubstring == nil &&
-                rhs.appNameRegexSubstring == nil &&
-                rhs.windowTitleRegexSubstring == nil,
-        )
-        return lhs.appId == rhs.appId
     }
 }
 
@@ -118,23 +103,26 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     let run = callback.rawRun ?? []
 
     // - 'exec' is prohibited because command-subject isn't yet supported in "exec session"
-    // - Commands that change focus are prohibited because the design isn't yet clear
+    // - Commands that take focus are prohibited because the design isn't yet clear. The one way in
+    //   is `--focus-follows-window`, which both move commands accept or neither does.
+    // - `fullscreen` and `sticky` only with an explicit `on`: a rule that toggles undoes itself on a second run.
     if !run.allSatisfy({
         let layoutArg = ($0 as? LayoutCommand)?.args.toggleBetween.val.singleOrNil()
-        return layoutArg == .floating || layoutArg == .tiling || $0 is MoveNodeToWorkspaceCommand
+        return layoutArg == .floating || layoutArg == .tiling || ($0 as? FullscreenCommand)?.args.toggle == .on ||
+            ($0 as? StickyCommand)?.args.toggle == .on || isWindowRuleMove($0)
     }) {
         myErrors.append(.semantic(
             backtrace,
-            "For now, 'layout floating', 'layout tiling' and 'move-node-to-workspace' are the only commands that are supported in 'on-window-detected'. " +
+            "For now, 'layout floating', 'layout tiling', 'fullscreen on', 'sticky on', 'move-node-to-workspace' and 'move-node-to-monitor' are the only commands that are supported in 'on-window-detected'. " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }
 
-    let count = run.count(where: { $0 is MoveNodeToWorkspaceCommand })
-    if count >= 1 && !(run.last is MoveNodeToWorkspaceCommand) {
+    let count = run.count(where: isWindowRuleMove)
+    if count >= 1 && run.last.map(isWindowRuleMove) != true {
         myErrors.append(.semantic(
             backtrace,
-            "For now, 'move-node-to-workspace' must be the latest instruction in the callback (otherwise it's error-prone). " +
+            "For now, 'move-node-to-workspace' or 'move-node-to-monitor' must be the latest instruction in the callback (otherwise it's error-prone). " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }
@@ -142,7 +130,7 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     if count > 1 {
         myErrors.append(.semantic(
             backtrace,
-            "For now, 'move-node-to-workspace' can be mentioned only once in 'run' callback. " +
+            "For now, only one 'move-node-to-workspace' or 'move-node-to-monitor' can be mentioned in 'run' callback. " +
                 "Please report your use cases to https://github.com/wbsmolen/aerospork/issues/20",
         ))
     }
@@ -156,4 +144,10 @@ func parseWindowDetectedCallback(_ raw: TOMLValueConvertible, _ backtrace: TomlB
     }
 
     return callback
+}
+
+/// The one move a rule may make, last: it takes the window off the workspace the rest of the rule
+/// was working on.
+private func isWindowRuleMove(_ command: any Command) -> Bool {
+    command is MoveNodeToWorkspaceCommand || command is MoveNodeToMonitorCommand
 }

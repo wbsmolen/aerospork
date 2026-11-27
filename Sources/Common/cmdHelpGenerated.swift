@@ -26,6 +26,7 @@ let config_help_generated = """
     """
 let debug_windows_help_generated = """
     USAGE: debug-windows [-h|--help] [--window-id <window-id>]
+       OR: debug-windows [-h|--help] --tree
 
     See: man aerospork-debug-windows
     """
@@ -96,7 +97,7 @@ let list_exec_env_vars_help_generated = """
     See: man aerospork-list-exec-env-vars
     """
 let list_modes_help_generated = """
-    USAGE: list-modes [-h|--help] [--current]
+    USAGE: list-modes [-h|--help] [--current] [--json]
 
     See: man aerospork-list-modes
     """
@@ -192,10 +193,29 @@ let split_help_generated = """
 
     See: man aerospork-split
     """
+let sticky_help_generated = """
+    USAGE: sticky [-h|--help]     [--window-id <window-id>]
+       OR: sticky [-h|--help] on  [--window-id <window-id>] [--fail-if-noop]
+       OR: sticky [-h|--help] off [--window-id <window-id>] [--fail-if-noop]
+
+    See: man aerospork-sticky
+    """
+let subscribe_help_generated = """
+    USAGE: subscribe [-h|--help] --all
+       OR: subscribe [-h|--help] <event>...
+
+    See: man aerospork-subscribe
+    """
 let summon_workspace_help_generated = """
     USAGE: summon-workspace [-h|--help] [--fail-if-noop] <workspace>
 
     See: man aerospork-summon-workspace
+    """
+let swap_help_generated = """
+    USAGE: swap [-h|--help] [--window-id <window-id>] [--swap-focus] [--wrap-around]
+                (left|down|up|right|dfs-next|dfs-prev)
+
+    See: man aerospork-swap
     """
 let trigger_binding_help_generated = """
     USAGE: trigger-binding [-h|--help] <binding> --mode <binding-mode>

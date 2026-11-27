@@ -198,6 +198,7 @@ extension [Command] {
             flag(config.enableNormalizationOppositeOrientationForNestedContainers),
         "default-root-container-layout": str(config.defaultRootContainerLayout.rawValue),
         "default-root-container-orientation": str(config.defaultRootContainerOrientation.rawValue),
+        "new-window-placement": str(config.newWindowPlacement.rawValue),
         "accordion-padding": int(config.accordionPadding),
         "persistent-workspaces": .array(
             config.persistentWorkspaces.sorted { $0.toLogicalSegments() < $1.toLogicalSegments() }.map { str($0) },
@@ -207,6 +208,7 @@ extension [Command] {
         "on-focus-changed": commands(config.onFocusChanged),
         "on-focused-workspace-changed": commands(config.onFocusedWorkspaceChanged),
         "on-focused-monitor-changed": commands(config.onFocusedMonitorChanged),
+        "on-mode-changed": commands(config.onModeChanged),
 
         "gaps": .dict([
             "inner": .dict(["horizontal": gap(config.gaps.inner.horizontal), "vertical": gap(config.gaps.inner.vertical)]),
