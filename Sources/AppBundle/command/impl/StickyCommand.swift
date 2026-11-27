@@ -25,6 +25,7 @@ struct StickyCommand: Command {
             }
         }
         window.isSticky = newState
+        if newState { window.isScratchpad = false } // following the screen and being put away are exclusive
         return true
     }
 }

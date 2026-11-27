@@ -27,11 +27,13 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case move = "move"
     case moveMouse = "move-mouse"
     case moveNodeToMonitor = "move-node-to-monitor"
+    case moveNodeToScratchpad = "move-node-to-scratchpad"
     case moveNodeToWorkspace = "move-node-to-workspace"
     case moveWorkspaceToMonitor = "move-workspace-to-monitor"
     case openSettings = "open-settings"
     case reloadConfig = "reload-config"
     case resize
+    case scratchpad
     case split
     case sticky
     case subscribe
@@ -101,6 +103,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseMoveMouseCmdArgs)
             case .moveNodeToMonitor:
                 result[kind.rawValue] = SubCommandParser(parseMoveNodeToMonitorCmdArgs)
+            case .moveNodeToScratchpad:
+                result[kind.rawValue] = SubCommandParser(MoveNodeToScratchpadCmdArgs.init)
             case .moveNodeToWorkspace:
                 result[kind.rawValue] = SubCommandParser(parseMoveNodeToWorkspaceCmdArgs)
             case .moveWorkspaceToMonitor:
@@ -113,6 +117,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(ReloadConfigCmdArgs.init)
             case .resize:
                 result[kind.rawValue] = SubCommandParser(parseResizeCmdArgs)
+            case .scratchpad:
+                result[kind.rawValue] = SubCommandParser(ScratchpadCmdArgs.init)
             case .split:
                 result[kind.rawValue] = SubCommandParser(parseSplitCmdArgs)
             case .sticky:

@@ -258,6 +258,22 @@ final class InvoluntaryFocusTest: XCTestCase {
         assertEquals(focusedWindowId, typingIn.windowId, additionalMsg: "a rule's 'fullscreen on' took focus")
     }
 
+    /// The same, for a rule that puts its window in the scratchpad: the window leaves, and focus stays where it was.
+    func testMoveNodeToScratchpadFromARuleDoesNotMoveFocus() async throws {
+        defer { config.onWindowDetected = [] }
+        let workspace = focus.workspace
+        let typingIn = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        XCTAssertTrue(typingIn.focusWindow())
+        config.onWindowDetected = [WindowDetectedCallback(rawRun: [parseCommand("move-node-to-scratchpad").cmdOrDie])]
+
+        let arriving = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await tryOnWindowDetected(arriving)
+
+        XCTAssertTrue(arriving.parent === scratchpadContainer, "the test needs the rule to have run")
+        assertEquals(focusedWindowId, typingIn.windowId, additionalMsg: "a rule's 'move-node-to-scratchpad' took focus")
+        assertEquals(focus.windowOrNil?.windowId, typingIn.windowId)
+    }
+
     /// The third bookkeeping rebind, cmd-H with `automatically-unhide-macos-hidden-apps` off. Its
     /// container also hangs off the workspace, so without the compensation hiding an app made its
     /// window the workspace's focus fallback. Unreachable headlessly until `isMacosAppHidden` became

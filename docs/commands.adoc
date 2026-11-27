@@ -86,6 +86,26 @@ include::aerospork-move-node-to-monitor.adoc[tags=purpose]
 
 include::aerospork-move-node-to-monitor.adoc[tags=body]
 
+[#move-node-to-scratchpad]
+=== move-node-to-scratchpad
+----
+include::aerospork-move-node-to-scratchpad.adoc[tags=synopsis]
+----
+include::aerospork-move-node-to-scratchpad.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-move-node-to-scratchpad.adoc[tags=body]
+
+[#scratchpad]
+=== scratchpad
+----
+include::aerospork-scratchpad.adoc[tags=synopsis]
+----
+include::aerospork-scratchpad.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-scratchpad.adoc[tags=body]
+
 [#move-workspace-to-monitor]
 === move-workspace-to-monitor
 ----

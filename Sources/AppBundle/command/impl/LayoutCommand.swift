@@ -47,6 +47,7 @@ struct LayoutCommand: Command {
                     case .tilingContainer:
                         return true // Nothing to do
                     case .workspace(let workspace):
+                        window.isScratchpad = false // a scratchpad window is a floating one, and this one stays here
                         window.lastFloatingSize = try await window.getAxSize() ?? window.lastFloatingSize
                         try await window.relayoutWindow(on: workspace, forceTile: true)
                         return true

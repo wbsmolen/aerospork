@@ -42,6 +42,7 @@ func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io:
     }
     // Sent somewhere on purpose: following the screen would take it straight back.
     window.isSticky = false
+    window.isScratchpad = false // and it stays there: `scratchpad` would put it away again
     let targetContainer: NonLeafTreeNodeObject = window.isFloating ? targetWorkspace : targetWorkspace.rootTilingContainer
     window.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: index)
     // A completed move is a success whether or not focus was asked to follow it. This used to

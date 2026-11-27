@@ -102,6 +102,25 @@ final class WindowDetectionRetryTest: XCTestCase {
         assertEquals(window.nodeWorkspace?.name, target.name, additionalMsg: "a cancelled refresh stopped the rule before its move")
     }
 
+    /// The same for the scratchpad: a rule cut short before its move would leave the window floating on screen.
+    func testARuleEndingInMoveNodeToScratchpadRunsToTheEndUnderCancellation() async throws {
+        setUpWorkspacesForTests()
+        defer { config.onWindowDetected = [] }
+        config.onWindowDetected = [
+            WindowDetectedCallback(rawRun: ["layout floating", "move-node-to-scratchpad"].map { parseCommand($0).cmdOrDie }),
+        ]
+        let window = TestWindow.new(id: 1, parent: focus.workspace.rootTilingContainer)
+
+        let caller = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await shieldedFromCancellation { try await tryOnWindowDetected(window) }
+        }
+        _ = await caller.result
+
+        XCTAssertTrue(window.parent === scratchpadContainer, "a cancelled refresh stopped the rule before its move")
+        XCTAssertTrue(window.isScratchpad)
+    }
+
     /// A rule runs once, when a window first appears. Running it again after a restart undid a move made
     /// by hand since, so a window AeroSpork remembers only runs the rules that ask for startup.
     func testARememberedWindowOnlyRunsRulesThatAskForStartup() async throws {

@@ -1,0 +1,79 @@
+= aerospork-scratchpad(1)
+include::util/man-attributes.adoc[]
+:manname: aerospork-scratchpad
+// tag::purpose[]
+:manpurpose: Show a window from the scratchpad, or put the focused one back
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospork scratchpad [-h|--help] [--app-bundle-id <app-bundle-id>]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+`scratchpad` shows a window from the scratchpad, and puts it away again.
+`aerospork move-node-to-scratchpad` puts a window in the scratchpad.
+
+* When the focused window came from the scratchpad, `scratchpad` puts it back.
+* When a window from the scratchpad is on the focused workspace, `scratchpad` focuses it.
+* Otherwise, `scratchpad` brings the window that you put away last onto the focused workspace, and focuses it.
+The window floats, centred on the monitor, at its floating size.
+A minimized window comes back from the Dock.
+When the scratchpad is empty, a window from the scratchpad that is on another workspace moves to this one.
+
+A window from the scratchpad stays on the workspace where you showed it, like any floating window, until you put it back.
+It stops being a scratchpad window when you move it with `move-node-to-workspace` or `move-node-to-monitor`, tile it with `layout tiling`, or make it sticky.
+
+// =========================================================== Options
+include::util/conditional-options-header.adoc[]
+
+-h, --help:: Print help and exit.
+
+--app-bundle-id <app-bundle-id>::
+Only the windows of the app with this bundle ID.
+With it, each app can have a binding of its own.
+
+// =========================================================== Exit status
+include::util/exit-status.adoc[]
+
+`scratchpad` exits 1 when no window from the scratchpad matches.
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Put a window away and call it back:
++
+[source,toml]
+----
+[keys]
+alt-shift-minus = 'move-node-to-scratchpad'
+alt-minus = 'scratchpad'
+----
+
+* A dropdown terminal: one binding for Terminal, which a window rule puts in the scratchpad when it opens:
++
+[source,toml]
+----
+[keys]
+alt-backtick = 'scratchpad --app-bundle-id com.apple.Terminal'
+
+[[on-window-detected]]
+    if.app-id = 'com.apple.Terminal'
+    run = 'move-node-to-scratchpad'
+----
+
+// =========================================================== See also
+include::util/conditional-see-also-header.adoc[]
+
+aerospork(1), aerospork-move-node-to-scratchpad(1), aerospork-layout(1)
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]
