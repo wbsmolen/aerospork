@@ -16,13 +16,6 @@ final class ConfigV2Test: XCTestCase {
         }
     }
 
-    private func errors(_ toml: String) -> [String] {
-        switch parseConfig(toml) {
-            case .success: return []
-            case .failure(let e): return e.map(\.description)
-        }
-    }
-
     /// key notation -> command, for one mode. The notation is what the user typed, which is what
     /// these tests are about.
     private func bindings(_ config: Config, _ mode: String = mainModeId) -> [String: String] {
@@ -92,19 +85,19 @@ final class ConfigV2Test: XCTestCase {
     /// than resolved by whichever one the dictionary happened to iterate last.
     func testTwoWorkspacesSharingAKeyIsAnError() {
         XCTAssertTrue(
-            errors("mod = 'alt'\nworkspaces = ['dev', 'docs']").contains { $0.contains("generated twice") },
-            "\(errors("mod = 'alt'\nworkspaces = ['dev', 'docs']"))",
+            parseErrors("mod = 'alt'\nworkspaces = ['dev', 'docs']").contains { $0.contains("generated twice") },
+            "\(parseErrors("mod = 'alt'\nworkspaces = ['dev', 'docs']"))",
         )
     }
 
     func testUnknownModifierIsReported() {
-        assertEquals(errors("mod = 'meta'"), ["mod: 'meta' is not a modifier. Use cmd, alt, ctrl or shift"])
+        assertEquals(parseErrors("mod = 'meta'"), ["mod: 'meta' is not a modifier. Use cmd, alt, ctrl or shift"])
     }
 
     /// `A-z` runs through `[`, `^` and `_`. Neither punctuation workspaces nor one named `A-z`.
     func testCrossClassRangeIsReported() {
-        assertEquals(errors("workspaces = 'A-z'"), ["workspaces: 'A-z': a range stays within digits, lower-case or upper-case letters"])
-        assertEquals(errors("workspaces = ['1-3', 'a-c', 'A-C']"), [])
+        assertEquals(parseErrors("workspaces = 'A-z'"), ["workspaces: 'A-z': a range stays within digits, lower-case or upper-case letters"])
+        assertEquals(parseErrors("workspaces = ['1-3', 'a-c', 'A-C']"), [])
     }
 
     /// No `mod` means no generation. Without this, migrating a config whose bindings do NOT match
@@ -141,13 +134,13 @@ final class ConfigV2Test: XCTestCase {
     func testModeSectionStillWorksInV2AndWins() {
         let b = bindings(parse("mod = 'alt'\n[keys]\nalt-h = 'close'\n[mode.main.binding]\nalt-h = 'fullscreen'"))
         assertEquals(b["alt-h"], "fullscreen")
-        assertEquals(errors("mod = 'alt'\n[mode.service.binding]\nesc = 'mode main'"), [])
+        assertEquals(parseErrors("mod = 'alt'\n[mode.service.binding]\nesc = 'mode main'"), [])
     }
 
     /// v1 keeps its own rule: `[mode.*]` without `main` is a mistake there, because nothing else
     /// would supply it.
     func testV1StillRequiresTheMainMode() {
-        assertEquals(errors("[mode.foo.binding]\nalt-h = 'focus left'"), ["mode: Please specify 'main' mode"])
+        assertEquals(parseErrors("[mode.foo.binding]\nalt-h = 'focus left'"), ["mode: Please specify 'main' mode"])
     }
 
     // MARK: - Gaps, monitors, window rules
@@ -205,7 +198,7 @@ final class ConfigV2Test: XCTestCase {
 
     /// Same restrictions as the long form -- they are enforced by the same parser, not a copy of it.
     func testOnWindowRejectsCommandsTheLongFormRejects() {
-        XCTAssertFalse(errors("[on-window]\n'com.apple.mail' = 'focus left'").isEmpty)
+        XCTAssertFalse(parseErrors("[on-window]\n'com.apple.mail' = 'focus left'").isEmpty)
     }
 
     func testOnWindowAndOnWindowDetectedCoexist() {
@@ -242,7 +235,7 @@ final class ConfigV2Test: XCTestCase {
         vm.settings.assignments.removeLast()
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertFalse(out.contains("secondary"), "deleted assignment came back:\n\(out)")
         XCTAssertTrue(out.contains("[monitors]"), "rewrote a v2 config into the v1 spelling:\n\(out)")
         assertEquals(parse(out).workspaceToMonitorForceAssignment.keys.sorted(), ["1"])
@@ -255,7 +248,7 @@ final class ConfigV2Test: XCTestCase {
         vm.addBinding(mode: "main", key: "alt-shift-q", command: "focus left")
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         let b = bindings(parse(out))
         assertEquals(b["alt-shift-q"], "focus left") // added
         assertEquals(b["alt-q"], "close") // [keys] survived
@@ -267,7 +260,7 @@ final class ConfigV2Test: XCTestCase {
     func testShippedDefaultIsV2AndParses() throws {
         let text = try String(contentsOf: defaultConfigUrl, encoding: .utf8)
         XCTAssertTrue(isConfigV2(try TOMLTable(string: text)), "the shipped default is still v1")
-        assertEquals(errors(text), [])
+        assertEquals(parseErrors(text), [])
         let b = bindings(parse(text))
         assertEquals(b["alt-1"], "workspace 1")
         assertEquals(b["alt-9"], "workspace 9")

@@ -9,17 +9,9 @@ import XCTest
 /// obsolete key is not worth losing a config over.
 @MainActor
 final class ConfigSafetyDeprecationTest: XCTestCase {
-    private func parse(_ toml: String) -> (Config?, warnings: [String], errors: [String]) {
-        var warnings: [TomlParseError] = []
-        switch parseConfig(toml, warnings: &warnings) {
-            case .success(let config): return (config, warnings.map(\.description), [])
-            case .failure(let errors): return (nil, warnings.map(\.description), errors.map(\.description))
-        }
-    }
-
     /// The regression that matters: everything else in the file must still take effect.
     func testOneDeprecatedKeyDoesNotCostTheUserTheirConfig() {
-        let (config, warnings, errors) = parse(
+        let (config, warnings, errors) = parseWithWarnings(
             """
             after-login-command = ['workspace 1']
             accordion-padding = 42
@@ -44,7 +36,7 @@ final class ConfigSafetyDeprecationTest: XCTestCase {
             "indent-for-nested-containers-with-the-same-orientation = 1",
         ]
         for sample in samples {
-            let (config, warnings, errors) = parse(sample)
+            let (config, warnings, errors) = parseWithWarnings(sample)
             assertEquals(errors, [], additionalMsg: sample)
             XCTAssertNotNil(config, sample)
             assertEquals(warnings.count, 1, additionalMsg: sample)
@@ -53,9 +45,9 @@ final class ConfigSafetyDeprecationTest: XCTestCase {
 
     /// A key that is accepted and does nothing is a lie. `[]` used to be accepted in silence.
     func testNoOpKeysSayTheyAreNoOps() {
-        assertEquals(parse("after-login-command = []").warnings.count, 1)
+        assertEquals(parseWithWarnings("after-login-command = []").warnings.count, 1)
         assertEquals(
-            parse("non-empty-workspaces-root-containers-layout-on-startup = 'smart'").warnings.count,
+            parseWithWarnings("non-empty-workspaces-root-containers-layout-on-startup = 'smart'").warnings.count,
             1,
         )
     }
@@ -63,7 +55,7 @@ final class ConfigSafetyDeprecationTest: XCTestCase {
     /// The dead key made live. Its consumer in `focus.swift` was unreachable while the parser
     /// accepted only `[]`.
     func testExecOnWorkspaceChangeReachesTheConfig() {
-        let (config, _, errors) = parse("exec-on-workspace-change = ['/bin/bash', '-c', 'echo hi']")
+        let (config, _, errors) = parseWithWarnings("exec-on-workspace-change = ['/bin/bash', '-c', 'echo hi']")
         assertEquals(errors, [])
         assertEquals(config?.execOnWorkspaceChange, ["/bin/bash", "-c", "echo hi"])
     }
@@ -71,7 +63,7 @@ final class ConfigSafetyDeprecationTest: XCTestCase {
     /// Warning severity is keyed on the deprecated key, not on the message text: a real mistake in
     /// a live key must still refuse the config.
     func testRealErrorsStillFail() {
-        let (config, _, errors) = parse("accordion-padding = 'thirty'")
+        let (config, _, errors) = parseWithWarnings("accordion-padding = 'thirty'")
         XCTAssertNil(config)
         assertEquals(errors.count, 1)
     }
@@ -79,6 +71,6 @@ final class ConfigSafetyDeprecationTest: XCTestCase {
     /// An unknown key is not a deprecation. The parser is strict on purpose -- a typo'd key that
     /// loads silently does nothing and is impossible to debug.
     func testUnknownKeysStillFail() {
-        XCTAssertNil(parse("after-login-comand = []").0)
+        XCTAssertNil(parseWithWarnings("after-login-comand = []").0)
     }
 }

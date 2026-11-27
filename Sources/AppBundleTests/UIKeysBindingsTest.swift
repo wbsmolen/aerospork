@@ -39,13 +39,6 @@ final class UIKeysBindingsTest: XCTestCase {
         return vm
     }
 
-    private func errors(_ toml: String) -> [String] {
-        switch parseConfig(toml) {
-            case .success: return []
-            case .failure(let e): return e.map(\.description)
-        }
-    }
-
     private func rows(_ vm: ConfigurationViewModel, _ mode: String = mainModeId) -> [String: ConfigurationViewModel.DisplayBinding] {
         Dictionary(uniqueKeysWithValues: vm.displayBindings(mode: mode).map { ($0.key, $0) })
     }
@@ -121,7 +114,7 @@ final class UIKeysBindingsTest: XCTestCase {
 
         vm.settings.general.accordionPadding = 42 // an edit on a completely different tab
         let out = ConfigurationWriter.render(baseText: Self.v2, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertFalse(out.contains("[mode."), "a generated or keys binding was written back:\n\(out)")
         XCTAssertFalse(out.contains("workspace 1"), "the boilerplate v2 deletes came back:\n\(out)")
         // ...and nothing was duplicated out of [keys] either.
@@ -136,7 +129,7 @@ final class UIKeysBindingsTest: XCTestCase {
         XCTAssertTrue(vm.addBinding(mode: mainModeId, key: "alt-1", command: "workspace scratch"))
 
         let out = ConfigurationWriter.render(baseText: Self.v2, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         assertEquals(out.components(separatedBy: "alt-1").count - 1, 1, additionalMsg: "override wrote more than one line:\n\(out)")
         XCTAssertFalse(out.contains("alt-2"), "overriding one binding dragged its 30 siblings along:\n\(out)")
 
@@ -166,7 +159,7 @@ final class UIKeysBindingsTest: XCTestCase {
         vm.updateBinding(mode: mainModeId, id: rowId(vm, mainModeId, "alt-enter"), command: "exec-and-forget open -na Alacritty")
 
         let out = ConfigurationWriter.render(baseText: Self.v2, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertTrue(out.contains("alt-enter = 'exec-and-forget open -na Alacritty'"), out)
         XCTAssertFalse(out.contains("Ghostty"), "the old command survived:\n\(out)")
         XCTAssertFalse(out.contains("[mode."), "the v1 spelling leaked into a v2 file:\n\(out)")
@@ -179,7 +172,7 @@ final class UIKeysBindingsTest: XCTestCase {
         XCTAssertTrue(vm.addBinding(mode: "service", key: "q", command: "close"))
 
         let out = ConfigurationWriter.render(baseText: Self.v2, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         switch parseConfig(out) {
             case .failure(let e): XCTFail("\(e.descriptions)")
             case .success(let config):
@@ -194,7 +187,7 @@ final class UIKeysBindingsTest: XCTestCase {
         vm.removeBinding(mode: mainModeId, id: rowId(vm, mainModeId, "alt-enter"))
 
         let out = ConfigurationWriter.render(baseText: Self.v2, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         XCTAssertFalse(out.contains("alt-enter"), out)
         XCTAssertTrue(out.contains("alt-shift-semicolon"), "the sibling binding went with it:\n\(out)")
     }
@@ -246,7 +239,7 @@ final class UIKeysBindingsTest: XCTestCase {
         vm.updateBinding(mode: mainModeId, id: id, command: "focus right")
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         assertEquals(out.components(separatedBy: "alt-h").count - 1, 1, additionalMsg: "edit appended a duplicate:\n\(out)")
         XCTAssertTrue(out.contains("alt-h = 'focus right'"), out)
     }
@@ -274,7 +267,7 @@ final class UIKeysBindingsTest: XCTestCase {
         assertEquals(rows(vm)["alt-l"]?.command, "focus right")
 
         let out = ConfigurationWriter.render(baseText: base, from: vm)
-        assertEquals(errors(out), [])
+        assertEquals(parseErrors(out), [])
         assertEquals(out.components(separatedBy: "alt-l").count - 1, 1, additionalMsg: out)
     }
 
