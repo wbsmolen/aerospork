@@ -38,7 +38,8 @@ public enum UnixSocketError: Error, Equatable {
     case frameTooLarge(UInt32)
 }
 
-/// One connected AF_UNIX stream socket. Thread-confined to whoever owns it.
+/// One connected AF_UNIX stream socket. Thread-confined to whoever owns it, except that `shutdown` and
+/// `waitForHangUp` may run on other threads beside one that sends.
 public final class UnixSocketConnection: @unchecked Sendable {
     /// Largest frame we're willing to allocate for. A config file is the biggest legitimate
     /// payload, so 16 MiB is generous; uncapped, a 4-byte header of 0xFFFFFFFF would make the
@@ -65,6 +66,17 @@ public final class UnixSocketConnection: @unchecked Sendable {
     }
 
     public func close() { _ = Darwin.close(fd) }
+
+    /// Ends the connection both ways but keeps the descriptor, so a thread blocked on it wakes with a failure
+    /// instead of later using a descriptor that was closed and handed to someone else.
+    public func shutdown() { _ = Darwin.shutdown(fd, SHUT_RDWR) }
+
+    /// Blocks, with no deadline, until the peer hangs up or sends anything, or `shutdown` is called. For a
+    /// connection that only sends from here on, such as a `subscribe` stream, which is quiet between events.
+    public func waitForHangUp() {
+        var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        while poll(&pfd, 1, -1) < 0 && errno == EINTR {}
+    }
 
     /// Give up on a frame, in either direction, that takes longer than `timeout` from start to finish,
     /// reporting it as a dropped connection. Without it a client that connects and never speaks, or

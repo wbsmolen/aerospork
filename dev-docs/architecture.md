@@ -80,6 +80,35 @@ a security boundary: a process that can reach the socket can already write the c
 explains the trust model. **Test.** `ServerProtocolTest.testExecOverSocketGetsBadArgs` pins the
 refusal.
 
+### The subscribe stream
+
+`aerospork subscribe` is the one connection that gets many answers: a snapshot, then one answer for
+each event, each carrying one line of JSON in its stdout. `subscribe/EventBroadcaster.swift` fans the
+events out. The event JSON, with `"version": 1` in every event, is a public contract that
+`docs/aerospork-subscribe.adoc` documents field by field. The framing around it stays private.
+
+**Rule.** The server branches on `subscribe` after the check for a disabled server and before
+`runSession`. It takes the main actor only to register the subscriber, which reads the snapshot in
+the same step, and never holds a session or `sessionGate`. Each subscriber has a queue of at most 256
+frames, written on a dispatch queue of its own. A full queue or a failed write drops the client, and
+the server keeps at most 16 subscribers. The frame timeout stays on every write, and the wait for the
+client to hang up has none. The CLI reads a stream with no reply timeout. A disabled server refuses
+`subscribe`, and `enable off` ends every stream with a last failure answer that says why. Every emit
+site passes its payload as an autoclosure behind a subscriber check, and the per-workspace window
+diff keeps no state, and walks no window, while no subscriber asks for `workspace-windows-changed`.
+
+**Reason.** A stream inside a session would hold `sessionGate` for as long as it stays connected,
+and every other session would wait behind it. A server that waited on a slow client would grow its
+memory or block the main actor. Each subscriber holds a thread and a file descriptor. The emit sites
+are on the focus and refresh paths, which run with nobody subscribed almost all the time. A stream is
+silent while nothing happens, so a receive deadline would end every idle status bar.
+
+**Test.** `ServerProtocolTest` (a snapshot then events, a client that stops reading is dropped and
+the others are not, the refusal while disabled, `enable off`),
+`CliConnectionTest.testAnIdleSubscriberOutlivesTheFrameTimeout`, `EventBroadcasterTest`,
+`PerfInvariantsTest.testSubscribeEventsCostNothingWithoutASubscriber`,
+`CliSurfaceTest.testAStreamKeepsReadingThroughSilence`.
+
 ## Commands
 
 Every command implements the `Command` protocol (`command/Command.swift`): it has its parsed

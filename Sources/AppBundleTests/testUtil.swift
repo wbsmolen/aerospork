@@ -161,3 +161,40 @@ extension HotkeyBinding {
         self.init(modifiers, keyCode, commands, descriptionWithKeyNotation: descriptionWithKeyNotation)
     }
 }
+
+// MARK: - The socket server, over a socketpair, never the app's real socket
+
+/// The client end of a connection that `newConnection` serves, with `frameTimeout` on the server's end as
+/// `startUnixSocketServer` sets it.
+func serverConnectionForTests(frameTimeout: Duration = .seconds(5)) -> UnixSocketConnection {
+    var fds: [Int32] = [0, 0]
+    check(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0)
+    let (client, server) = (UnixSocketConnection(fd: fds[0]), UnixSocketConnection(fd: fds[1]))
+    client.setFrameTimeout(seconds: 5)
+    server.setFrameTimeout(frameTimeout)
+    Task.detached { await newConnection(server) }
+    return client
+}
+
+func sendRequest(_ client: UnixSocketConnection, _ args: [String]) throws {
+    check(client.sendMessage(try JSONEncoder().encode(ClientRequest(args: args, stdin: ""))))
+}
+
+/// The next answer, read off the main actor, which the server has to reach. nil when the server hung up.
+func nextAnswer(_ client: UnixSocketConnection) async throws -> ServerAnswer? {
+    guard let data = try await Task.detached(operation: { try client.recvMessage() }).value else { return nil }
+    return try JSONDecoder().decode(ServerAnswer.self, from: data)
+}
+
+/// The event JSON a `subscribe` answer carries.
+func eventJson(_ answer: ServerAnswer?) -> [String: Any] {
+    (try? JSONSerialization.jsonObject(with: Data((answer?.stdout ?? "").utf8))) as? [String: Any] ?? [:]
+}
+
+@MainActor func waitUntil(_ condition: () -> Bool, timeout: Duration = .seconds(5)) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+        guard ContinuousClock.now < deadline else { return XCTFail("timed out") }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+}

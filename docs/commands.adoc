@@ -428,6 +428,16 @@ include::aerospork-list-workspaces.adoc[tags=purpose]
 
 include::aerospork-list-workspaces.adoc[tags=body]
 
+[#subscribe]
+=== subscribe
+----
+include::aerospork-subscribe.adoc[tags=synopsis]
+----
+include::aerospork-subscribe.adoc[tags=purpose]
+{manpurpose}.
+
+include::aerospork-subscribe.adoc[tags=body]
+
 [#exit-status]
 == Exit status
 

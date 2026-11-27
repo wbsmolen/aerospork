@@ -60,6 +60,21 @@ final class PerfInvariantsTest: XCTestCase {
         assertFalse(evaluated)
     }
 
+    /// `subscribe` events are emitted on every focus and mode change, and the membership diff runs on every
+    /// refresh. With nobody subscribed, neither may build anything: no payload, no walk over the windows.
+    /// `EventBroadcasterTest` has the counter-check, where a subscriber makes both happen.
+    func testSubscribeEventsCostNothingWithoutASubscriber() {
+        let events = EventBroadcaster.shared
+        assertTrue(events.subscribers.isEmpty)
+        var evaluated = false
+        events.emit(.focusChanged, { evaluated = true; return [:] }())
+        assertFalse(evaluated)
+
+        TestWindow.new(id: 8101, parent: focus.workspace.rootTilingContainer)
+        events.emitWorkspaceWindowsChanges()
+        assertFalse(events.tracksMembership)
+    }
+
     // The fourth property -- "the setFrame no-op guard actually skips AX writes when the frame
     // already matches" -- is pinned by AxWriteTest.testGuardSkipsAllWritesWhenFrameAlreadyMatches,
     // which counts writes through the AX mock rather than timing them. Its sibling,

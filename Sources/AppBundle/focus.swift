@@ -183,6 +183,21 @@ extension Workspace {
     if frozenFocus.monitorId != _lastKnownFocus.monitorId {
         hasFocusedMonitorChanged = true
     }
+    // Before the callbacks, and whether or not the config has any. Each emit costs one check without a subscriber.
+    let events = EventBroadcaster.shared
+    if hasFocusChanged {
+        events.emit(.focusChanged, ["window-id": frozenFocus.windowId.map(Json.uint32) ?? .null, "workspace": .string(frozenFocus.workspaceName)])
+    }
+    if hasFocusedWorkspaceChanged {
+        events.emit(.focusedWorkspaceChanged, ["workspace": .string(frozenFocus.workspaceName), "prev-workspace": .string(_lastKnownFocus.workspaceName)])
+    }
+    if hasFocusedMonitorChanged {
+        events.emit(.focusedMonitorChanged, [
+            "monitor-id": .int(frozenFocus.monitorId + 1),
+            "prev-monitor-id": .int(_lastKnownFocus.monitorId + 1),
+            "workspace": .string(frozenFocus.workspaceName),
+        ])
+    }
     // Termination of the recursion below is provided by this assignment, not by a flag: the
     // runSession Tasks re-enter this function via refreshModel(), and by then _lastKnownFocus
     // already equals frozenFocus, so nothing fires and nothing is spawned. (The flag that used to

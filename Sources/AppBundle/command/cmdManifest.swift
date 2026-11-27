@@ -71,6 +71,8 @@ extension CmdArgs {
                 command = SplitCommand(args: self as! SplitCmdArgs)
             case .sticky:
                 command = StickyCommand(args: self as! StickyCmdArgs)
+            case .subscribe:
+                command = SubscribeCommand(args: self as! SubscribeCmdArgs)
             case .summonWorkspace:
                 command = SummonWorkspaceCommand(args: self as! SummonWorkspaceCmdArgs)
             case .swap:

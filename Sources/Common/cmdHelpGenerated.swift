@@ -200,6 +200,12 @@ let sticky_help_generated = """
 
     See: man aerospork-sticky
     """
+let subscribe_help_generated = """
+    USAGE: subscribe [-h|--help] --all
+       OR: subscribe [-h|--help] <event>...
+
+    See: man aerospork-subscribe
+    """
 let summon_workspace_help_generated = """
     USAGE: summon-workspace [-h|--help] [--fail-if-noop] <workspace>
 

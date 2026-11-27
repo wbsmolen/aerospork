@@ -331,6 +331,11 @@ func tryOnWindowDetected(_ window: Window, onlyStartupRules: Bool = false) async
         case .tilingContainer, .workspace, .macosMinimizedWindowsContainer,
              .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
             try await onWindowDetected(window, onlyStartupRules: onlyStartupRules)
+            // After the rules, so `workspace` is where they put it.
+            EventBroadcaster.shared.emit(
+                .windowDetected,
+                subscribeWindowJson(window).merging(["workspace": window.nodeWorkspace.map { .string($0.name) } ?? .null]) { $1 },
+            )
         case .macosPopupWindowsContainer:
             break
     }

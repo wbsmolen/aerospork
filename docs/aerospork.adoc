@@ -49,7 +49,7 @@ AeroSpork and the system::
 aerospork-enable(1), aerospork-reload-config(1), aerospork-open-settings(1), aerospork-exec-and-forget(1), aerospork-volume(1)
 
 Query commands (CLI only)::
-aerospork-config(1), aerospork-debug-windows(1), aerospork-list-apps(1), aerospork-list-exec-env-vars(1), aerospork-list-modes(1), aerospork-list-monitors(1), aerospork-list-windows(1), aerospork-list-workspaces(1)
+aerospork-config(1), aerospork-debug-windows(1), aerospork-list-apps(1), aerospork-list-exec-env-vars(1), aerospork-list-modes(1), aerospork-list-monitors(1), aerospork-list-windows(1), aerospork-list-workspaces(1), aerospork-subscribe(1)
 
 `aerospork-list-exec-env-vars` also works in the config. `aerospork-exec-and-forget` works only in the config.
 
